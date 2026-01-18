@@ -68,7 +68,11 @@ struct EditorView: NSViewRepresentable {
 
         textView.imageContext = viewModel.imageContext
         
-        if textView.string != text {
+        // Skip if input method is composing (dead keys, IME) - touching the text view breaks composition
+        guard !textView.hasMarkedText() else { return }
+        
+        // Don't sync text back if the change came from the text view itself
+        if !context.coordinator.isUpdatingFromTextView && textView.string != text {
             let selectedRanges = textView.selectedRanges
             textView.string = text
             textView.selectedRanges = selectedRanges
@@ -89,6 +93,7 @@ struct EditorView: NSViewRepresentable {
         private var scrollObserver: NSObjectProtocol?
         private var stylingCancellable: AnyCancellable?
         private var lastReportedScroll: CGFloat = 0
+        var isUpdatingFromTextView = false
 
         init(text: Binding<String>, viewModel: EditorViewModel) {
             self.text = text
@@ -135,8 +140,12 @@ struct EditorView: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard !isStyling else { return }
             guard let textView = notification.object as? EditorTextView else { return }
+            // Don't interfere while input method is composing (dead keys, IME)
+            guard !textView.hasMarkedText() else { return }
+            isUpdatingFromTextView = true
             text.wrappedValue = textView.string
             viewModel.text = textView.string
+            isUpdatingFromTextView = false
             viewModel.forceReparse()
             triggerStyling()
         }
@@ -152,6 +161,8 @@ struct EditorView: NSViewRepresentable {
 
         func triggerStyling() {
             guard let textView = textView else { return }
+            // Don't style while input method is composing (dead keys, IME)
+            guard !textView.hasMarkedText() else { return }
             
             isStyling = true
             defer { isStyling = false }
@@ -195,8 +206,6 @@ class EditorTextView: NSTextView {
         "(": ")",
         "[": "]",
         "{": "}",
-        "\"": "\"",
-        "'": "'",
         "*": "*",
         "_": "_",
         "`": "`"
@@ -204,7 +213,7 @@ class EditorTextView: NSTextView {
 
     private static let openers: Set<Character> = Set(pairs.keys)
     private static let closers: Set<Character> = Set(pairs.values)
-    private static let symmetricPairs: Set<Character> = ["\"", "'", "*", "_", "`"]
+    private static let symmetricPairs: Set<Character> = ["*", "_", "`"]
 
     override init(frame frameRect: NSRect, textContainer container: NSTextContainer?) {
         super.init(frame: frameRect, textContainer: container)
@@ -250,14 +259,18 @@ class EditorTextView: NSTextView {
             .paragraphStyle: paragraphStyle
         ]
     }
-
+    
     override func insertText(_ string: Any, replacementRange: NSRange) {
+        
+        // If input method is composing (dead keys, IME), skip auto-pairing entirely
+        let isComposing = hasMarkedText() || replacementRange.location != NSNotFound
+        
         guard autoPairEnabled,
+              !isComposing,
               let insertedString = string as? String,
               insertedString.count == 1,
               let char = insertedString.first else {
             super.insertText(string, replacementRange: replacementRange)
-    
             return
         }
 
@@ -266,35 +279,29 @@ class EditorTextView: NSTextView {
 
         if hasSelection, let closer = Self.pairs[char] {
             wrapSelection(opener: char, closer: closer, range: selectedRange)
-    
             return
         }
 
         if let closer = Self.pairs[char], !Self.symmetricPairs.contains(char) {
             insertPair(opener: char, closer: closer)
-    
             return
         }
 
         if Self.symmetricPairs.contains(char) {
             if shouldSkipOver(char: char, at: selectedRange.location) {
                 moveCursorRight()
-        
                 return
             }
             insertPair(opener: char, closer: char)
-    
             return
         }
 
         if Self.closers.contains(char), shouldSkipOver(char: char, at: selectedRange.location) {
             moveCursorRight()
-    
             return
         }
 
         super.insertText(string, replacementRange: replacementRange)
-
     }
 
     override func deleteBackward(_ sender: Any?) {
