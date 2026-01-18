@@ -1,9 +1,15 @@
 import SwiftUI
 import AppKit
+import Sparkle
 
 @main
 struct HugoraApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    private let updaterController: SPUStandardUpdaterController
+
+    init() {
+        updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+    }
     @StateObject private var workspaceStore = WorkspaceStore()
     @StateObject private var editorState = EditorState()
 
@@ -19,7 +25,7 @@ struct HugoraApp: App {
                 }
         }
         .commands {
-            AppCommands(editorState: editorState)
+            AppCommands(editorState: editorState, updater: updaterController.updater)
             WorkspaceCommands(workspaceStore: workspaceStore)
         }
 
