@@ -197,7 +197,7 @@ jobs:
           printf '%s\n' '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">' >> _site/appcast.xml
           printf '%s\n' '  <channel>' >> _site/appcast.xml
           printf '%s\n' '    <title>Hugora Updates</title>' >> _site/appcast.xml
-          printf '%s\n' '    <link>https://rselbach.github.io/digitora/appcast.xml</link>' >> _site/appcast.xml
+          printf '%s\n' '    <link>https://rselbach.github.io/hugora/appcast.xml</link>' >> _site/appcast.xml
           printf '%s\n' '    <description>Hugora app updates</description>' >> _site/appcast.xml
           printf '%s\n' '    <language>en</language>' >> _site/appcast.xml
           printf '%s\n' '    <item>' >> _site/appcast.xml
@@ -206,7 +206,7 @@ jobs:
           printf '%s\n' "      <sparkle:version>${{ github.run_number }}</sparkle:version>" >> _site/appcast.xml
           printf '%s\n' "      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>" >> _site/appcast.xml
           printf '%s\n' "      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>" >> _site/appcast.xml
-          printf '%s\n' "      <enclosure url=\"https://github.com/rselbach/digitora/releases/download/v${VERSION}/Hugora-${VERSION}.dmg\" ${SPARKLE_SIGNATURE} type=\"application/octet-stream\"/>" >> _site/appcast.xml
+          printf '%s\n' "      <enclosure url=\"https://github.com/rselbach/hugora/releases/download/v${VERSION}/Hugora-${VERSION}.dmg\" ${SPARKLE_SIGNATURE} type=\"application/octet-stream\"/>" >> _site/appcast.xml
           printf '%s\n' '    </item>' >> _site/appcast.xml
           printf '%s\n' '  </channel>' >> _site/appcast.xml
           printf '%s\n' '</rss>' >> _site/appcast.xml
