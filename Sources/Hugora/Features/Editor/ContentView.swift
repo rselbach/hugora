@@ -9,7 +9,7 @@ struct ContentView: View {
     var body: some View {
         HSplitView {
             if showSidebar {
-                PostListView()
+                ContentListView()
                     .frame(minWidth: 180, idealWidth: 220, maxWidth: 350)
             }
 
@@ -39,8 +39,8 @@ struct ContentView: View {
         }
         .onAppear {
             // Set up image context for restored session
-            if let post = editorState.currentPost, let blogDir = workspaceStore.blogDirectoryURL {
-                viewModel.imageContext = ImageContext(postURL: post.url, blogDirectoryURL: blogDir)
+            if let item = editorState.currentItem, let contentDir = workspaceStore.contentDirectoryURL {
+                viewModel.imageContext = ImageContext(postURL: item.url, blogDirectoryURL: contentDir)
                 viewModel.setText(editorState.content)
             }
         }
@@ -48,7 +48,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private var editorPane: some View {
-        if editorState.currentPost != nil {
+        if editorState.currentItem != nil {
             EditorView(
                 text: contentBinding,
                 viewModel: viewModel,
@@ -85,13 +85,16 @@ struct ContentView: View {
     }
 
     private func openPostAtURL(_ url: URL) {
-        guard let post = workspaceStore.posts.first(where: { $0.url == url }) else { return }
-        editorState.openPost(post)
+        let item = workspaceStore.sections
+            .flatMap { $0.items }
+            .first { $0.url == url }
+        guard let item else { return }
+        editorState.openItem(item)
         viewModel.setText(editorState.content)
         
         // Set up image context for resolving image paths
-        if let blogDir = workspaceStore.blogDirectoryURL {
-            viewModel.imageContext = ImageContext(postURL: post.url, blogDirectoryURL: blogDir)
+        if let contentDir = workspaceStore.contentDirectoryURL {
+            viewModel.imageContext = ImageContext(postURL: item.url, blogDirectoryURL: contentDir)
         }
     }
 }

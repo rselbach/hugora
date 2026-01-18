@@ -18,26 +18,14 @@ struct AppCommands: Commands {
             }
         }
 
-        CommandGroup(after: .textEditing) {
-            Divider()
 
-            Button("Toggle Focus Mode") {
-                NotificationCenter.default.post(name: .toggleFocusMode, object: nil)
-            }
-            .keyboardShortcut("f", modifiers: [.command, .shift])
-
-            Button("Toggle Typewriter Mode") {
-                NotificationCenter.default.post(name: .toggleTypewriterMode, object: nil)
-            }
-            .keyboardShortcut("t", modifiers: [.command, .shift])
-        }
 
         CommandGroup(replacing: .saveItem) {
             Button("Save") {
                 editorState.save()
             }
             .keyboardShortcut("s", modifiers: .command)
-            .disabled(editorState.currentPost == nil || !editorState.isDirty)
+            .disabled(editorState.currentItem == nil || !editorState.isDirty)
         }
 
         CommandGroup(replacing: .help) {
@@ -138,7 +126,4 @@ struct WorkspaceCommands: Commands {
     }
 }
 
-extension Notification.Name {
-    static let toggleFocusMode = Notification.Name("toggleFocusMode")
-    static let toggleTypewriterMode = Notification.Name("toggleTypewriterMode")
-}
+

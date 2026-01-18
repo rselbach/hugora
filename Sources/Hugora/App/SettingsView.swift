@@ -66,30 +66,18 @@ struct GeneralSettingsView: View {
 }
 
 struct EditorSettingsView: View {
-    @AppStorage("showLineNumbers") private var showLineNumbers = false
     @AppStorage("autoPairEnabled") private var autoPairEnabled = true
-    @AppStorage("focusModeEnabled") private var focusModeEnabled = false
-    @AppStorage("typewriterModeEnabled") private var typewriterModeEnabled = false
-    @AppStorage("newPostFormat") private var newPostFormat = PostFormat.bundle.rawValue
+    @AppStorage("newPostFormat") private var newPostFormat = ContentFormat.bundle.rawValue
 
     var body: some View {
         Form {
-            Section("Display") {
-                Toggle("Show line numbers", isOn: $showLineNumbers)
-            }
-
             Section("Typing") {
                 Toggle("Auto-pair brackets and quotes", isOn: $autoPairEnabled)
             }
 
-            Section("Focus") {
-                Toggle("Focus mode (dim other paragraphs)", isOn: $focusModeEnabled)
-                Toggle("Typewriter mode (center cursor)", isOn: $typewriterModeEnabled)
-            }
-
             Section("New Posts") {
                 Picker("New post format", selection: $newPostFormat) {
-                    ForEach(PostFormat.allCases, id: \.rawValue) { format in
+                    ForEach(ContentFormat.allCases, id: \.rawValue) { format in
                         Text(format.displayName).tag(format.rawValue)
                     }
                 }

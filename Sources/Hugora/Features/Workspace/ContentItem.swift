@@ -31,9 +31,9 @@ func parseFrontmatterValue(key: String, from content: String) -> String? {
     return nil
 }
 
-enum PostFormat: String, Codable, CaseIterable {
-    case bundle  // content/blog/slug/index.md
-    case file    // content/blog/slug.md
+enum ContentFormat: String, Codable, CaseIterable {
+    case bundle  // content/section/slug/index.md
+    case file    // content/section/slug.md
 
     var displayName: String {
         switch self {
@@ -43,18 +43,20 @@ enum PostFormat: String, Codable, CaseIterable {
     }
 }
 
-struct BlogPost: Identifiable, Equatable, Comparable {
+struct ContentItem: Identifiable, Equatable, Comparable {
     let id: URL
     let url: URL          // path to the .md file
     let slug: String
     let title: String
-    let format: PostFormat
+    let format: ContentFormat
     let date: Date?
+    let section: String
 
-    init(url: URL, format: PostFormat) {
+    init(url: URL, format: ContentFormat, section: String) {
         self.id = url
         self.url = url
         self.format = format
+        self.section = section
 
         switch format {
         case .bundle:
@@ -67,7 +69,7 @@ struct BlogPost: Identifiable, Equatable, Comparable {
         self.date = Self.extractDate(from: url)
     }
 
-    static func < (lhs: BlogPost, rhs: BlogPost) -> Bool {
+    static func < (lhs: ContentItem, rhs: ContentItem) -> Bool {
         switch (lhs.date, rhs.date) {
         case let (l?, r?):
             return l > r  // newer first

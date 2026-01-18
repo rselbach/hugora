@@ -14,20 +14,18 @@ struct WorkspaceRef: Codable, Identifiable, Equatable {
 
 enum WorkspaceError: LocalizedError {
     case notHugoSite
-    case noBlogDirectory
 
     var errorDescription: String? {
         switch self {
         case .notHugoSite:
-            "This folder doesn't appear to be a Hugo site (no hugo.toml found)."
-        case .noBlogDirectory:
-            "No content/blog directory found in this Hugo site."
+            "This folder doesn't appear to be a Hugo site. Expected hugo.toml, config.toml, or a config/ directory."
         }
     }
 }
 
 final class WorkspaceStore: ObservableObject {
-    @Published private(set) var posts: [BlogPost] = []
+    @Published private(set) var sections: [ContentSection] = []
+    @Published private(set) var hugoConfig: HugoConfig?
     @Published private(set) var currentFolderURL: URL?
     @Published private(set) var siteName: String?
     @Published var recentWorkspaces: [WorkspaceRef] = []
@@ -41,8 +39,9 @@ final class WorkspaceStore: ObservableObject {
     private let recentKey = "hugora.workspace.recent"
     private let maxRecent = 10
 
-    var blogDirectoryURL: URL? {
-        currentFolderURL?.appendingPathComponent("content/blog")
+    var contentDirectoryURL: URL? {
+        guard let folder = currentFolderURL, let config = hugoConfig else { return nil }
+        return folder.appendingPathComponent(config.contentDir)
     }
 
     init() {
@@ -74,6 +73,11 @@ final class WorkspaceStore: ObservableObject {
         stopAccessingCurrentFolder()
         lastError = nil
 
+        guard validateHugoSite(at: url) else {
+            lastError = .notHugoSite
+            return
+        }
+
         guard let bookmarkData = createBookmark(for: url) else {
             openFolderWithoutBookmark(url)
             return
@@ -82,13 +86,7 @@ final class WorkspaceStore: ObservableObject {
         saveCurrentBookmark(bookmarkData)
         addToRecent(url: url, bookmarkData: bookmarkData)
         startAccessingFolder(url)
-
-        if !validateHugoSite(at: url) {
-            lastError = .notHugoSite
-            return
-        }
-
-        loadPosts(from: url)
+        loadContent(from: url)
     }
 
     func openRecent(_ ref: WorkspaceRef) {
@@ -106,6 +104,12 @@ final class WorkspaceStore: ObservableObject {
             return
         }
 
+        guard validateHugoSite(at: url) else {
+            removeFromRecent(ref)
+            lastError = .notHugoSite
+            return
+        }
+
         if isStale {
             if let newData = createBookmark(for: url) {
                 let updatedRef = WorkspaceRef(path: url.path, bookmarkData: newData)
@@ -117,18 +121,13 @@ final class WorkspaceStore: ObservableObject {
         }
 
         startAccessingFolder(url)
-
-        if !validateHugoSite(at: url) {
-            lastError = .notHugoSite
-            return
-        }
-
-        loadPosts(from: url)
+        loadContent(from: url)
     }
 
     func closeWorkspace() {
         stopAccessingCurrentFolder()
-        posts = []
+        sections = []
+        hugoConfig = nil
         currentFolderURL = nil
         siteName = nil
         lastError = nil
@@ -137,7 +136,7 @@ final class WorkspaceStore: ObservableObject {
 
     func refreshPosts() {
         guard let url = currentFolderURL else { return }
-        loadPosts(from: url)
+        loadContent(from: url)
     }
 
     // MARK: - Open File
@@ -149,7 +148,11 @@ final class WorkspaceStore: ObservableObject {
     // MARK: - Create New Post
 
     func createNewPost() {
-        guard let blogDir = blogDirectoryURL else { return }
+        guard let blogSection = sections.first(where: { 
+            $0.name.lowercased() == "blog" || $0.name.lowercased() == "posts" 
+        }) else { return }
+
+        let blogDir = blogSection.url
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
@@ -186,9 +189,11 @@ final class WorkspaceStore: ObservableObject {
             try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
             try frontmatter.write(to: fileURL, atomically: true, encoding: .utf8)
 
-            let newPost = BlogPost(url: fileURL, format: .bundle)
-            posts.insert(newPost, at: 0)
-            posts.sort()
+            let newItem = ContentItem(url: fileURL, format: .bundle, section: blogSection.name)
+            if let idx = sections.firstIndex(where: { $0.name == blogSection.name }) {
+                sections[idx].items.insert(newItem, at: 0)
+                sections[idx].items.sort()
+            }
 
             selectedFileURL = fileURL
         } catch {
@@ -196,23 +201,25 @@ final class WorkspaceStore: ObservableObject {
         }
     }
 
-    // MARK: - Delete Post
+    // MARK: - Delete Content
 
-    func deletePost(_ post: BlogPost) {
+    func deleteContent(_ item: ContentItem) {
         let fm = FileManager.default
 
         do {
-            switch post.format {
+            switch item.format {
             case .bundle:
-                let folderURL = post.url.deletingLastPathComponent()
+                let folderURL = item.url.deletingLastPathComponent()
                 try fm.trashItem(at: folderURL, resultingItemURL: nil)
             case .file:
-                try fm.trashItem(at: post.url, resultingItemURL: nil)
+                try fm.trashItem(at: item.url, resultingItemURL: nil)
             }
 
-            posts.removeAll { $0.id == post.id }
+            if let sectionIdx = sections.firstIndex(where: { $0.name == item.section }) {
+                sections[sectionIdx].items.removeAll { $0.id == item.id }
+            }
 
-            if selectedFileURL == post.url {
+            if selectedFileURL == item.url {
                 selectedFileURL = nil
             }
         } catch {
@@ -223,30 +230,94 @@ final class WorkspaceStore: ObservableObject {
     // MARK: - Hugo Validation
 
     private func validateHugoSite(at url: URL) -> Bool {
-        let hugoConfigURL = url.appendingPathComponent("hugo.toml")
-        return FileManager.default.fileExists(atPath: hugoConfigURL.path)
+        let fm = FileManager.default
+
+        let configFiles = [
+            "hugo.toml", "hugo.yaml", "hugo.json",
+            "config.toml", "config.yaml", "config.json"
+        ]
+        for file in configFiles {
+            if fm.fileExists(atPath: url.appendingPathComponent(file).path) {
+                return true
+            }
+        }
+
+        var isDir: ObjCBool = false
+        let configDir = url.appendingPathComponent("config")
+        if fm.fileExists(atPath: configDir.path, isDirectory: &isDir), isDir.boolValue {
+            return true
+        }
+
+        return false
     }
 
-    // MARK: - Post Loading
+    // MARK: - Content Loading
 
-    private func loadPosts(from siteURL: URL) {
-        let blogDir = siteURL.appendingPathComponent("content/blog")
+    private func loadContent(from siteURL: URL) {
+        hugoConfig = HugoConfig.load(from: siteURL)
+        siteName = siteURL.lastPathComponent
 
-        guard FileManager.default.fileExists(atPath: blogDir.path) else {
-            lastError = .noBlogDirectory
-            posts = []
+        guard let contentDir = contentDirectoryURL else {
+            sections = []
             return
         }
 
-        siteName = siteURL.lastPathComponent
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: contentDir.path) else {
+            sections = []
+            return
+        }
 
-        let contents = (try? FileManager.default.contentsOfDirectory(
-            at: blogDir,
+        let sectionDirs = (try? fm.contentsOfDirectory(
+            at: contentDir,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         )) ?? []
 
-        var loadedPosts: [BlogPost] = []
+        var loadedSections: [ContentSection] = []
+
+        // Collect root-level .md files as "Root Pages"
+        var rootItems: [ContentItem] = []
+
+        for itemURL in sectionDirs {
+            guard let resourceValues = try? itemURL.resourceValues(forKeys: [.isDirectoryKey]),
+                  let isDir = resourceValues.isDirectory else {
+                continue
+            }
+
+            if isDir {
+                // It's a section directory
+                let sectionName = itemURL.lastPathComponent
+                let items = loadItems(in: itemURL, sectionName: sectionName)
+                let section = ContentSection(name: sectionName, url: itemURL, items: items.sorted())
+                loadedSections.append(section)
+            } else if itemURL.pathExtension.lowercased() == "md" {
+                // Root-level markdown file (e.g., about.md)
+                let fileName = itemURL.lastPathComponent
+                if fileName != "_index.md" {
+                    rootItems.append(ContentItem(url: itemURL, format: .file, section: ""))
+                }
+            }
+        }
+
+        // Add root pages as a special section if any exist
+        if !rootItems.isEmpty {
+            let rootSection = ContentSection(name: "(root)", url: contentDir, items: rootItems.sorted())
+            loadedSections.append(rootSection)
+        }
+
+        sections = loadedSections.sorted()
+    }
+
+    private func loadItems(in sectionURL: URL, sectionName: String) -> [ContentItem] {
+        let fm = FileManager.default
+        let contents = (try? fm.contentsOfDirectory(
+            at: sectionURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )) ?? []
+
+        var items: [ContentItem] = []
 
         for itemURL in contents {
             guard let resourceValues = try? itemURL.resourceValues(forKeys: [.isDirectoryKey]),
@@ -255,18 +326,16 @@ final class WorkspaceStore: ObservableObject {
             }
 
             if isDir {
-                // Bundle format: look for index.md
                 let indexURL = itemURL.appendingPathComponent("index.md")
-                if FileManager.default.fileExists(atPath: indexURL.path) {
-                    loadedPosts.append(BlogPost(url: indexURL, format: .bundle))
+                if fm.fileExists(atPath: indexURL.path) {
+                    items.append(ContentItem(url: indexURL, format: .bundle, section: sectionName))
                 }
             } else if itemURL.pathExtension.lowercased() == "md" {
-                // File format: direct .md file
-                loadedPosts.append(BlogPost(url: itemURL, format: .file))
+                items.append(ContentItem(url: itemURL, format: .file, section: sectionName))
             }
         }
 
-        posts = loadedPosts.sorted()
+        return items
     }
 
     // MARK: - Private: Security-Scoped Bookmarks
@@ -294,7 +363,7 @@ final class WorkspaceStore: ObservableObject {
     private func openFolderWithoutBookmark(_ url: URL) {
         currentFolderURL = url
         if validateHugoSite(at: url) {
-            loadPosts(from: url)
+            loadContent(from: url)
         } else {
             lastError = .notHugoSite
         }
@@ -315,7 +384,15 @@ final class WorkspaceStore: ObservableObject {
             options: [.withSecurityScope],
             relativeTo: nil,
             bookmarkDataIsStale: &isStale
-        ) else { return }
+        ) else {
+            UserDefaults.standard.removeObject(forKey: bookmarkKey)
+            return
+        }
+
+        guard validateHugoSite(at: url) else {
+            UserDefaults.standard.removeObject(forKey: bookmarkKey)
+            return
+        }
 
         if isStale {
             if let newData = createBookmark(for: url) {
@@ -324,10 +401,7 @@ final class WorkspaceStore: ObservableObject {
         }
 
         startAccessingFolder(url)
-
-        if validateHugoSite(at: url) {
-            loadPosts(from: url)
-        }
+        loadContent(from: url)
     }
 
     private func loadRecentWorkspaces() {

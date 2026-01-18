@@ -148,8 +148,6 @@ struct EditorView: NSViewRepresentable {
             viewModel.updateCursorPosition(cursorPos)
             onCursorChange?(cursorPos)
             
-            let visibleRange = computeVisibleRange(textView: textView)
-            textView.updateFocusMode(visibleRange: visibleRange)
         }
 
         func triggerStyling() {
@@ -160,7 +158,6 @@ struct EditorView: NSViewRepresentable {
 
             let visibleRange = computeVisibleRange(textView: textView)
             viewModel.applyStyles(to: textView, visibleRange: visibleRange)
-            textView.updateFocusMode(visibleRange: visibleRange)
         }
 
         private func computeVisibleRange(textView: NSTextView) -> NSRange {
@@ -188,11 +185,8 @@ class EditorTextView: NSTextView {
     @AppStorage("editorFontSize") private var fontSize: Double = 16
     @AppStorage("editorLineSpacing") private var lineSpacing: Double = 1.4
     @AppStorage("spellCheckEnabled") private var spellCheckEnabled = true
-    @AppStorage("focusModeEnabled") private var focusModeEnabled = false
-    @AppStorage("typewriterModeEnabled") private var typewriterModeEnabled = false
-    @AppStorage("autoPairEnabled") private var autoPairEnabled = true
 
-    private var userScrollUntil: Date?
+    @AppStorage("autoPairEnabled") private var autoPairEnabled = true
     
     /// Context for saving pasted images. Set by the coordinator.
     var imageContext: ImageContext?
@@ -257,18 +251,13 @@ class EditorTextView: NSTextView {
         ]
     }
 
-    override func scrollWheel(with event: NSEvent) {
-        userScrollUntil = Date().addingTimeInterval(0.6)
-        super.scrollWheel(with: event)
-    }
-
     override func insertText(_ string: Any, replacementRange: NSRange) {
         guard autoPairEnabled,
               let insertedString = string as? String,
               insertedString.count == 1,
               let char = insertedString.first else {
             super.insertText(string, replacementRange: replacementRange)
-            scrollCaretToCenterIfTypewriter()
+    
             return
         }
 
@@ -277,48 +266,48 @@ class EditorTextView: NSTextView {
 
         if hasSelection, let closer = Self.pairs[char] {
             wrapSelection(opener: char, closer: closer, range: selectedRange)
-            scrollCaretToCenterIfTypewriter()
+    
             return
         }
 
         if let closer = Self.pairs[char], !Self.symmetricPairs.contains(char) {
             insertPair(opener: char, closer: closer)
-            scrollCaretToCenterIfTypewriter()
+    
             return
         }
 
         if Self.symmetricPairs.contains(char) {
             if shouldSkipOver(char: char, at: selectedRange.location) {
                 moveCursorRight()
-                scrollCaretToCenterIfTypewriter()
+        
                 return
             }
             insertPair(opener: char, closer: char)
-            scrollCaretToCenterIfTypewriter()
+    
             return
         }
 
         if Self.closers.contains(char), shouldSkipOver(char: char, at: selectedRange.location) {
             moveCursorRight()
-            scrollCaretToCenterIfTypewriter()
+    
             return
         }
 
         super.insertText(string, replacementRange: replacementRange)
-        scrollCaretToCenterIfTypewriter()
+
     }
 
     override func deleteBackward(_ sender: Any?) {
         guard autoPairEnabled else {
             super.deleteBackward(sender)
-            scrollCaretToCenterIfTypewriter()
+    
             return
         }
 
         let selectedRange = self.selectedRange()
         guard selectedRange.length == 0, selectedRange.location > 0 else {
             super.deleteBackward(sender)
-            scrollCaretToCenterIfTypewriter()
+    
             return
         }
 
@@ -329,7 +318,7 @@ class EditorTextView: NSTextView {
         guard let expectedCloser = Self.pairs[prevChar],
               selectedRange.location < nsString.length else {
             super.deleteBackward(sender)
-            scrollCaretToCenterIfTypewriter()
+    
             return
         }
 
@@ -344,7 +333,7 @@ class EditorTextView: NSTextView {
         } else {
             super.deleteBackward(sender)
         }
-        scrollCaretToCenterIfTypewriter()
+
     }
 
     private func wrapSelection(opener: Character, closer: Character, range: NSRange) {
@@ -380,72 +369,6 @@ class EditorTextView: NSTextView {
     private func moveCursorRight() {
         let range = self.selectedRange()
         setSelectedRange(NSRange(location: range.location + 1, length: 0))
-    }
-
-    private func scrollCaretToCenterIfTypewriter() {
-        guard typewriterModeEnabled else { return }
-
-        if let cooldown = userScrollUntil, Date() < cooldown {
-            return
-        }
-
-        guard let layoutManager = layoutManager,
-              let scrollView = enclosingScrollView else { return }
-
-        let caretLocation = selectedRange().location
-        let glyphIndex = layoutManager.glyphIndexForCharacter(at: caretLocation)
-        var lineFragmentRect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
-
-        lineFragmentRect.origin.x += textContainerOrigin.x
-        lineFragmentRect.origin.y += textContainerOrigin.y
-
-        let visibleHeight = scrollView.documentVisibleRect.height
-        let targetY = lineFragmentRect.midY - (visibleHeight / 2)
-        let clampedY = max(0, min(targetY, frame.height - visibleHeight))
-
-        let targetPoint = NSPoint(x: 0, y: clampedY)
-        scrollView.contentView.scroll(to: targetPoint)
-        scrollView.reflectScrolledClipView(scrollView.contentView)
-    }
-
-    func updateFocusMode(visibleRange: NSRange) {
-        guard let layoutManager = layoutManager,
-              let textStorage = textStorage else { return }
-
-        let clampedVisibleRange = NSIntersectionRange(visibleRange, NSRange(location: 0, length: string.utf16.count))
-        guard clampedVisibleRange.length > 0 else { return }
-
-        layoutManager.removeTemporaryAttribute(.foregroundColor, forCharacterRange: clampedVisibleRange)
-
-        guard focusModeEnabled else { return }
-
-        let nsString = string as NSString
-        guard nsString.length > 0 else { return }
-
-        let cursorLocation = selectedRange().location
-        let safeCursorLocation = min(cursorLocation, max(0, nsString.length - 1))
-        let currentParagraphRange = nsString.paragraphRange(for: NSRange(location: safeCursorLocation, length: 0))
-
-        var searchLocation = clampedVisibleRange.location
-        let visibleEnd = NSMaxRange(clampedVisibleRange)
-
-        while searchLocation < visibleEnd {
-            let paragraphRange = nsString.paragraphRange(for: NSRange(location: searchLocation, length: 0))
-            let rangeInVisible = NSIntersectionRange(paragraphRange, clampedVisibleRange)
-
-            if rangeInVisible.length > 0 && !NSEqualRanges(paragraphRange, currentParagraphRange) {
-                textStorage.enumerateAttribute(.foregroundColor, in: rangeInVisible, options: []) { value, attrRange, _ in
-                    let baseColor = (value as? NSColor) ?? NSColor.textColor
-                    let dimmedColor = baseColor.withAlphaComponent(baseColor.alphaComponent * 0.3)
-                    layoutManager.addTemporaryAttribute(.foregroundColor, value: dimmedColor, forCharacterRange: attrRange)
-                }
-            }
-
-            searchLocation = NSMaxRange(paragraphRange)
-            if searchLocation <= paragraphRange.location {
-                break
-            }
-        }
     }
     
     // MARK: - Custom Drawing
@@ -660,7 +583,7 @@ class EditorTextView: NSTextView {
         // Insert markdown at cursor position
         let markdown = "![](\(filename))"
         insertText(markdown, replacementRange: selectedRange())
-        scrollCaretToCenterIfTypewriter()
+
     }
     
     private func generateImageFilename() -> String {

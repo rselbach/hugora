@@ -50,7 +50,7 @@ func decodeHTMLEntities(_ string: String) -> String {
 }
 
 final class EditorState: ObservableObject {
-    @Published var currentPost: BlogPost?
+    @Published var currentItem: ContentItem?
     @Published var content: String = ""
     @Published var isDirty: Bool = false
     @Published var cursorPosition: Int = 0
@@ -59,22 +59,22 @@ final class EditorState: ObservableObject {
     private let sessionKey = "hugora.session.currentPost"
 
     var title: String {
-        currentPost?.title ?? "No Post Selected"
+        currentItem?.title ?? "No Document Selected"
     }
 
     init() {
         restoreSession()
     }
 
-    func openPost(_ post: BlogPost) {
+    func openItem(_ item: ContentItem) {
         saveCurrentIfDirty()
 
         do {
-            let rawContent = try String(contentsOf: post.url, encoding: .utf8)
+            let rawContent = try String(contentsOf: item.url, encoding: .utf8)
             let decodedContent = decodeHTMLEntities(rawContent)
-            currentPost = post
+            currentItem = item
             content = decodedContent
-            isDirty = rawContent != decodedContent  // mark dirty if entities were decoded
+            isDirty = rawContent != decodedContent
             cursorPosition = 0
             scrollPosition = 0
             saveSession()
@@ -89,11 +89,11 @@ final class EditorState: ObservableObject {
     }
 
     func save() {
-        guard let post = currentPost, isDirty else { return }
+        guard let item = currentItem, isDirty else { return }
         do {
-            let newURL = try saveWithRename(post: post, content: content)
-            if newURL != post.url {
-                currentPost = BlogPost(url: newURL, format: post.format)
+            let newURL = try saveWithRename(item: item, content: content)
+            if newURL != item.url {
+                currentItem = ContentItem(url: newURL, format: item.format, section: item.section)
                 saveSession()
             }
             isDirty = false
@@ -102,17 +102,17 @@ final class EditorState: ObservableObject {
         }
     }
 
-    private func saveWithRename(post: BlogPost, content: String) throws -> URL {
+    private func saveWithRename(item: ContentItem, content: String) throws -> URL {
         let slug = deriveSlug(from: content)
-        let datePrefix = deriveDatePrefix(from: content, fallback: post.date)
+        let datePrefix = deriveDatePrefix(from: content, fallback: item.date)
         let expectedName = "\(datePrefix)-\(slug)"
         
         let fm = FileManager.default
-        var finalURL = post.url
+        var finalURL = item.url
 
-        switch post.format {
+        switch item.format {
         case .bundle:
-            let currentFolder = post.url.deletingLastPathComponent()
+            let currentFolder = item.url.deletingLastPathComponent()
             let currentFolderName = currentFolder.lastPathComponent
             
             if currentFolderName != expectedName {
@@ -126,14 +126,14 @@ final class EditorState: ObservableObject {
             }
             
         case .file:
-            let currentFileName = post.url.deletingPathExtension().lastPathComponent
+            let currentFileName = item.url.deletingPathExtension().lastPathComponent
             
             if currentFileName != expectedName {
-                let parentDir = post.url.deletingLastPathComponent()
+                let parentDir = item.url.deletingLastPathComponent()
                 let newFile = parentDir.appendingPathComponent("\(expectedName).md")
                 
                 if !fm.fileExists(atPath: newFile.path) {
-                    try fm.moveItem(at: post.url, to: newFile)
+                    try fm.moveItem(at: item.url, to: newFile)
                     finalURL = newFile
                 }
             }
@@ -183,11 +183,11 @@ final class EditorState: ObservableObject {
     // MARK: - Session Persistence
 
     private func saveSession() {
-        guard let post = currentPost else {
+        guard let item = currentItem else {
             UserDefaults.standard.removeObject(forKey: sessionKey)
             return
         }
-        UserDefaults.standard.set(post.url.path, forKey: sessionKey)
+        UserDefaults.standard.set(item.url.path, forKey: sessionKey)
     }
 
     private func restoreSession() {
@@ -197,16 +197,27 @@ final class EditorState: ObservableObject {
         }
 
         let url = URL(fileURLWithPath: path)
-        let format: PostFormat = url.lastPathComponent == "index.md" ? .bundle : .file
+        let format: ContentFormat = url.lastPathComponent == "index.md" ? .bundle : .file
+        let section = extractSectionFromPath(url)
 
         do {
             let rawContent = try String(contentsOf: url, encoding: .utf8)
             let decodedContent = decodeHTMLEntities(rawContent)
-            currentPost = BlogPost(url: url, format: format)
+            currentItem = ContentItem(url: url, format: format, section: section)
             content = decodedContent
             isDirty = rawContent != decodedContent
         } catch {
             // Silently fail on restore
         }
+    }
+
+    private func extractSectionFromPath(_ url: URL) -> String {
+        // Path like: .../content/blog/2025-01-01-post/index.md
+        // We want "blog"
+        let components = url.pathComponents
+        if let contentIdx = components.lastIndex(of: "content"), contentIdx + 1 < components.count {
+            return components[contentIdx + 1]
+        }
+        return "unknown"
     }
 }

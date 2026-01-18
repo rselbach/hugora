@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct PostListView: View {
+struct ContentListView: View {
     @EnvironmentObject private var workspaceStore: WorkspaceStore
 
     var body: some View {
@@ -15,7 +15,7 @@ struct PostListView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("POSTS")
+                Text("CONTENT")
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
@@ -71,20 +71,20 @@ struct PostListView: View {
     private var content: some View {
         if let error = workspaceStore.lastError {
             errorState(error)
-        } else if !workspaceStore.posts.isEmpty {
-            postList
+        } else if !workspaceStore.sections.isEmpty {
+            sectionList
         } else if workspaceStore.currentFolderURL != nil {
-            emptyPostsState
+            emptyContentState
         } else {
             emptyState
         }
     }
 
-    private var postList: some View {
+    private var sectionList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(workspaceStore.posts) { post in
-                    PostRow(post: post)
+                ForEach(workspaceStore.sections) { section in
+                    SectionGroup(section: section)
                 }
             }
             .padding(.vertical, 4)
@@ -108,15 +108,15 @@ struct PostListView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private var emptyPostsState: some View {
+    private var emptyContentState: some View {
         VStack(spacing: 12) {
             Spacer()
             Image(systemName: "doc.text")
                 .font(.system(size: 32))
                 .foregroundStyle(.secondary)
-            Text("No posts yet")
+            Text("No content yet")
                 .foregroundStyle(.secondary)
-            Text("Create posts in content/blog")
+            Text("Add content sections to your Hugo site")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
             Spacer()
@@ -145,8 +145,36 @@ struct PostListView: View {
     }
 }
 
-struct PostRow: View {
-    let post: BlogPost
+struct SectionGroup: View {
+    let section: ContentSection
+    @EnvironmentObject private var workspaceStore: WorkspaceStore
+    @State private var isExpanded = true
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            ForEach(section.items) { item in
+                ContentRow(item: item)
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                Text(section.displayName)
+                    .font(.system(size: 12, weight: .medium))
+                Spacer()
+                Text("\(section.itemCount)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 4)
+    }
+}
+
+struct ContentRow: View {
+    let item: ContentItem
 
     @EnvironmentObject private var workspaceStore: WorkspaceStore
     @State private var isHovering = false
@@ -166,19 +194,19 @@ struct PostRow: View {
                 .foregroundStyle(.secondary)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(post.title)
+                Text(item.title)
                     .font(.system(size: 12))
                     .lineLimit(1)
                     .truncationMode(.tail)
 
                 HStack(spacing: 4) {
-                    if let date = post.date {
+                    if let date = item.date {
                         Text(dateFormatter.string(from: date))
                             .font(.system(size: 10))
                             .foregroundStyle(.tertiary)
                     }
 
-                    if post.format == .bundle {
+                    if item.format == .bundle {
                         Text("bundle")
                             .font(.system(size: 9))
                             .foregroundStyle(.tertiary)
@@ -198,16 +226,16 @@ struct PostRow: View {
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
         .onTapGesture {
-            workspaceStore.openFile(post.url)
+            workspaceStore.openFile(item.url)
         }
         .contextMenu {
             Button("Open") {
-                workspaceStore.openFile(post.url)
+                workspaceStore.openFile(item.url)
             }
             Button("Reveal in Finder") {
-                let revealURL = post.format == .bundle
-                    ? post.url.deletingLastPathComponent()
-                    : post.url
+                let revealURL = item.format == .bundle
+                    ? item.url.deletingLastPathComponent()
+                    : item.url
                 NSWorkspace.shared.activateFileViewerSelecting([revealURL])
             }
             Divider()
@@ -216,22 +244,22 @@ struct PostRow: View {
             }
         }
         .confirmationDialog(
-            "Delete \"\(post.title)\"?",
+            "Delete \"\(item.title)\"?",
             isPresented: $showDeleteConfirmation,
             titleVisibility: .visible
         ) {
             Button("Delete", role: .destructive) {
-                workspaceStore.deletePost(post)
+                workspaceStore.deleteContent(item)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This will move the post to Trash.")
+            Text("This will move the content to Trash.")
         }
     }
 }
 
 #Preview {
-    PostListView()
+    ContentListView()
         .environmentObject(WorkspaceStore())
         .frame(width: 250, height: 400)
 }
