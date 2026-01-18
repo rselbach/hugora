@@ -1,0 +1,2 @@
+This file exists to ensure the Resources directory is included in the bundle.
+Add themes, templates, and web assets here.

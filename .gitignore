@@ -1,0 +1,27 @@
+# Swift/SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+*.xccheckout
+*.moved-aside
+*.xcuserstate
+DerivedData/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# App builds
+*.app
+*.dSYM.zip
+*.dSYM
+
+# Archives
+*.xcarchive

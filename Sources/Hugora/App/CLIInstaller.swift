@@ -1,0 +1,174 @@
+import AppKit
+import Foundation
+
+enum CLIInstaller {
+    static let installPath = "/usr/local/bin/hugora"
+
+    static var bundledCLIURL: URL? {
+        Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("hugora-cli")
+    }
+
+    static var isInstalled: Bool {
+        guard let bundledURL = bundledCLIURL else { return false }
+
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: installPath) else { return false }
+
+        // Check if symlink points to our bundled CLI
+        if let destination = try? fm.destinationOfSymbolicLink(atPath: installPath) {
+            return destination == bundledURL.path
+        }
+
+        return false
+    }
+
+    static var canInstallWithoutAuth: Bool {
+        let fm = FileManager.default
+        let binDir = "/usr/local/bin"
+
+        // Check if /usr/local/bin exists and is writable
+        if fm.fileExists(atPath: binDir) {
+            return fm.isWritableFile(atPath: binDir)
+        }
+
+        // Check if /usr/local exists and is writable (can create bin)
+        if fm.isWritableFile(atPath: "/usr/local") {
+            return true
+        }
+
+        return false
+    }
+
+    static func install(completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let bundledURL = bundledCLIURL else {
+            completion(.failure(CLIInstallerError.cliNotBundled))
+            return
+        }
+
+        let fm = FileManager.default
+
+        // Ensure bundled CLI exists
+        guard fm.fileExists(atPath: bundledURL.path) else {
+            completion(.failure(CLIInstallerError.cliNotBundled))
+            return
+        }
+
+        // Try without auth first
+        if canInstallWithoutAuth {
+            do {
+                try installSymlink(from: bundledURL.path)
+                completion(.success(()))
+            } catch {
+                completion(.failure(error))
+            }
+            return
+        }
+
+        // Need admin privileges - use AppleScript
+        installWithAdminPrivileges(bundledURL: bundledURL, completion: completion)
+    }
+
+    static func uninstall(completion: @escaping (Result<Void, Error>) -> Void) {
+        let fm = FileManager.default
+
+        guard fm.fileExists(atPath: installPath) else {
+            completion(.success(()))
+            return
+        }
+
+        // Try without auth first
+        if fm.isDeletableFile(atPath: installPath) {
+            do {
+                try fm.removeItem(atPath: installPath)
+                completion(.success(()))
+            } catch {
+                completion(.failure(error))
+            }
+            return
+        }
+
+        // Need admin privileges
+        uninstallWithAdminPrivileges(completion: completion)
+    }
+
+    private static func installSymlink(from source: String) throws {
+        let fm = FileManager.default
+        let binDir = "/usr/local/bin"
+
+        // Create /usr/local/bin if needed
+        if !fm.fileExists(atPath: binDir) {
+            try fm.createDirectory(atPath: binDir, withIntermediateDirectories: true)
+        }
+
+        // Remove existing file/symlink if present
+        if fm.fileExists(atPath: installPath) {
+            try fm.removeItem(atPath: installPath)
+        }
+
+        // Create symlink
+        try fm.createSymbolicLink(atPath: installPath, withDestinationPath: source)
+    }
+
+    private static func installWithAdminPrivileges(
+        bundledURL: URL,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let script = """
+            do shell script "mkdir -p /usr/local/bin && rm -f '\(installPath)' && ln -s '\(bundledURL.path)' '\(installPath)'" with administrator privileges
+            """
+
+        runAppleScript(script, completion: completion)
+    }
+
+    private static func uninstallWithAdminPrivileges(
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let script = """
+            do shell script "rm -f '\(installPath)'" with administrator privileges
+            """
+
+        runAppleScript(script, completion: completion)
+    }
+
+    private static func runAppleScript(
+        _ source: String,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            var error: NSDictionary?
+            let script = NSAppleScript(source: source)
+            script?.executeAndReturnError(&error)
+
+            DispatchQueue.main.async {
+                if let error = error {
+                    let message =
+                        error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
+                    if message.contains("User canceled") {
+                        completion(.failure(CLIInstallerError.userCancelled))
+                    } else {
+                        completion(.failure(CLIInstallerError.scriptFailed(message)))
+                    }
+                } else {
+                    completion(.success(()))
+                }
+            }
+        }
+    }
+}
+
+enum CLIInstallerError: LocalizedError {
+    case cliNotBundled
+    case userCancelled
+    case scriptFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .cliNotBundled:
+            "The command line tool is not bundled with this version of Hugora."
+        case .userCancelled:
+            "Installation was cancelled."
+        case .scriptFailed(let message):
+            "Installation failed: \(message)"
+        }
+    }
+}

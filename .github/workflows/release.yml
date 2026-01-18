@@ -1,0 +1,247 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Set version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          elif [[ -n "${{ github.event.inputs.version }}" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="0.0.0-dev"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Update version in Info.plist
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.version }}" Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" Info.plist
+
+      - name: Build release
+        run: swift build -c release
+
+      - name: Import signing certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.DEVELOPER_ID_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="${RUNNER_TEMP}/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+          
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          security set-keychain-settings -lut 21600 "${KEYCHAIN_PATH}"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          
+          echo "${CERTIFICATE_P12}" | base64 --decode > "${RUNNER_TEMP}/certificate.p12"
+          security import "${RUNNER_TEMP}/certificate.p12" \
+            -P "${CERTIFICATE_PASSWORD}" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "${KEYCHAIN_PATH}"
+          
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          security list-keychain -d user -s "${KEYCHAIN_PATH}" login.keychain-db
+          
+          rm "${RUNNER_TEMP}/certificate.p12"
+
+      - name: Create app bundle
+        run: |
+          APP_BUNDLE=".build/release-bundle/Hugora.app"
+          CONTENTS="${APP_BUNDLE}/Contents"
+          mkdir -p "${CONTENTS}/MacOS" "${CONTENTS}/Resources" "${CONTENTS}/Frameworks"
+          
+          # Copy executables
+          cp .build/release/Hugora "${CONTENTS}/MacOS/Hugora"
+          cp .build/release/hugora-cli "${CONTENTS}/MacOS/hugora-cli"
+          cp Info.plist "${CONTENTS}/Info.plist"
+          
+          # Copy Sparkle.framework into the bundle
+          SPARKLE_PATH=$(find .build -name "Sparkle.framework" -type d | head -1)
+          cp -R "${SPARKLE_PATH}" "${CONTENTS}/Frameworks/"
+          
+          # Add rpath for Frameworks directory
+          install_name_tool -add_rpath @executable_path/../Frameworks "${CONTENTS}/MacOS/Hugora"
+          
+          # Compile assets
+          xcrun actool Sources/Hugora/Resources/Assets.xcassets \
+            --compile "${CONTENTS}/Resources" \
+            --platform macosx \
+            --minimum-deployment-target 14.0 \
+            --app-icon AppIcon \
+            --output-partial-info-plist .build/release-bundle/AssetInfo.plist
+
+      - name: Sign app bundle
+        run: |
+          # Sign Sparkle.framework first
+          codesign --force --options runtime --deep \
+            --sign "Developer ID Application" \
+            .build/release-bundle/Hugora.app/Contents/Frameworks/Sparkle.framework
+          
+          # Sign the CLI tool
+          codesign --force --options runtime \
+            --entitlements Hugora.entitlements \
+            --sign "Developer ID Application" \
+            .build/release-bundle/Hugora.app/Contents/MacOS/hugora-cli
+          
+          # Sign the main executable
+          codesign --force --options runtime \
+            --entitlements Hugora.entitlements \
+            --sign "Developer ID Application" \
+            .build/release-bundle/Hugora.app/Contents/MacOS/Hugora
+          
+          # Sign the app bundle
+          codesign --force --options runtime \
+            --entitlements Hugora.entitlements \
+            --sign "Developer ID Application" \
+            .build/release-bundle/Hugora.app
+          
+          codesign --verify --deep --strict --verbose=2 .build/release-bundle/Hugora.app
+
+      - name: Create DMG
+        run: |
+          mkdir -p .build/dmg/staging
+          cp -R .build/release-bundle/Hugora.app .build/dmg/staging/
+          ln -s /Applications .build/dmg/staging/Applications
+          
+          hdiutil create -volname "Hugora" \
+            -srcfolder .build/dmg/staging \
+            -ov -format UDRW \
+            .build/dmg/Hugora-temp.dmg
+          
+          hdiutil convert .build/dmg/Hugora-temp.dmg \
+            -format UDZO \
+            -imagekey zlib-level=9 \
+            -o .build/dmg/Hugora.dmg
+          
+          rm .build/dmg/Hugora-temp.dmg
+          rm -rf .build/dmg/staging
+          
+          codesign --force --sign "Developer ID Application" .build/dmg/Hugora.dmg
+
+      - name: Notarize DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool submit .build/dmg/Hugora.dmg \
+            --apple-id "${APPLE_ID}" \
+            --team-id "${APPLE_TEAM_ID}" \
+            --password "${APPLE_APP_PASSWORD}" \
+            --wait
+          
+          xcrun stapler staple .build/dmg/Hugora.dmg
+
+      - name: Rename DMG with version
+        run: |
+          mv .build/dmg/Hugora.dmg ".build/dmg/Hugora-${{ steps.version.outputs.version }}.dmg"
+
+      - name: Download Sparkle tools
+        run: |
+          curl -L -o /tmp/Sparkle.tar.xz "https://github.com/sparkle-project/Sparkle/releases/download/2.8.1/Sparkle-2.8.1.tar.xz"
+          mkdir -p /tmp/sparkle
+          tar -xf /tmp/Sparkle.tar.xz -C /tmp/sparkle
+
+      - name: Sign update for Sparkle
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+        run: |
+          SIGNATURE=$(/tmp/sparkle/bin/sign_update ".build/dmg/Hugora-${{ steps.version.outputs.version }}.dmg" --ed-key-file <(echo "$SPARKLE_PRIVATE_KEY"))
+
+          if [[ -z "$SIGNATURE" ]]; then
+            echo "Error: Failed to generate Sparkle signature"
+            exit 1
+          fi
+
+          if [[ ! "$SIGNATURE" =~ sparkle:edSignature= ]]; then
+            echo "Error: Sparkle signature has invalid format: $SIGNATURE"
+            exit 1
+          fi
+
+          echo "SPARKLE_SIGNATURE=$SIGNATURE" >> $GITHUB_ENV
+
+      - name: Generate appcast.xml
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          DATE=$(date -R)
+          
+          mkdir -p _site
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?>' > _site/appcast.xml
+          printf '%s\n' '<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">' >> _site/appcast.xml
+          printf '%s\n' '  <channel>' >> _site/appcast.xml
+          printf '%s\n' '    <title>Hugora Updates</title>' >> _site/appcast.xml
+          printf '%s\n' '    <link>https://rselbach.github.io/digitora/appcast.xml</link>' >> _site/appcast.xml
+          printf '%s\n' '    <description>Hugora app updates</description>' >> _site/appcast.xml
+          printf '%s\n' '    <language>en</language>' >> _site/appcast.xml
+          printf '%s\n' '    <item>' >> _site/appcast.xml
+          printf '%s\n' "      <title>Version ${VERSION}</title>" >> _site/appcast.xml
+          printf '%s\n' "      <pubDate>${DATE}</pubDate>" >> _site/appcast.xml
+          printf '%s\n' "      <sparkle:version>${{ github.run_number }}</sparkle:version>" >> _site/appcast.xml
+          printf '%s\n' "      <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>" >> _site/appcast.xml
+          printf '%s\n' "      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>" >> _site/appcast.xml
+          printf '%s\n' "      <enclosure url=\"https://github.com/rselbach/digitora/releases/download/v${VERSION}/Hugora-${VERSION}.dmg\" ${SPARKLE_SIGNATURE} type=\"application/octet-stream\"/>" >> _site/appcast.xml
+          printf '%s\n' '    </item>' >> _site/appcast.xml
+          printf '%s\n' '  </channel>' >> _site/appcast.xml
+          printf '%s\n' '</rss>' >> _site/appcast.xml
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hugora-${{ steps.version.outputs.version }}
+          path: .build/dmg/Hugora-${{ steps.version.outputs.version }}.dmg
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: .build/dmg/Hugora-${{ steps.version.outputs.version }}.dmg
+          generate_release_notes: true
+
+      - name: Cleanup keychain
+        if: always()
+        run: |
+          security delete-keychain "${RUNNER_TEMP}/signing.keychain-db" || true
+
+  deploy-appcast:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
