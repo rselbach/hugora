@@ -148,51 +148,73 @@ final class WorkspaceStore: ObservableObject {
     // MARK: - Create New Post
 
     func createNewPost() {
-        guard let blogSection = sections.first(where: { 
-            $0.name.lowercased() == "blog" || $0.name.lowercased() == "posts" 
-        }) else { return }
+        guard let siteURL = currentFolderURL else {
+            presentNewPostError("No Hugo site is open.")
+            return
+        }
 
-        let blogDir = blogSection.url
+        guard let targetSection = resolveNewPostSection() else {
+            presentNewPostError("No content section found. Add a section folder under your Hugo content directory.")
+            return
+        }
 
+        let format = preferredNewPostFormat()
+        let sectionDir = targetSection.url
+
+        let date = Date()
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        let datePrefix = formatter.string(from: Date())
-
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime]
-        let isoDate = isoFormatter.string(from: Date())
+        let datePrefix = formatter.string(from: date)
 
         let baseSlug = "new-post"
         var slug = baseSlug
         var counter = 1
 
-        while FileManager.default.fileExists(atPath: blogDir.appendingPathComponent("\(datePrefix)-\(slug)").path) ||
-              FileManager.default.fileExists(atPath: blogDir.appendingPathComponent("\(datePrefix)-\(slug).md").path) {
+        func postExists(_ candidateSlug: String) -> Bool {
+            let folderName = "\(datePrefix)-\(candidateSlug)"
+            let folderURL = sectionDir.appendingPathComponent(folderName)
+            let fileURL = sectionDir.appendingPathComponent("\(folderName).md")
+            return FileManager.default.fileExists(atPath: folderURL.path)
+                || FileManager.default.fileExists(atPath: fileURL.path)
+        }
+
+        while postExists(slug) {
             slug = "\(baseSlug)-\(counter)"
             counter += 1
         }
 
         let folderName = "\(datePrefix)-\(slug)"
-        let folderURL = blogDir.appendingPathComponent(folderName)
-        let fileURL = folderURL.appendingPathComponent("index.md")
+        let folderURL = sectionDir.appendingPathComponent(folderName)
+        let fileURL: URL
+        switch format {
+        case .bundle:
+            fileURL = folderURL.appendingPathComponent("index.md")
+        case .file:
+            fileURL = sectionDir.appendingPathComponent("\(folderName).md")
+        }
 
-        let frontmatter = """
-            ---
-            title: "New Post"
-            date: \(isoDate)
-            draft: true
-            ---
-
-            """
+        let frontmatter = newPostContent(
+            sectionName: targetSection.name,
+            format: format,
+            slug: slug,
+            date: date,
+            siteURL: siteURL
+        )
 
         do {
-            try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+            if format == .bundle {
+                try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+            }
             try frontmatter.write(to: fileURL, atomically: true, encoding: .utf8)
 
-            let newItem = ContentItem(url: fileURL, format: .bundle, section: blogSection.name)
-            if let idx = sections.firstIndex(where: { $0.name == blogSection.name }) {
+            let newItem = ContentItem(url: fileURL, format: format, section: targetSection.name)
+            if let idx = sections.firstIndex(where: { $0.name == targetSection.name }) {
                 sections[idx].items.insert(newItem, at: 0)
                 sections[idx].items.sort()
+            } else {
+                let newSection = ContentSection(name: targetSection.name, url: targetSection.url, items: [newItem])
+                sections.append(newSection)
+                sections.sort()
             }
 
             selectedFileURL = fileURL
@@ -215,7 +237,8 @@ final class WorkspaceStore: ObservableObject {
                 try fm.trashItem(at: item.url, resultingItemURL: nil)
             }
 
-            if let sectionIdx = sections.firstIndex(where: { $0.name == item.section }) {
+            let sectionName = item.section.isEmpty ? "(root)" : item.section
+            if let sectionIdx = sections.firstIndex(where: { $0.name == sectionName }) {
                 sections[sectionIdx].items.removeAll { $0.id == item.id }
             }
 
@@ -295,7 +318,7 @@ final class WorkspaceStore: ObservableObject {
                 // Root-level markdown file (e.g., about.md)
                 let fileName = itemURL.lastPathComponent
                 if fileName != "_index.md" {
-                    rootItems.append(ContentItem(url: itemURL, format: .file, section: ""))
+                    rootItems.append(ContentItem(url: itemURL, format: .file, section: "(root)"))
                 }
             }
         }
@@ -307,6 +330,59 @@ final class WorkspaceStore: ObservableObject {
         }
 
         sections = loadedSections.sorted()
+    }
+
+    private func preferredNewPostFormat() -> ContentFormat {
+        let stored = UserDefaults.standard.string(forKey: "newPostFormat") ?? ""
+        return ContentFormat(rawValue: stored) ?? .bundle
+    }
+
+    private func resolveNewPostSection() -> ContentSection? {
+        let preferredNames = ["blog", "posts"]
+        if let preferred = sections.first(where: { preferredNames.contains($0.name.lowercased()) }) {
+            return preferred
+        }
+
+        let nonRoot = sections.filter { $0.name != "(root)" }
+        if let first = nonRoot.first {
+            return first
+        }
+
+        if let root = sections.first(where: { $0.name == "(root)" }) {
+            return root
+        }
+
+        if let contentDir = contentDirectoryURL {
+            return ContentSection(name: "(root)", url: contentDir, items: [])
+        }
+
+        return nil
+    }
+
+    private func newPostContent(
+        sectionName: String,
+        format: ContentFormat,
+        slug: String,
+        date: Date,
+        siteURL: URL
+    ) -> String {
+        let config = hugoConfig ?? .default
+        let builder = NewPostBuilder(siteURL: siteURL, config: config)
+        return builder.buildContent(
+            sectionName: sectionName,
+            format: format,
+            title: "New Post",
+            slug: slug,
+            date: date
+        )
+    }
+
+    private func presentNewPostError(_ message: String) {
+        let alert = NSAlert()
+        alert.messageText = "Cannot create new post"
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.runModal()
     }
 
     private func loadItems(in sectionURL: URL, sectionName: String) -> [ContentItem] {

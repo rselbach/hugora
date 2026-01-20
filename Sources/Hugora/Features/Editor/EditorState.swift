@@ -68,6 +68,11 @@ final class EditorState: ObservableObject {
         displayContent: String,
         saveContent: String
     ) throws -> URL {
+        guard autoRenameOnSave else {
+            try saveContent.data(using: .utf8)?.write(to: item.url)
+            return item.url
+        }
+
         let slug = deriveSlug(from: displayContent)
         let datePrefix = deriveDatePrefix(from: displayContent, fallback: item.date)
         let expectedName = "\(datePrefix)-\(slug)"
@@ -109,19 +114,32 @@ final class EditorState: ObservableObject {
     }
 
     private func deriveSlug(from content: String) -> String {
-        if let urlValue = parseFrontmatterValue(key: "url", from: content) {
-            let cleaned = urlValue
-                .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                .components(separatedBy: "/")
-                .last ?? urlValue
+        if let slugValue = parseFrontmatterValue(key: "slug", from: content),
+           let cleaned = cleanedSlugComponent(from: slugValue) {
             return cleaned
         }
-        
+
+        if let urlValue = parseFrontmatterValue(key: "url", from: content),
+           let cleaned = cleanedSlugComponent(from: urlValue) {
+            return cleaned
+        }
+
         if let title = parseFrontmatterValue(key: "title", from: content) {
             return slugify(title)
         }
         
         return "untitled"
+    }
+
+    private func cleanedSlugComponent(from value: String) -> String? {
+        let trimmed = value
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        let lastComponent = trimmed.components(separatedBy: "/").last ?? trimmed
+        let cleaned = lastComponent.trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? nil : cleaned
     }
 
     private func deriveDatePrefix(from content: String, fallback: Date?) -> String {
@@ -182,9 +200,20 @@ final class EditorState: ObservableObject {
         // We want "blog"
         let components = url.pathComponents
         if let contentIdx = components.lastIndex(of: "content"), contentIdx + 1 < components.count {
-            return components[contentIdx + 1]
+            let nextComponent = components[contentIdx + 1]
+            let ext = (nextComponent as NSString).pathExtension.lowercased()
+            if ext == "md" || ext == "markdown" {
+                return "(root)"
+            }
+            return nextComponent
         }
         return "unknown"
+    }
+}
+
+private extension EditorState {
+    var autoRenameOnSave: Bool {
+        UserDefaults.standard.object(forKey: "autoRenameOnSave") as? Bool ?? false
     }
 }
 

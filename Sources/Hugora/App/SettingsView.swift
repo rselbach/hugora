@@ -5,6 +5,7 @@ struct SettingsView: View {
     @AppStorage("editorLineSpacing") private var lineSpacing: Double = 1.4
     @AppStorage("autoSaveEnabled") private var autoSaveEnabled = true
     @AppStorage("spellCheckEnabled") private var spellCheckEnabled = true
+    @AppStorage("autoRenameOnSave") private var autoRenameOnSave = false
 
     var body: some View {
         TabView {
@@ -12,7 +13,8 @@ struct SettingsView: View {
                 fontSize: $fontSize,
                 lineSpacing: $lineSpacing,
                 autoSaveEnabled: $autoSaveEnabled,
-                spellCheckEnabled: $spellCheckEnabled
+                spellCheckEnabled: $spellCheckEnabled,
+                autoRenameOnSave: $autoRenameOnSave
             )
             .tabItem {
                 Label("General", systemImage: "gear")
@@ -37,6 +39,7 @@ struct GeneralSettingsView: View {
     @Binding var lineSpacing: Double
     @Binding var autoSaveEnabled: Bool
     @Binding var spellCheckEnabled: Bool
+    @Binding var autoRenameOnSave: Bool
 
     var body: some View {
         Form {
@@ -58,6 +61,7 @@ struct GeneralSettingsView: View {
 
             Section("Behavior") {
                 Toggle("Auto-save documents", isOn: $autoSaveEnabled)
+                Toggle("Auto-rename on save (date-slug)", isOn: $autoRenameOnSave)
                 Toggle("Spell checking", isOn: $spellCheckEnabled)
             }
         }
