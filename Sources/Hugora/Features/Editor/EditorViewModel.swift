@@ -23,6 +23,7 @@ final class EditorViewModel: ObservableObject {
         self.styler = MarkdownStyler(theme: themeManager.currentTheme)
         setupPipeline()
         observeThemeChanges()
+        observeEditorPreferences()
     }
 
     private func observeThemeChanges() {
@@ -30,6 +31,15 @@ final class EditorViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] newTheme in
                 self?.styler = MarkdownStyler(theme: newTheme)
+                self?.forceRestyle()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func observeEditorPreferences() {
+        NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
                 self?.forceRestyle()
             }
             .store(in: &cancellables)

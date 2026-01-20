@@ -12,23 +12,109 @@ func slugify(_ string: String) -> String {
 
 func parseFrontmatterValue(key: String, from content: String) -> String? {
     let lines = content.components(separatedBy: .newlines)
-    guard lines.first?.trimmingCharacters(in: .whitespaces) == "---" else { return nil }
+    guard let firstLine = lines.first?.trimmingCharacters(in: .whitespaces) else { return nil }
 
-    for line in lines.dropFirst() {
+    let delimiter: String
+    switch firstLine {
+    case "---":
+        delimiter = "---"
+    case "+++":
+        delimiter = "+++"
+    default:
+        return nil
+    }
+
+    switch delimiter {
+    case "---":
+        return parseYAMLFrontmatterValue(key: key, lines: lines.dropFirst(), endDelimiter: delimiter)
+    case "+++":
+        return parseTOMLFrontmatterValue(key: key, lines: lines.dropFirst(), endDelimiter: delimiter)
+    default:
+        return nil
+    }
+}
+
+private func parseYAMLFrontmatterValue(
+    key: String,
+    lines: ArraySlice<String>,
+    endDelimiter: String
+) -> String? {
+    let lowerKey = key.lowercased()
+
+    for line in lines {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
-        if trimmed == "---" || trimmed == "+++" { break }
+        if trimmed == endDelimiter { break }
 
-        if trimmed.lowercased().hasPrefix("\(key):") {
-            var value = String(trimmed.dropFirst(key.count + 1))
-                .trimmingCharacters(in: .whitespaces)
-            if (value.hasPrefix("\"") && value.hasSuffix("\"")) ||
-               (value.hasPrefix("'") && value.hasSuffix("'")) {
-                value = String(value.dropFirst().dropLast())
-            }
-            return value.isEmpty ? nil : value
+        let lowerTrimmed = trimmed.lowercased()
+        guard lowerTrimmed.hasPrefix("\(lowerKey):") else { continue }
+
+        var value = String(trimmed.dropFirst(key.count + 1))
+            .trimmingCharacters(in: .whitespaces)
+        value = trimInlineValue(value)
+        value = unquote(value)
+
+        return value.isEmpty ? nil : value
+    }
+
+    return nil
+}
+
+private func parseTOMLFrontmatterValue(
+    key: String,
+    lines: ArraySlice<String>,
+    endDelimiter: String
+) -> String? {
+    let lowerKey = key.lowercased()
+
+    for line in lines {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        if trimmed == endDelimiter { break }
+        guard !trimmed.hasPrefix("#") else { continue }
+
+        let parts = trimmed.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: true)
+        guard parts.count == 2 else { continue }
+
+        let keyPart = parts[0].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard keyPart == lowerKey else { continue }
+
+        var value = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+        value = trimInlineValue(value)
+        value = unquote(value)
+
+        return value.isEmpty ? nil : value
+    }
+
+    return nil
+}
+
+private func stripInlineComment(from value: String) -> String {
+    guard let hashIndex = value.firstIndex(of: "#") else { return value }
+    let beforeHash = value[..<hashIndex].trimmingCharacters(in: .whitespaces)
+    return String(beforeHash)
+}
+
+private func trimInlineValue(_ value: String) -> String {
+    guard let firstChar = value.first else { return value }
+
+    if firstChar == "\"" || firstChar == "'" {
+        let afterFirst = value.index(after: value.startIndex)
+        if let endQuote = value[afterFirst...].firstIndex(of: firstChar) {
+            return String(value[afterFirst..<endQuote])
         }
     }
-    return nil
+
+    return stripInlineComment(from: value)
+}
+
+private func unquote(_ value: String) -> String {
+    guard value.count >= 2 else { return value }
+    if value.hasPrefix("\""), value.hasSuffix("\"") {
+        return String(value.dropFirst().dropLast())
+    }
+    if value.hasPrefix("'"), value.hasSuffix("'") {
+        return String(value.dropFirst().dropLast())
+    }
+    return value
 }
 
 enum ContentFormat: String, Codable, CaseIterable {

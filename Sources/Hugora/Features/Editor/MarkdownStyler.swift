@@ -1,4 +1,5 @@
 import AppKit
+import Foundation
 import Markdown
 
 // MARK: - Theme
@@ -568,11 +569,19 @@ struct MarkdownStyler {
         imageContext: ImageContext? = nil
     ) {
         let activeTheme = theme ?? self.theme
+        let preferences = EditorPreferences.current()
+        let fontScale = preferences.fontScale(for: activeTheme)
         
         textStorage.beginEditing()
         defer { textStorage.endEditing() }
 
-        resetBaseAttributes(textStorage: textStorage, range: visibleRange, theme: activeTheme)
+        resetBaseAttributes(
+            textStorage: textStorage,
+            range: visibleRange,
+            theme: activeTheme,
+            fontScale: fontScale,
+            lineSpacing: preferences.lineSpacing
+        )
 
         // Detect and style frontmatter first
         let frontmatter = detectFrontmatter(in: text)
@@ -580,7 +589,12 @@ struct MarkdownStyler {
         var imageSpans: [(range: NSRange, source: String?, altText: String)] = []
         
         if let fm = frontmatter {
-            applyFrontmatterStyle(range: fm.range, textStorage: textStorage, theme: activeTheme)
+            applyFrontmatterStyle(
+                range: fm.range,
+                textStorage: textStorage,
+                theme: activeTheme,
+                fontScale: fontScale
+            )
             
             // Add delimiter markers for hiding
             allMarkers.append(SyntaxMarker(range: fm.openingDelimiterRange, parentRange: fm.range))
@@ -610,7 +624,9 @@ struct MarkdownStyler {
                 kind: span.kind,
                 range: nsRange,
                 textStorage: textStorage,
-                theme: activeTheme
+                theme: activeTheme,
+                fontScale: fontScale,
+                lineSpacing: preferences.lineSpacing
             )
             
             // Collect syntax markers for hiding
@@ -632,16 +648,23 @@ struct MarkdownStyler {
                 imageSpans: imageSpans,
                 cursorPosition: cursorPosition,
                 textStorage: textStorage,
-                imageContext: context
+                imageContext: context,
+                lineSpacing: preferences.lineSpacing
             )
         }
     }
     
-    private func applyFrontmatterStyle(range: NSRange, textStorage: NSTextStorage, theme: Theme) {
+    private func applyFrontmatterStyle(
+        range: NSRange,
+        textStorage: NSTextStorage,
+        theme: Theme,
+        fontScale: CGFloat
+    ) {
         let clampedRange = NSIntersectionRange(range, NSRange(location: 0, length: textStorage.length))
         guard clampedRange.length > 0 else { return }
         
-        textStorage.addAttribute(.font, value: theme.frontmatterFont, range: clampedRange)
+        let font = scaledFont(theme.frontmatterFont, scale: fontScale)
+        textStorage.addAttribute(.font, value: font, range: clampedRange)
         textStorage.addAttribute(.foregroundColor, value: theme.frontmatterColor, range: clampedRange)
         textStorage.addAttribute(.backgroundColor, value: theme.frontmatterBackground, range: clampedRange)
         
@@ -701,15 +724,25 @@ struct MarkdownStyler {
         }
     }
 
-    private func resetBaseAttributes(textStorage: NSTextStorage, range: NSRange, theme: Theme) {
+    private func resetBaseAttributes(
+        textStorage: NSTextStorage,
+        range: NSRange,
+        theme: Theme,
+        fontScale: CGFloat,
+        lineSpacing: CGFloat
+    ) {
         let clampedRange = NSIntersectionRange(range, NSRange(location: 0, length: textStorage.length))
         guard clampedRange.length > 0 else { return }
         
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineHeightMultiple = lineSpacing
+
         let baseAttributes: [NSAttributedString.Key: Any] = [
-            .font: theme.baseFont,
+            .font: scaledFont(theme.baseFont, scale: fontScale),
             .foregroundColor: theme.baseColor,
             .backgroundColor: NSColor.clear,
-            .underlineStyle: 0
+            .underlineStyle: 0,
+            .paragraphStyle: paragraphStyle
         ]
         textStorage.setAttributes(baseAttributes, range: clampedRange)
     }
@@ -718,7 +751,9 @@ struct MarkdownStyler {
         kind: StyleKind,
         range: NSRange,
         textStorage: NSTextStorage,
-        theme: Theme
+        theme: Theme,
+        fontScale: CGFloat,
+        lineSpacing: CGFloat
     ) {
         let clampedRange = NSIntersectionRange(range, NSRange(location: 0, length: textStorage.length))
         guard clampedRange.length > 0 else { return }
@@ -726,7 +761,8 @@ struct MarkdownStyler {
         switch kind {
         case .heading(let level):
             let style = theme.headingStyle(level: level)
-            textStorage.addAttribute(.font, value: style.font, range: clampedRange)
+            let font = scaledFont(style.font, scale: fontScale)
+            textStorage.addAttribute(.font, value: font, range: clampedRange)
             textStorage.addAttribute(.foregroundColor, value: style.color, range: clampedRange)
 
         case .bold:
@@ -738,7 +774,8 @@ struct MarkdownStyler {
             textStorage.addAttribute(.foregroundColor, value: theme.italicColor, range: clampedRange)
 
         case .inlineCode:
-            textStorage.addAttribute(.font, value: theme.inlineCodeFont, range: clampedRange)
+            let font = scaledFont(theme.inlineCodeFont, scale: fontScale)
+            textStorage.addAttribute(.font, value: font, range: clampedRange)
             textStorage.addAttribute(.foregroundColor, value: theme.inlineCodeColor, range: clampedRange)
             textStorage.addAttribute(.backgroundColor, value: theme.inlineCodeBackground, range: clampedRange)
 
@@ -760,15 +797,18 @@ struct MarkdownStyler {
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.headIndent = indent
             paragraphStyle.firstLineHeadIndent = indent
+            paragraphStyle.lineHeightMultiple = lineSpacing
             textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: clampedRange)
 
         case .codeBlock:
-            textStorage.addAttribute(.font, value: theme.codeBlockFont, range: clampedRange)
+            let font = scaledFont(theme.codeBlockFont, scale: fontScale)
+            textStorage.addAttribute(.font, value: font, range: clampedRange)
             textStorage.addAttribute(.foregroundColor, value: theme.codeBlockColor, range: clampedRange)
             textStorage.addAttribute(.backgroundColor, value: theme.codeBlockBackground, range: clampedRange)
 
         case .table:
-            textStorage.addAttribute(.font, value: theme.tableFont, range: clampedRange)
+            let font = scaledFont(theme.tableFont, scale: fontScale)
+            textStorage.addAttribute(.font, value: font, range: clampedRange)
             textStorage.addAttribute(.backgroundColor, value: theme.tableBackground, range: clampedRange)
 
         case .tableHeader:
@@ -793,7 +833,8 @@ struct MarkdownStyler {
         imageSpans: [(range: NSRange, source: String?, altText: String)],
         cursorPosition: Int?,
         textStorage: NSTextStorage,
-        imageContext: ImageContext
+        imageContext: ImageContext,
+        lineSpacing: CGFloat
     ) {
         for imageSpan in imageSpans {
             let range = imageSpan.range
@@ -850,6 +891,7 @@ struct MarkdownStyler {
                 let paragraphStyle = NSMutableParagraphStyle()
                 paragraphStyle.paragraphSpacingBefore = 0
                 paragraphStyle.paragraphSpacing = targetHeight + 12  // image height + padding
+                paragraphStyle.lineHeightMultiple = lineSpacing
                 textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: range)
             }
         }
@@ -907,5 +949,31 @@ struct MarkdownStyler {
             let newFont = fontManager.convert(existingFont, toHaveTrait: trait)
             textStorage.addAttribute(.font, value: newFont, range: subrange)
         }
+    }
+
+    private func scaledFont(_ font: NSFont, scale: CGFloat) -> NSFont {
+        let newSize = max(font.pointSize * scale, 1)
+        guard let scaled = NSFont(descriptor: font.fontDescriptor, size: newSize) else { return font }
+        return scaled
+    }
+}
+
+private struct EditorPreferences {
+    let fontSize: CGFloat
+    let lineSpacing: CGFloat
+
+    static func current() -> EditorPreferences {
+        let defaults = UserDefaults.standard
+        let storedFontSize = defaults.object(forKey: "editorFontSize") as? Double ?? 16
+        let storedLineSpacing = defaults.object(forKey: "editorLineSpacing") as? Double ?? 1.4
+        return EditorPreferences(
+            fontSize: CGFloat(max(storedFontSize, 1)),
+            lineSpacing: CGFloat(max(storedLineSpacing, 1))
+        )
+    }
+
+    func fontScale(for theme: Theme) -> CGFloat {
+        let baseSize = max(theme.baseFont.pointSize, 1)
+        return fontSize / baseSize
     }
 }

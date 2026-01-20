@@ -2,53 +2,6 @@ import Foundation
 import Combine
 import AppKit
 
-private let htmlEntityPattern = try! NSRegularExpression(pattern: "&#(\\d+);|&#x([0-9A-Fa-f]+);|&([a-zA-Z]+);")
-
-private let namedEntities: [String: String] = [
-    "quot": "\"", "amp": "&", "apos": "'", "lt": "<", "gt": ">",
-    "nbsp": "\u{00A0}", "iexcl": "¡", "cent": "¢", "pound": "£", "curren": "¤",
-    "yen": "¥", "brvbar": "¦", "sect": "§", "uml": "¨", "copy": "©",
-    "ordf": "ª", "laquo": "«", "not": "¬", "shy": "\u{00AD}", "reg": "®",
-    "macr": "¯", "deg": "°", "plusmn": "±", "sup2": "²", "sup3": "³",
-    "acute": "´", "micro": "µ", "para": "¶", "middot": "·", "cedil": "¸",
-    "sup1": "¹", "ordm": "º", "raquo": "»", "frac14": "¼", "frac12": "½",
-    "frac34": "¾", "iquest": "¿", "times": "×", "divide": "÷",
-    "ndash": "–", "mdash": "—", "lsquo": "'", "rsquo": "'", "sbquo": "‚",
-    "ldquo": "\u{201C}", "rdquo": "\u{201D}", "bdquo": "„", "dagger": "†", "Dagger": "‡",
-    "bull": "•", "hellip": "…", "permil": "‰", "prime": "′", "Prime": "″",
-    "lsaquo": "‹", "rsaquo": "›", "oline": "‾", "frasl": "⁄", "euro": "€",
-    "trade": "™", "larr": "←", "uarr": "↑", "rarr": "→", "darr": "↓",
-    "harr": "↔", "spades": "♠", "clubs": "♣", "hearts": "♥", "diams": "♦"
-]
-
-func decodeHTMLEntities(_ string: String) -> String {
-    let range = NSRange(string.startIndex..., in: string)
-    var result = string
-
-    let matches = htmlEntityPattern.matches(in: string, range: range).reversed()
-    for match in matches {
-        var replacement: String?
-
-        if let decRange = Range(match.range(at: 1), in: string),
-           let codePoint = UInt32(string[decRange]),
-           let scalar = Unicode.Scalar(codePoint) {
-            replacement = String(Character(scalar))
-        } else if let hexRange = Range(match.range(at: 2), in: string),
-                  let codePoint = UInt32(string[hexRange], radix: 16),
-                  let scalar = Unicode.Scalar(codePoint) {
-            replacement = String(Character(scalar))
-        } else if let nameRange = Range(match.range(at: 3), in: string) {
-            replacement = namedEntities[String(string[nameRange])]
-        }
-
-        if let replacement, let matchRange = Range(match.range, in: result) {
-            result.replaceSubrange(matchRange, with: replacement)
-        }
-    }
-
-    return result
-}
-
 final class EditorState: ObservableObject {
     @Published var currentItem: ContentItem?
     @Published var content: String = ""
@@ -57,6 +10,7 @@ final class EditorState: ObservableObject {
     @Published var scrollPosition: CGFloat = 0
 
     private let sessionKey = "hugora.session.currentPost"
+    private var entityMappings: [HTMLEntityMapping] = []
 
     var title: String {
         currentItem?.title ?? "No Document Selected"
@@ -71,10 +25,11 @@ final class EditorState: ObservableObject {
 
         do {
             let rawContent = try String(contentsOf: item.url, encoding: .utf8)
-            let decodedContent = decodeHTMLEntities(rawContent)
+            let decoded = HTMLEntityCodec.decode(rawContent)
             currentItem = item
-            content = decodedContent
-            isDirty = rawContent != decodedContent
+            content = decoded.decoded
+            entityMappings = decoded.mappings
+            isDirty = false
             cursorPosition = 0
             scrollPosition = 0
             saveSession()
@@ -84,6 +39,7 @@ final class EditorState: ObservableObject {
     }
 
     func updateContent(_ newContent: String) {
+        updateEntityMappings(oldText: content, newText: newContent)
         content = newContent
         isDirty = true
     }
@@ -91,7 +47,12 @@ final class EditorState: ObservableObject {
     func save() {
         guard let item = currentItem, isDirty else { return }
         do {
-            let newURL = try saveWithRename(item: item, content: content)
+            let encodedContent = HTMLEntityCodec.encode(content, mappings: entityMappings)
+            let newURL = try saveWithRename(
+                item: item,
+                displayContent: content,
+                saveContent: encodedContent
+            )
             if newURL != item.url {
                 currentItem = ContentItem(url: newURL, format: item.format, section: item.section)
                 saveSession()
@@ -102,9 +63,13 @@ final class EditorState: ObservableObject {
         }
     }
 
-    private func saveWithRename(item: ContentItem, content: String) throws -> URL {
-        let slug = deriveSlug(from: content)
-        let datePrefix = deriveDatePrefix(from: content, fallback: item.date)
+    private func saveWithRename(
+        item: ContentItem,
+        displayContent: String,
+        saveContent: String
+    ) throws -> URL {
+        let slug = deriveSlug(from: displayContent)
+        let datePrefix = deriveDatePrefix(from: displayContent, fallback: item.date)
         let expectedName = "\(datePrefix)-\(slug)"
         
         let fm = FileManager.default
@@ -139,7 +104,7 @@ final class EditorState: ObservableObject {
             }
         }
 
-        try content.data(using: .utf8)?.write(to: finalURL)
+        try saveContent.data(using: .utf8)?.write(to: finalURL)
         return finalURL
     }
 
@@ -202,10 +167,11 @@ final class EditorState: ObservableObject {
 
         do {
             let rawContent = try String(contentsOf: url, encoding: .utf8)
-            let decodedContent = decodeHTMLEntities(rawContent)
+            let decoded = HTMLEntityCodec.decode(rawContent)
             currentItem = ContentItem(url: url, format: format, section: section)
-            content = decodedContent
-            isDirty = rawContent != decodedContent
+            content = decoded.decoded
+            entityMappings = decoded.mappings
+            isDirty = false
         } catch {
             // Silently fail on restore
         }
@@ -220,4 +186,81 @@ final class EditorState: ObservableObject {
         }
         return "unknown"
     }
+}
+
+private struct TextChange {
+    let oldRange: NSRange
+    let newRange: NSRange
+}
+
+private func computeTextChange(oldText: String, newText: String) -> TextChange? {
+    if oldText == newText { return nil }
+
+    let oldString = oldText as NSString
+    let newString = newText as NSString
+    let oldLength = oldString.length
+    let newLength = newString.length
+    let minLength = min(oldLength, newLength)
+
+    var prefixLength = 0
+    while prefixLength < minLength,
+          oldString.character(at: prefixLength) == newString.character(at: prefixLength) {
+        prefixLength += 1
+    }
+
+    var suffixLength = 0
+    let oldRemaining = oldLength - prefixLength
+    let newRemaining = newLength - prefixLength
+    let maxSuffix = min(oldRemaining, newRemaining)
+    while suffixLength < maxSuffix,
+          oldString.character(at: oldLength - 1 - suffixLength) ==
+          newString.character(at: newLength - 1 - suffixLength) {
+        suffixLength += 1
+    }
+
+    let oldRange = NSRange(location: prefixLength, length: oldLength - prefixLength - suffixLength)
+    let newRange = NSRange(location: prefixLength, length: newLength - prefixLength - suffixLength)
+    return TextChange(oldRange: oldRange, newRange: newRange)
+}
+
+private extension EditorState {
+    func updateEntityMappings(oldText: String, newText: String) {
+        guard let change = computeTextChange(oldText: oldText, newText: newText) else { return }
+        guard !entityMappings.isEmpty else { return }
+
+        let delta = change.newRange.length - change.oldRange.length
+        let changeEnd = change.oldRange.location + change.oldRange.length
+
+        var updatedMappings: [HTMLEntityMapping] = []
+        for mapping in entityMappings {
+            let mappingRange = mapping.decodedRange
+            if changeOverlapsMapping(changeRange: change.oldRange, mappingRange: mappingRange) {
+                continue
+            }
+
+            var newRange = mappingRange
+            if mappingRange.location >= changeEnd {
+                newRange.location += delta
+            }
+
+            updatedMappings.append(HTMLEntityMapping(
+                decodedRange: newRange,
+                encodedText: mapping.encodedText,
+                decodedText: mapping.decodedText
+            ))
+        }
+
+        entityMappings = updatedMappings
+    }
+}
+
+private func changeOverlapsMapping(changeRange: NSRange, mappingRange: NSRange) -> Bool {
+    if changeRange.length > 0 {
+        return NSIntersectionRange(changeRange, mappingRange).length > 0
+    }
+
+    let changeLocation = changeRange.location
+    let mappingStart = mappingRange.location
+    let mappingEnd = mappingRange.location + mappingRange.length
+    return changeLocation > mappingStart && changeLocation < mappingEnd
 }

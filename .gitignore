@@ -1,5 +1,6 @@
 # Swift/SwiftPM
 .build/
+.build-tests/
 .swiftpm/
 Package.resolved
 

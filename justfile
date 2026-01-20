@@ -17,7 +17,7 @@ run:
 
 # Run tests
 test:
-    swift test
+    swift test --build-path .build-tests
 
 # Build release app bundle with CLI included
 bundle: build-release

@@ -193,11 +193,10 @@ struct EditorView: NSViewRepresentable {
 }
 
 class EditorTextView: NSTextView {
-    @AppStorage("editorFontSize") private var fontSize: Double = 16
-    @AppStorage("editorLineSpacing") private var lineSpacing: Double = 1.4
-    @AppStorage("spellCheckEnabled") private var spellCheckEnabled = true
-
-    @AppStorage("autoPairEnabled") private var autoPairEnabled = true
+    private var fontSize: Double = 16
+    private var lineSpacing: Double = 1.4
+    private var spellCheckEnabled = true
+    private var autoPairEnabled = true
     
     /// Context for saving pasted images. Set by the coordinator.
     var imageContext: ImageContext?
@@ -214,6 +213,7 @@ class EditorTextView: NSTextView {
     private static let openers: Set<Character> = Set(pairs.keys)
     private static let closers: Set<Character> = Set(pairs.values)
     private static let symmetricPairs: Set<Character> = ["*", "_", "`"]
+    private var defaultsObserver: NSObjectProtocol?
 
     override init(frame frameRect: NSRect, textContainer container: NSTextContainer?) {
         super.init(frame: frameRect, textContainer: container)
@@ -234,9 +234,14 @@ class EditorTextView: NSTextView {
         setup()
     }
 
+    deinit {
+        if let observer = defaultsObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
     private func setup() {
-        font = .monospacedSystemFont(ofSize: fontSize, weight: .regular)
-        isContinuousSpellCheckingEnabled = spellCheckEnabled
+        applyPreferences()
         isAutomaticSpellingCorrectionEnabled = false
         isAutomaticQuoteSubstitutionEnabled = false
         isAutomaticDashSubstitutionEnabled = false
@@ -246,6 +251,26 @@ class EditorTextView: NSTextView {
         usesFindBar = true
         isIncrementalSearchingEnabled = true
 
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.applyPreferences()
+        }
+    }
+
+    private func applyPreferences() {
+        let defaults = UserDefaults.standard
+        let storedFontSize = defaults.object(forKey: "editorFontSize") as? Double
+        let storedLineSpacing = defaults.object(forKey: "editorLineSpacing") as? Double
+        fontSize = max(storedFontSize ?? 16, 1)
+        lineSpacing = max(storedLineSpacing ?? 1.4, 1)
+        spellCheckEnabled = defaults.object(forKey: "spellCheckEnabled") as? Bool ?? true
+        autoPairEnabled = defaults.object(forKey: "autoPairEnabled") as? Bool ?? true
+
+        font = .monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        isContinuousSpellCheckingEnabled = spellCheckEnabled
         updateTypingAttributes()
     }
 

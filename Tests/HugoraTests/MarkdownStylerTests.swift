@@ -521,7 +521,9 @@ struct SyntaxHidingTests {
         // Check ** at position 5 is visible (normal font)
         let font = textStorage.attribute(.font, at: 5, effectiveRange: nil) as? NSFont
         #expect(font != nil)
-        #expect(font!.pointSize >= theme.baseFont.pointSize)
+        let storedFontSize = UserDefaults.standard.object(forKey: "editorFontSize") as? Double
+        let expectedBase = CGFloat(storedFontSize ?? Double(theme.baseFont.pointSize))
+        #expect(font!.pointSize >= expectedBase)
     }
     
     @Test("Heading hash hidden when cursor outside")
@@ -654,28 +656,28 @@ struct ImageHandlingTests {
     
     @Test("Image context resolves relative path")
     func testRelativePathResolution() throws {
-        let postURL = URL(fileURLWithPath: "/Users/test/site/content/blog/my-post/index.md")
-        let blogDir = URL(fileURLWithPath: "/Users/test/site/content/blog")
+        let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/my-post/index.md")
+        let blogDir = URL(fileURLWithPath: "/tmp/greendale/site/content/blog")
         let context = ImageContext(postURL: postURL, blogDirectoryURL: blogDir)
         
         let resolved = context.resolveImagePath("photo.png")
-        #expect(resolved?.path == "/Users/test/site/content/blog/my-post/photo.png")
+        #expect(resolved?.path == "/tmp/greendale/site/content/blog/my-post/photo.png")
     }
     
     @Test("Image context resolves absolute path from blog root")
     func testAbsolutePathResolution() throws {
-        let postURL = URL(fileURLWithPath: "/Users/test/site/content/blog/my-post/index.md")
-        let blogDir = URL(fileURLWithPath: "/Users/test/site/content/blog")
+        let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/my-post/index.md")
+        let blogDir = URL(fileURLWithPath: "/tmp/greendale/site/content/blog")
         let context = ImageContext(postURL: postURL, blogDirectoryURL: blogDir)
         
         let resolved = context.resolveImagePath("/other-post/image.png")
-        #expect(resolved?.path == "/Users/test/site/content/blog/other-post/image.png")
+        #expect(resolved?.path == "/tmp/greendale/site/content/blog/other-post/image.png")
     }
     
     @Test("Image context handles remote URLs")
     func testRemoteURL() {
-        let postURL = URL(fileURLWithPath: "/Users/test/site/content/blog/post.md")
-        let blogDir = URL(fileURLWithPath: "/Users/test/site/content/blog")
+        let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/post.md")
+        let blogDir = URL(fileURLWithPath: "/tmp/greendale/site/content/blog")
         let context = ImageContext(postURL: postURL, blogDirectoryURL: blogDir)
         
         let resolved = context.resolveImagePath("https://example.com/image.png")
@@ -684,8 +686,8 @@ struct ImageHandlingTests {
     
     @Test("Image context returns nil for empty source")
     func testEmptySource() {
-        let postURL = URL(fileURLWithPath: "/Users/test/site/content/blog/post.md")
-        let blogDir = URL(fileURLWithPath: "/Users/test/site/content/blog")
+        let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/post.md")
+        let blogDir = URL(fileURLWithPath: "/tmp/greendale/site/content/blog")
         let context = ImageContext(postURL: postURL, blogDirectoryURL: blogDir)
         
         let resolved = context.resolveImagePath("")

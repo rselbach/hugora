@@ -88,6 +88,25 @@ struct ContentItemTests {
         #expect(item.title == "Greendale Community College Rules")
     }
 
+    @Test("Title extracted from TOML frontmatter")
+    func titleExtractedFromTomlFrontmatter() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let postFile = tempDir.appendingPathComponent("test.md")
+        try """
+        +++
+        title = "Annie's Boobs"
+        date = 2024-01-01
+        +++
+        # Content here
+        """.write(to: postFile, atomically: true, encoding: .utf8)
+
+        let item = ContentItem(url: postFile, format: .file, section: "blog")
+        #expect(item.title == "Annie's Boobs")
+    }
+
     @Test("Title extracted from frontmatter without quotes")
     func titleExtractedWithoutQuotes() throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -131,6 +150,32 @@ struct ContentItemTests {
         #expect(components.year == 2024)
         #expect(components.month == 3)
         #expect(components.day == 15)
+    }
+
+    @Test("Date extracted from TOML frontmatter")
+    func dateExtractedFromTomlFrontmatter() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let postFile = tempDir.appendingPathComponent("test.md")
+        try """
+        +++
+        title = "Senior Chang"
+        date = 2024-05-02
+        +++
+        Content
+        """.write(to: postFile, atomically: true, encoding: .utf8)
+
+        let item = ContentItem(url: postFile, format: .file, section: "blog")
+        #expect(item.date != nil)
+
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let components = calendar.dateComponents([.year, .month, .day], from: item.date!)
+        #expect(components.year == 2024)
+        #expect(components.month == 5)
+        #expect(components.day == 2)
     }
 }
 
@@ -188,14 +233,14 @@ struct ContentSectionTests {
 struct WorkspaceRefTests {
     @Test("Display name extracts folder name")
     func displayNameExtractsFolderName() {
-        let ref = WorkspaceRef(path: "/Users/annie/Documents/Study Group Notes", bookmarkData: Data())
+        let ref = WorkspaceRef(path: "/tmp/Greendale/Study Group Notes", bookmarkData: Data())
         #expect(ref.displayName == "Study Group Notes")
     }
 
     @Test("ID equals path")
     func idEqualsPath() {
-        let ref = WorkspaceRef(path: "/Users/jeff/Documents", bookmarkData: Data())
-        #expect(ref.id == "/Users/jeff/Documents")
+        let ref = WorkspaceRef(path: "/tmp/Greendale/Jeff/Documents", bookmarkData: Data())
+        #expect(ref.id == "/tmp/Greendale/Jeff/Documents")
     }
 
     @Test("WorkspaceRef is equatable")
