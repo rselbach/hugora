@@ -595,27 +595,57 @@ class EditorTextView: NSTextView {
             return
         }
         
-        // Determine save directory (post's directory)
-        let postDirectory = context.postURL.deletingLastPathComponent()
-        
         // Generate unique filename
         let filename = generateImageFilename()
-        let saveURL = postDirectory.appendingPathComponent(filename)
+
+        let location = ImagePasteLocation.current()
+        let destination = imagePasteDestination(context: context, location: location, filename: filename)
         
+        do {
+            try FileManager.default.createDirectory(
+                at: destination.saveURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Failed to prepare image folder"
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .critical
+            alert.runModal()
+            return
+        }
+
         // Save as PNG
-        guard saveImageAsPNG(image, to: saveURL) else {
+        guard saveImageAsPNG(image, to: destination.saveURL) else {
             let alert = NSAlert()
             alert.messageText = "Failed to save image"
-            alert.informativeText = "Could not save the image to \(saveURL.path)"
+            alert.informativeText = "Could not save the image to \(destination.saveURL.path)"
             alert.alertStyle = .critical
             alert.runModal()
             return
         }
         
         // Insert markdown at cursor position
-        let markdown = "![](\(filename))"
+        let markdown = "![](\(destination.markdownPath))"
         insertText(markdown, replacementRange: selectedRange())
+    }
 
+    private func imagePasteDestination(
+        context: ImageContext,
+        location: ImagePasteLocation,
+        filename: String
+    ) -> (saveURL: URL, markdownPath: String) {
+        switch location {
+        case .pageFolder:
+            let postDirectory = context.postURL.deletingLastPathComponent()
+            return (postDirectory.appendingPathComponent(filename), filename)
+        case .siteStatic:
+            let staticDirectory = context.siteURL.appendingPathComponent("static")
+            return (staticDirectory.appendingPathComponent(filename), "/\(filename)")
+        case .siteAssets:
+            let assetsDirectory = context.siteURL.appendingPathComponent("assets")
+            return (assetsDirectory.appendingPathComponent(filename), "assets/\(filename)")
+        }
     }
     
     private func generateImageFilename() -> String {

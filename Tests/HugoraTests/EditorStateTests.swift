@@ -5,6 +5,7 @@ import Testing
 @Suite("EditorState Rename")
 struct EditorStateRenameTests {
     @Test("Auto-rename disabled keeps original path")
+    @MainActor
     func autoRenameDisabledKeepsOriginalPath() throws {
         let defaults = UserDefaults.standard
         let key = "autoRenameOnSave"
@@ -55,6 +56,7 @@ struct EditorStateRenameTests {
     }
 
     @Test("Auto-rename uses slug frontmatter when enabled")
+    @MainActor
     func autoRenameUsesSlugFrontmatterWhenEnabled() throws {
         let defaults = UserDefaults.standard
         let key = "autoRenameOnSave"

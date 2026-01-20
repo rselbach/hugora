@@ -494,13 +494,14 @@ struct RenderedImageInfo {
 
 // MARK: - Image Context
 
-/// Context for resolving image paths relative to Hugo's content structure.
+/// Context for resolving image paths relative to Hugo's site structure.
 struct ImageContext {
     let postURL: URL           // URL of the current .md file
-    let blogDirectoryURL: URL  // URL of content/blog directory
+    let siteURL: URL           // URL of the Hugo site root
     
     /// Resolves an image path according to Hugo conventions:
-    /// - `/some-slug/my-image.png` → content/blog/some-slug/my-image.png
+    /// - `/some-path/my-image.png` → static/some-path/my-image.png
+    /// - `assets/my-image.png` → assets/my-image.png
     /// - `my-image.png` → same directory as the post
     func resolveImagePath(_ source: String) -> URL? {
         guard !source.isEmpty else { return nil }
@@ -511,14 +512,24 @@ struct ImageContext {
         }
         
         if source.hasPrefix("/") {
-            // Absolute path from content/blog root
+            // Absolute path from site root -> static/
             let relativePath = String(source.dropFirst())
-            return blogDirectoryURL.appendingPathComponent(relativePath)
-        } else {
-            // Relative path from post's directory
-            let postDirectory = postURL.deletingLastPathComponent()
-            return postDirectory.appendingPathComponent(source)
+            return siteURL.appendingPathComponent("static").appendingPathComponent(relativePath)
         }
+
+        if source.hasPrefix("assets/") {
+            let relativePath = String(source.dropFirst("assets/".count))
+            return siteURL.appendingPathComponent("assets").appendingPathComponent(relativePath)
+        }
+
+        if source.hasPrefix("static/") {
+            let relativePath = String(source.dropFirst("static/".count))
+            return siteURL.appendingPathComponent("static").appendingPathComponent(relativePath)
+        }
+
+        // Relative path from post's directory
+        let postDirectory = postURL.deletingLastPathComponent()
+        return postDirectory.appendingPathComponent(source)
     }
 }
 

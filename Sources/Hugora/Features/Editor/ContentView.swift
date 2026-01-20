@@ -39,8 +39,9 @@ struct ContentView: View {
         }
         .onAppear {
             // Set up image context for restored session
-            if let item = editorState.currentItem, let contentDir = workspaceStore.contentDirectoryURL {
-                viewModel.imageContext = ImageContext(postURL: item.url, blogDirectoryURL: contentDir)
+            if let item = editorState.currentItem,
+               let siteURL = workspaceStore.currentFolderURL {
+                viewModel.imageContext = ImageContext(postURL: item.url, siteURL: siteURL)
                 viewModel.setText(editorState.content)
             }
         }
@@ -93,8 +94,8 @@ struct ContentView: View {
         viewModel.setText(editorState.content)
         
         // Set up image context for resolving image paths
-        if let contentDir = workspaceStore.contentDirectoryURL {
-            viewModel.imageContext = ImageContext(postURL: item.url, blogDirectoryURL: contentDir)
+        if let siteURL = workspaceStore.currentFolderURL {
+            viewModel.imageContext = ImageContext(postURL: item.url, siteURL: siteURL)
         }
     }
 }

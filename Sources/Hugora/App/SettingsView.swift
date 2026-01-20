@@ -72,6 +72,7 @@ struct GeneralSettingsView: View {
 struct EditorSettingsView: View {
     @AppStorage("autoPairEnabled") private var autoPairEnabled = true
     @AppStorage("newPostFormat") private var newPostFormat = ContentFormat.bundle.rawValue
+    @AppStorage("imagePasteLocation") private var imagePasteLocation = ImagePasteLocation.pageFolder.rawValue
 
     var body: some View {
         Form {
@@ -86,6 +87,14 @@ struct EditorSettingsView: View {
                     }
                 }
                 .pickerStyle(.radioGroup)
+            }
+
+            Section("Images") {
+                Picker("Paste destination", selection: $imagePasteLocation) {
+                    ForEach(ImagePasteLocation.allCases) { location in
+                        Text(location.displayName).tag(location.rawValue)
+                    }
+                }
             }
         }
         .padding()

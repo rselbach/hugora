@@ -657,28 +657,28 @@ struct ImageHandlingTests {
     @Test("Image context resolves relative path")
     func testRelativePathResolution() throws {
         let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/my-post/index.md")
-        let blogDir = URL(fileURLWithPath: "/tmp/greendale/site/content/blog")
-        let context = ImageContext(postURL: postURL, blogDirectoryURL: blogDir)
+        let siteURL = URL(fileURLWithPath: "/tmp/greendale/site")
+        let context = ImageContext(postURL: postURL, siteURL: siteURL)
         
         let resolved = context.resolveImagePath("photo.png")
         #expect(resolved?.path == "/tmp/greendale/site/content/blog/my-post/photo.png")
     }
     
-    @Test("Image context resolves absolute path from blog root")
+    @Test("Image context resolves absolute path from static root")
     func testAbsolutePathResolution() throws {
         let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/my-post/index.md")
-        let blogDir = URL(fileURLWithPath: "/tmp/greendale/site/content/blog")
-        let context = ImageContext(postURL: postURL, blogDirectoryURL: blogDir)
+        let siteURL = URL(fileURLWithPath: "/tmp/greendale/site")
+        let context = ImageContext(postURL: postURL, siteURL: siteURL)
         
         let resolved = context.resolveImagePath("/other-post/image.png")
-        #expect(resolved?.path == "/tmp/greendale/site/content/blog/other-post/image.png")
+        #expect(resolved?.path == "/tmp/greendale/site/static/other-post/image.png")
     }
     
     @Test("Image context handles remote URLs")
     func testRemoteURL() {
         let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/post.md")
-        let blogDir = URL(fileURLWithPath: "/tmp/greendale/site/content/blog")
-        let context = ImageContext(postURL: postURL, blogDirectoryURL: blogDir)
+        let siteURL = URL(fileURLWithPath: "/tmp/greendale/site")
+        let context = ImageContext(postURL: postURL, siteURL: siteURL)
         
         let resolved = context.resolveImagePath("https://example.com/image.png")
         #expect(resolved?.absoluteString == "https://example.com/image.png")
@@ -687,11 +687,21 @@ struct ImageHandlingTests {
     @Test("Image context returns nil for empty source")
     func testEmptySource() {
         let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/post.md")
-        let blogDir = URL(fileURLWithPath: "/tmp/greendale/site/content/blog")
-        let context = ImageContext(postURL: postURL, blogDirectoryURL: blogDir)
+        let siteURL = URL(fileURLWithPath: "/tmp/greendale/site")
+        let context = ImageContext(postURL: postURL, siteURL: siteURL)
         
         let resolved = context.resolveImagePath("")
         #expect(resolved == nil)
+    }
+
+    @Test("Image context resolves assets prefix from site root")
+    func testAssetsPathResolution() {
+        let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/post.md")
+        let siteURL = URL(fileURLWithPath: "/tmp/greendale/site")
+        let context = ImageContext(postURL: postURL, siteURL: siteURL)
+
+        let resolved = context.resolveImagePath("assets/human-being.png")
+        #expect(resolved?.path == "/tmp/greendale/site/assets/human-being.png")
     }
     
     @Test("Image syntax hidden when cursor outside")
