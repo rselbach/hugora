@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import AppKit
 
+@MainActor
 final class EditorState: ObservableObject {
     @Published var currentItem: ContentItem?
     @Published var content: String = ""

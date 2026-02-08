@@ -23,6 +23,7 @@ enum WorkspaceError: LocalizedError {
     }
 }
 
+@MainActor
 final class WorkspaceStore: ObservableObject {
     @Published private(set) var sections: [ContentSection] = []
     @Published private(set) var hugoConfig: HugoConfig?
@@ -50,7 +51,7 @@ final class WorkspaceStore: ObservableObject {
     }
 
     deinit {
-        stopAccessingCurrentFolder()
+        securityScopedURL?.stopAccessingSecurityScopedResource()
     }
 
     // MARK: - Open Folder

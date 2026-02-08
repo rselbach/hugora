@@ -83,6 +83,7 @@ struct EditorView: NSViewRepresentable {
         Coordinator(text: $text, viewModel: viewModel)
     }
 
+    @MainActor
     class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         let viewModel: EditorViewModel
@@ -115,8 +116,10 @@ struct EditorView: NSViewRepresentable {
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                self?.triggerStyling()
-                self?.reportScrollPosition()
+                MainActor.assumeIsolated {
+                    self?.triggerStyling()
+                    self?.reportScrollPosition()
+                }
             }
         }
 
