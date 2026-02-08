@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import Combine
+import os
 
 struct WorkspaceRef: Codable, Identifiable, Equatable {
     var id: String { path }
@@ -24,6 +25,11 @@ enum WorkspaceError: LocalizedError {
 }
 
 final class WorkspaceStore: ObservableObject {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
+        category: "WorkspaceStore"
+    )
+
     @Published private(set) var sections: [ContentSection] = []
     @Published private(set) var hugoConfig: HugoConfig?
     @Published private(set) var currentFolderURL: URL?
@@ -35,13 +41,18 @@ final class WorkspaceStore: ObservableObject {
     @Published var selectedFileURL: URL?
 
     private var securityScopedURL: URL?
-    private let bookmarkKey = "hugora.workspace.bookmark"
-    private let recentKey = "hugora.workspace.recent"
+    private static let newPostDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
     private let maxRecent = 10
 
     var contentDirectoryURL: URL? {
         guard let folder = currentFolderURL, let config = hugoConfig else { return nil }
-        return folder.appendingPathComponent(config.contentDir)
+        let candidate = folder.appendingPathComponent(config.contentDir).standardizedFileURL
+        guard candidate.path.hasPrefix(folder.standardizedFileURL.path) else { return nil }
+        return candidate
     }
 
     init() {
@@ -94,12 +105,16 @@ final class WorkspaceStore: ObservableObject {
         lastError = nil
 
         var isStale = false
-        guard let url = try? URL(
-            resolvingBookmarkData: ref.bookmarkData,
-            options: [.withSecurityScope],
-            relativeTo: nil,
-            bookmarkDataIsStale: &isStale
-        ) else {
+        let url: URL
+        do {
+            url = try URL(
+                resolvingBookmarkData: ref.bookmarkData,
+                options: [.withSecurityScope],
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+        } catch {
+            Self.logger.error("Failed to resolve bookmark for recent workspace \(ref.path): \(error.localizedDescription)")
             removeFromRecent(ref)
             return
         }
@@ -131,7 +146,7 @@ final class WorkspaceStore: ObservableObject {
         currentFolderURL = nil
         siteName = nil
         lastError = nil
-        UserDefaults.standard.removeObject(forKey: bookmarkKey)
+        UserDefaults.standard.removeObject(forKey: DefaultsKey.workspaceBookmark)
     }
 
     func refreshPosts() {
@@ -162,9 +177,7 @@ final class WorkspaceStore: ObservableObject {
         let sectionDir = targetSection.url
 
         let date = Date()
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let datePrefix = formatter.string(from: date)
+        let datePrefix = Self.newPostDateFormatter.string(from: date)
 
         let baseSlug = "new-post"
         var slug = baseSlug
@@ -291,11 +304,17 @@ final class WorkspaceStore: ObservableObject {
             return
         }
 
-        let sectionDirs = (try? fm.contentsOfDirectory(
-            at: contentDir,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        )) ?? []
+        let sectionDirs: [URL]
+        do {
+            sectionDirs = try fm.contentsOfDirectory(
+                at: contentDir,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        } catch {
+            Self.logger.error("Failed to list content directory \(contentDir.lastPathComponent): \(error.localizedDescription)")
+            sectionDirs = []
+        }
 
         var loadedSections: [ContentSection] = []
 
@@ -303,8 +322,14 @@ final class WorkspaceStore: ObservableObject {
         var rootItems: [ContentItem] = []
 
         for itemURL in sectionDirs {
-            guard let resourceValues = try? itemURL.resourceValues(forKeys: [.isDirectoryKey]),
-                  let isDir = resourceValues.isDirectory else {
+            let resourceValues: URLResourceValues
+            do {
+                resourceValues = try itemURL.resourceValues(forKeys: [.isDirectoryKey])
+            } catch {
+                Self.logger.error("Failed to read resource values for \(itemURL.lastPathComponent): \(error.localizedDescription)")
+                continue
+            }
+            guard let isDir = resourceValues.isDirectory else {
                 continue
             }
 
@@ -333,7 +358,7 @@ final class WorkspaceStore: ObservableObject {
     }
 
     private func preferredNewPostFormat() -> ContentFormat {
-        let stored = UserDefaults.standard.string(forKey: "newPostFormat") ?? ""
+        let stored = UserDefaults.standard.string(forKey: DefaultsKey.newPostFormat) ?? ""
         return ContentFormat(rawValue: stored) ?? .bundle
     }
 
@@ -387,17 +412,29 @@ final class WorkspaceStore: ObservableObject {
 
     private func loadItems(in sectionURL: URL, sectionName: String) -> [ContentItem] {
         let fm = FileManager.default
-        let contents = (try? fm.contentsOfDirectory(
-            at: sectionURL,
-            includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsHiddenFiles]
-        )) ?? []
+        let contents: [URL]
+        do {
+            contents = try fm.contentsOfDirectory(
+                at: sectionURL,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+        } catch {
+            Self.logger.error("Failed to list section \(sectionURL.lastPathComponent): \(error.localizedDescription)")
+            contents = []
+        }
 
         var items: [ContentItem] = []
 
         for itemURL in contents {
-            guard let resourceValues = try? itemURL.resourceValues(forKeys: [.isDirectoryKey]),
-                  let isDir = resourceValues.isDirectory else {
+            let resourceValues: URLResourceValues
+            do {
+                resourceValues = try itemURL.resourceValues(forKeys: [.isDirectoryKey])
+            } catch {
+                Self.logger.error("Failed to read resource values for \(itemURL.lastPathComponent): \(error.localizedDescription)")
+                continue
+            }
+            guard let isDir = resourceValues.isDirectory else {
                 continue
             }
 
@@ -417,11 +454,16 @@ final class WorkspaceStore: ObservableObject {
     // MARK: - Private: Security-Scoped Bookmarks
 
     private func createBookmark(for url: URL) -> Data? {
-        try? url.bookmarkData(
-            options: [.withSecurityScope],
-            includingResourceValuesForKeys: nil,
-            relativeTo: nil
-        )
+        do {
+            return try url.bookmarkData(
+                options: [.withSecurityScope],
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil
+            )
+        } catch {
+            Self.logger.error("Failed to create bookmark for \(url.lastPathComponent): \(error.localizedDescription)")
+            return nil
+        }
     }
 
     private func startAccessingFolder(_ url: URL) {
@@ -448,25 +490,29 @@ final class WorkspaceStore: ObservableObject {
     // MARK: - Private: Persistence
 
     private func saveCurrentBookmark(_ data: Data) {
-        UserDefaults.standard.set(data, forKey: bookmarkKey)
+        UserDefaults.standard.set(data, forKey: DefaultsKey.workspaceBookmark)
     }
 
     private func restoreLastWorkspace() {
-        guard let data = UserDefaults.standard.data(forKey: bookmarkKey) else { return }
+        guard let data = UserDefaults.standard.data(forKey: DefaultsKey.workspaceBookmark) else { return }
 
         var isStale = false
-        guard let url = try? URL(
-            resolvingBookmarkData: data,
-            options: [.withSecurityScope],
-            relativeTo: nil,
-            bookmarkDataIsStale: &isStale
-        ) else {
-            UserDefaults.standard.removeObject(forKey: bookmarkKey)
+        let url: URL
+        do {
+            url = try URL(
+                resolvingBookmarkData: data,
+                options: [.withSecurityScope],
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+        } catch {
+            Self.logger.error("Failed to resolve session bookmark: \(error.localizedDescription)")
+            UserDefaults.standard.removeObject(forKey: DefaultsKey.workspaceBookmark)
             return
         }
 
         guard validateHugoSite(at: url) else {
-            UserDefaults.standard.removeObject(forKey: bookmarkKey)
+            UserDefaults.standard.removeObject(forKey: DefaultsKey.workspaceBookmark)
             return
         }
 
@@ -481,16 +527,23 @@ final class WorkspaceStore: ObservableObject {
     }
 
     private func loadRecentWorkspaces() {
-        guard let data = UserDefaults.standard.data(forKey: recentKey),
-              let refs = try? JSONDecoder().decode([WorkspaceRef].self, from: data) else {
+        guard let data = UserDefaults.standard.data(forKey: DefaultsKey.workspaceRecent) else {
             return
         }
-        recentWorkspaces = refs
+        do {
+            recentWorkspaces = try JSONDecoder().decode([WorkspaceRef].self, from: data)
+        } catch {
+            Self.logger.error("Failed to decode recent workspaces: \(error.localizedDescription)")
+        }
     }
 
     private func saveRecentWorkspaces() {
-        guard let data = try? JSONEncoder().encode(recentWorkspaces) else { return }
-        UserDefaults.standard.set(data, forKey: recentKey)
+        do {
+            let data = try JSONEncoder().encode(recentWorkspaces)
+            UserDefaults.standard.set(data, forKey: DefaultsKey.workspaceRecent)
+        } catch {
+            Self.logger.error("Failed to encode recent workspaces: \(error.localizedDescription)")
+        }
     }
 
     private func addToRecent(url: URL, bookmarkData: Data) {

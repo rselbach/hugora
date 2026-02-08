@@ -305,8 +305,8 @@ struct StyleCollectorTests {
 
 @Suite("Style Application")
 struct StyleApplicationTests {
-    let theme = Theme.default
-    let styler = MarkdownStyler(theme: .default)
+    let theme = Theme.defaultLight
+    let styler = MarkdownStyler(theme: .defaultLight)
 
     @Test("Headings get larger fonts")
     func testHeadingFontSize() {
@@ -487,7 +487,7 @@ struct ThemeTests {
 
 @Suite("Syntax Hiding")
 struct SyntaxHidingTests {
-    let theme = Theme.default
+    let theme = Theme.defaultLight
     lazy var styler = MarkdownStyler(theme: theme)
     
     @Test("Bold syntax hidden when cursor outside")
@@ -496,7 +496,7 @@ struct SyntaxHidingTests {
         let textStorage = NSTextStorage(string: markdown)
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
-        let styler = MarkdownStyler(theme: Theme.default)
+        let styler = MarkdownStyler(theme: Theme.defaultLight)
         
         // Cursor at position 0 (outside bold element)
         styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
@@ -513,7 +513,7 @@ struct SyntaxHidingTests {
         let textStorage = NSTextStorage(string: markdown)
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
-        let styler = MarkdownStyler(theme: Theme.default)
+        let styler = MarkdownStyler(theme: Theme.defaultLight)
         
         // Cursor at position 8 (inside "bold")
         styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 8)
@@ -532,7 +532,7 @@ struct SyntaxHidingTests {
         let textStorage = NSTextStorage(string: markdown)
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
-        let styler = MarkdownStyler(theme: Theme.default)
+        let styler = MarkdownStyler(theme: Theme.defaultLight)
         
         // Cursor in paragraph (position 12)
         styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 15)
@@ -549,7 +549,7 @@ struct SyntaxHidingTests {
         let textStorage = NSTextStorage(string: markdown)
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
-        let styler = MarkdownStyler(theme: Theme.default)
+        let styler = MarkdownStyler(theme: Theme.defaultLight)
         
         // Cursor on heading (position 5)
         styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 5)
@@ -566,7 +566,7 @@ struct SyntaxHidingTests {
         let textStorage = NSTextStorage(string: markdown)
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
-        let styler = MarkdownStyler(theme: Theme.default)
+        let styler = MarkdownStyler(theme: Theme.defaultLight)
         
         // Cursor at end (outside link)
         styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 35)
@@ -588,7 +588,7 @@ struct SyntaxHidingTests {
         let textStorage = NSTextStorage(string: markdown)
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
-        let styler = MarkdownStyler(theme: Theme.default)
+        let styler = MarkdownStyler(theme: Theme.defaultLight)
         
         styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
         
@@ -720,7 +720,7 @@ struct ImageHandlingTests {
         let textStorage = NSTextStorage(string: markdown)
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
-        let styler = MarkdownStyler(theme: Theme.default)
+        let styler = MarkdownStyler(theme: Theme.defaultLight)
         
         // Cursor at beginning, outside image
         styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
@@ -739,7 +739,7 @@ struct ImageHandlingTests {
         let textStorage = NSTextStorage(string: markdown)
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
-        let styler = MarkdownStyler(theme: Theme.default)
+        let styler = MarkdownStyler(theme: Theme.defaultLight)
 
         // Cursor inside the image markdown
         styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 5)
@@ -756,7 +756,7 @@ struct ImageHandlingTests {
 
 @Suite("Cursor-Only Update")
 struct CursorOnlyUpdateTests {
-    let styler = MarkdownStyler(theme: .default)
+    let styler = MarkdownStyler(theme: .defaultLight)
 
     @Test("Moving cursor out of bold hides syntax via lightweight update")
     func testLeavingBoldHidesSyntax() {

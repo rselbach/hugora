@@ -1,15 +1,24 @@
 import Foundation
 import Combine
 import AppKit
+import os
 
 final class EditorState: ObservableObject {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
+        category: "EditorState"
+    )
     @Published var currentItem: ContentItem?
     @Published var content: String = ""
     @Published var isDirty: Bool = false
     @Published var cursorPosition: Int = 0
     @Published var scrollPosition: CGFloat = 0
 
-    private let sessionKey = "hugora.session.currentPost"
+    private static let datePrefixFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
     private var entityMappings: [HTMLEntityMapping] = []
 
     var title: String {
@@ -139,22 +148,20 @@ final class EditorState: ObservableObject {
 
         let lastComponent = trimmed.components(separatedBy: "/").last ?? trimmed
         let cleaned = lastComponent.trimmingCharacters(in: .whitespacesAndNewlines)
-        return cleaned.isEmpty ? nil : cleaned
+        guard !cleaned.isEmpty, cleaned != ".", cleaned != ".." else { return nil }
+        return cleaned
     }
 
     private func deriveDatePrefix(from content: String, fallback: Date?) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        
         if let dateString = FrontmatterParser.value(forKey: "date", in: content) {
             return String(dateString.prefix(10))
         }
-        
+
         if let date = fallback {
-            return formatter.string(from: date)
+            return Self.datePrefixFormatter.string(from: date)
         }
-        
-        return formatter.string(from: Date())
+
+        return Self.datePrefixFormatter.string(from: Date())
     }
 
     func saveCurrentIfDirty() {
@@ -167,14 +174,14 @@ final class EditorState: ObservableObject {
 
     private func saveSession() {
         guard let item = currentItem else {
-            UserDefaults.standard.removeObject(forKey: sessionKey)
+            UserDefaults.standard.removeObject(forKey: DefaultsKey.sessionCurrentPost)
             return
         }
-        UserDefaults.standard.set(item.url.path, forKey: sessionKey)
+        UserDefaults.standard.set(item.url.path, forKey: DefaultsKey.sessionCurrentPost)
     }
 
     private func restoreSession() {
-        guard let path = UserDefaults.standard.string(forKey: sessionKey),
+        guard let path = UserDefaults.standard.string(forKey: DefaultsKey.sessionCurrentPost),
               FileManager.default.fileExists(atPath: path) else {
             return
         }
@@ -186,7 +193,7 @@ final class EditorState: ObservableObject {
         do {
             let rawContent = try String(contentsOf: url, encoding: .utf8)
             let decoded = HTMLEntityCodec.decode(rawContent)
-            currentItem = ContentItem(url: url, format: format, section: section)
+            currentItem = ContentItem(url: url, format: format, section: section, content: rawContent)
             content = decoded.decoded
             entityMappings = decoded.mappings
             isDirty = false
@@ -213,7 +220,7 @@ final class EditorState: ObservableObject {
 
 private extension EditorState {
     var autoRenameOnSave: Bool {
-        UserDefaults.standard.object(forKey: "autoRenameOnSave") as? Bool ?? false
+        UserDefaults.standard.object(forKey: DefaultsKey.autoRenameOnSave) as? Bool ?? false
     }
 }
 

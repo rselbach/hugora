@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 enum Slug {
     static func from(_ string: String) -> String {
@@ -134,6 +135,11 @@ enum ContentFormat: String, Codable, CaseIterable {
 }
 
 struct ContentItem: Identifiable, Equatable, Comparable {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
+        category: "ContentItem"
+    )
+
     let id: URL
     let url: URL          // path to the .md file
     let slug: String
@@ -159,6 +165,25 @@ struct ContentItem: Identifiable, Equatable, Comparable {
         self.date = Self.extractDate(from: url)
     }
 
+    /// Create a ContentItem with metadata extracted from already-loaded content.
+    /// Avoids a second file read when the caller has the content in hand.
+    init(url: URL, format: ContentFormat, section: String, content: String) {
+        self.id = url
+        self.url = url
+        self.format = format
+        self.section = section
+
+        switch format {
+        case .bundle:
+            self.slug = url.deletingLastPathComponent().lastPathComponent
+        case .file:
+            self.slug = url.deletingPathExtension().lastPathComponent
+        }
+
+        self.title = FrontmatterParser.value(forKey: "title", in: content) ?? slug
+        self.date = Self.parseDate(from: content)
+    }
+
     static func < (lhs: ContentItem, rhs: ContentItem) -> Bool {
         switch (lhs.date, rhs.date) {
         case let (l?, r?):
@@ -173,25 +198,47 @@ struct ContentItem: Identifiable, Equatable, Comparable {
     }
 
     private static func extractTitle(from url: URL) -> String? {
-        guard let content = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        let content: String
+        do {
+            content = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            logger.error("Failed to read title from \(url.lastPathComponent): \(error.localizedDescription)")
+            return nil
+        }
         return FrontmatterParser.value(forKey: "title", in: content)
     }
 
+    private static let isoDateFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withFullDate, .withDashSeparatorInDate]
+        return f
+    }()
+
+    private static let fallbackDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
     private static func extractDate(from url: URL) -> Date? {
-        guard let content = try? String(contentsOf: url, encoding: .utf8),
-              let dateString = FrontmatterParser.value(forKey: "date", in: content) else {
+        let content: String
+        do {
+            content = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            logger.error("Failed to read date from \(url.lastPathComponent): \(error.localizedDescription)")
+            return nil
+        }
+        return parseDate(from: content)
+    }
+
+    fileprivate static func parseDate(from content: String) -> Date? {
+        guard let dateString = FrontmatterParser.value(forKey: "date", in: content) else {
             return nil
         }
 
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
-        if let date = formatter.date(from: String(dateString.prefix(10))) {
-            return date
-        }
-
-        let fallback = DateFormatter()
-        fallback.dateFormat = "yyyy-MM-dd"
-        return fallback.date(from: String(dateString.prefix(10)))
+        let prefix = String(dateString.prefix(10))
+        return isoDateFormatter.date(from: prefix)
+            ?? fallbackDateFormatter.date(from: prefix)
     }
 
 }

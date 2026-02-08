@@ -1,7 +1,12 @@
 import AppKit
 import Foundation
+import os
 
 enum CLIInstaller {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
+        category: "CLIInstaller"
+    )
     static let installPath = "/usr/local/bin/hugora"
 
     static var bundledCLIURL: URL? {
@@ -15,8 +20,11 @@ enum CLIInstaller {
         guard fm.fileExists(atPath: installPath) else { return false }
 
         // Check if symlink points to our bundled CLI
-        if let destination = try? fm.destinationOfSymbolicLink(atPath: installPath) {
+        do {
+            let destination = try fm.destinationOfSymbolicLink(atPath: installPath)
             return destination == bundledURL.path
+        } catch {
+            logger.error("Failed to read symlink at \(installPath): \(error.localizedDescription)")
         }
 
         return false

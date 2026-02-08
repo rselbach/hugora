@@ -180,12 +180,12 @@ struct ContentRow: View {
     @State private var isHovering = false
     @State private var showDeleteConfirmation = false
 
-    private var dateFormatter: DateFormatter {
+    private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .medium
         f.timeStyle = .none
         return f
-    }
+    }()
 
     var body: some View {
         HStack(spacing: 8) {
@@ -201,7 +201,7 @@ struct ContentRow: View {
 
                 HStack(spacing: 4) {
                     if let date = item.date {
-                        Text(dateFormatter.string(from: date))
+                        Text(Self.dateFormatter.string(from: date))
                             .font(.system(size: 10))
                             .foregroundStyle(.tertiary)
                     }
