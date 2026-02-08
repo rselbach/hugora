@@ -126,14 +126,17 @@ final class WorkspaceStore: ObservableObject {
             return
         }
 
-        if isStale {
-            if let newData = createBookmark(for: url) {
-                let updatedRef = WorkspaceRef(path: url.path, bookmarkData: newData)
-                updateRecent(updatedRef)
-                saveCurrentBookmark(newData)
-            }
-        } else {
+        guard isStale else {
             saveCurrentBookmark(ref.bookmarkData)
+            startAccessingFolder(url)
+            loadContent(from: url)
+            return
+        }
+
+        if let newData = createBookmark(for: url) {
+            let updatedRef = WorkspaceRef(path: url.path, bookmarkData: newData)
+            updateRecent(updatedRef)
+            saveCurrentBookmark(newData)
         }
 
         startAccessingFolder(url)

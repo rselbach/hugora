@@ -372,16 +372,16 @@ class EditorTextView: NSTextView {
         }
         let nextChar = Character(nextScalar)
 
-        if nextChar == expectedCloser {
-            let deleteRange = NSRange(location: prevLocation, length: 2)
-            if shouldChangeText(in: deleteRange, replacementString: "") {
-                replaceCharacters(in: deleteRange, with: "")
-                didChangeText()
-            }
-        } else {
+        guard nextChar == expectedCloser else {
             super.deleteBackward(sender)
+            return
         }
 
+        let deleteRange = NSRange(location: prevLocation, length: 2)
+        if shouldChangeText(in: deleteRange, replacementString: "") {
+            replaceCharacters(in: deleteRange, with: "")
+            didChangeText()
+        }
     }
 
     private func wrapSelection(opener: Character, closer: Character, range: NSRange) {

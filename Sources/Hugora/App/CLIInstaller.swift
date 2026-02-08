@@ -151,17 +151,18 @@ enum CLIInstaller {
             script?.executeAndReturnError(&error)
 
             DispatchQueue.main.async {
-                if let error = error {
-                    let message =
-                        error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
-                    if message.contains("User canceled") {
-                        completion(.failure(CLIInstallerError.userCancelled))
-                    } else {
-                        completion(.failure(CLIInstallerError.scriptFailed(message)))
-                    }
-                } else {
+                guard let error else {
                     completion(.success(()))
+                    return
                 }
+
+                let message =
+                    error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
+                if message.contains("User canceled") {
+                    completion(.failure(CLIInstallerError.userCancelled))
+                    return
+                }
+                completion(.failure(CLIInstallerError.scriptFailed(message)))
             }
         }
     }
