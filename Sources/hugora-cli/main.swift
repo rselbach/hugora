@@ -6,6 +6,12 @@ import AppKit
 import Foundation
 
 let args = CommandLine.arguments.dropFirst()
+let expectedBundleID = "com.selbach.hugora"
+
+func isValidHugoraApp(at url: URL) -> Bool {
+    guard let bundle = Bundle(url: url) else { return false }
+    return bundle.bundleIdentifier == expectedBundleID
+}
 
 func findHugoraApp() -> URL? {
     let fm = FileManager.default
@@ -21,7 +27,10 @@ func findHugoraApp() -> URL? {
     
     for path in candidates {
         if fm.fileExists(atPath: path) {
-            return URL(fileURLWithPath: path)
+            let url = URL(fileURLWithPath: path)
+            if isValidHugoraApp(at: url) {
+                return url
+            }
         }
     }
     
@@ -39,10 +48,14 @@ func findHugoraApp() -> URL? {
         task.waitUntilExit()
         
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        if let output = String(data: data, encoding: .utf8),
-           let firstPath = output.components(separatedBy: "\n").first,
-           !firstPath.isEmpty {
-            return URL(fileURLWithPath: firstPath)
+        if let output = String(data: data, encoding: .utf8) {
+            let paths = output.split(separator: "\n")
+            for path in paths where !path.isEmpty {
+                let url = URL(fileURLWithPath: String(path))
+                if isValidHugoraApp(at: url) {
+                    return url
+                }
+            }
         }
     } catch {}
     

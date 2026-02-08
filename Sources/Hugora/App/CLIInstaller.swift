@@ -113,8 +113,10 @@ enum CLIInstaller {
         bundledURL: URL,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
+        let installPathEscaped = escapeShellPath(installPath)
+        let bundledPathEscaped = escapeShellPath(bundledURL.path)
         let script = """
-            do shell script "mkdir -p /usr/local/bin && rm -f '\(installPath)' && ln -s '\(bundledURL.path)' '\(installPath)'" with administrator privileges
+            do shell script "mkdir -p /usr/local/bin && rm -f '\(installPathEscaped)' && ln -s '\(bundledPathEscaped)' '\(installPathEscaped)'" with administrator privileges
             """
 
         runAppleScript(script, completion: completion)
@@ -123,8 +125,9 @@ enum CLIInstaller {
     private static func uninstallWithAdminPrivileges(
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
+        let installPathEscaped = escapeShellPath(installPath)
         let script = """
-            do shell script "rm -f '\(installPath)'" with administrator privileges
+            do shell script "rm -f '\(installPathEscaped)'" with administrator privileges
             """
 
         runAppleScript(script, completion: completion)
@@ -153,6 +156,10 @@ enum CLIInstaller {
                 }
             }
         }
+    }
+
+    private static func escapeShellPath(_ path: String) -> String {
+        path.replacingOccurrences(of: "'", with: "'\\''")
     }
 }
 

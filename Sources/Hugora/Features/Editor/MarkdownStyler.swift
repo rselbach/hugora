@@ -176,13 +176,23 @@ struct StyleSpan {
 struct SyntaxMarker {
     let range: NSRange         // Range of the syntax characters to hide
     let parentRange: NSRange   // Full range of the containing element (for cursor detection)
+    let parentKind: StyleKind  // Kind of the parent element (for restoring styles)
     let preserveLineHeight: Bool  // If true, only hide color (don't shrink font) to preserve line height
-    
-    init(range: NSRange, parentRange: NSRange, preserveLineHeight: Bool = false) {
+
+    init(range: NSRange, parentRange: NSRange, parentKind: StyleKind, preserveLineHeight: Bool = false) {
         self.range = range
         self.parentRange = parentRange
+        self.parentKind = parentKind
         self.preserveLineHeight = preserveLineHeight
     }
+}
+
+/// Cached data from a full style pass, used for lightweight cursor-only updates.
+struct StylePassCache {
+    let markers: [SyntaxMarker]
+    let imageSpans: [(range: NSRange, source: String?, altText: String)]
+    let fontScale: CGFloat
+    let lineSpacing: CGFloat
 }
 
 /// Calculates syntax marker ranges for different markdown elements.
@@ -194,34 +204,35 @@ enum SyntaxMarkerCalculator {
     /// - Returns: Array of syntax markers (prefix and suffix ranges)
     static func markers(for span: StyleSpan, in text: String) -> [SyntaxMarker] {
         guard let nsRange = convertRange(span.sourceRange, in: text) else { return [] }
-        
-        switch span.kind {
+        let kind = span.kind
+
+        switch kind {
         case .heading(let level):
             // # to ###### plus space = level + 1 characters prefix
             let prefixLen = min(level + 1, nsRange.length)
             let prefixRange = NSRange(location: nsRange.location, length: prefixLen)
-            return [SyntaxMarker(range: prefixRange, parentRange: nsRange)]
-            
+            return [SyntaxMarker(range: prefixRange, parentRange: nsRange, parentKind: kind)]
+
         case .bold:
             // ** or __ prefix and suffix (2 chars each)
             guard nsRange.length >= 4 else { return [] }
             let prefixRange = NSRange(location: nsRange.location, length: 2)
             let suffixRange = NSRange(location: NSMaxRange(nsRange) - 2, length: 2)
             return [
-                SyntaxMarker(range: prefixRange, parentRange: nsRange),
-                SyntaxMarker(range: suffixRange, parentRange: nsRange)
+                SyntaxMarker(range: prefixRange, parentRange: nsRange, parentKind: kind),
+                SyntaxMarker(range: suffixRange, parentRange: nsRange, parentKind: kind)
             ]
-            
+
         case .italic:
             // * or _ prefix and suffix (1 char each)
             guard nsRange.length >= 2 else { return [] }
             let prefixRange = NSRange(location: nsRange.location, length: 1)
             let suffixRange = NSRange(location: NSMaxRange(nsRange) - 1, length: 1)
             return [
-                SyntaxMarker(range: prefixRange, parentRange: nsRange),
-                SyntaxMarker(range: suffixRange, parentRange: nsRange)
+                SyntaxMarker(range: prefixRange, parentRange: nsRange, parentKind: kind),
+                SyntaxMarker(range: suffixRange, parentRange: nsRange, parentKind: kind)
             ]
-            
+
         case .inlineCode:
             // ` prefix and suffix (1 char each, or `` for escaped)
             guard nsRange.length >= 2 else { return [] }
@@ -230,25 +241,25 @@ enum SyntaxMarkerCalculator {
             let firstChar = nsString.substring(with: NSRange(location: nsRange.location, length: 1))
             let secondChar = nsRange.length > 1 ? nsString.substring(with: NSRange(location: nsRange.location + 1, length: 1)) : ""
             let backtickCount = (firstChar == "`" && secondChar == "`") ? 2 : 1
-            
+
             guard nsRange.length >= backtickCount * 2 else { return [] }
             let prefixRange = NSRange(location: nsRange.location, length: backtickCount)
             let suffixRange = NSRange(location: NSMaxRange(nsRange) - backtickCount, length: backtickCount)
             return [
-                SyntaxMarker(range: prefixRange, parentRange: nsRange),
-                SyntaxMarker(range: suffixRange, parentRange: nsRange)
+                SyntaxMarker(range: prefixRange, parentRange: nsRange, parentKind: kind),
+                SyntaxMarker(range: suffixRange, parentRange: nsRange, parentKind: kind)
             ]
-            
+
         case .link:
             // [text](url) - hide [ and ](url)
             guard nsRange.length >= 4 else { return [] }
             let nsString = text as NSString
             let content = nsString.substring(with: nsRange)
-            
+
             // Find ]( position
             guard let closeBracketParenRange = content.range(of: "](") else { return [] }
             let closeBracketOffset = content.distance(from: content.startIndex, to: closeBracketParenRange.lowerBound)
-            
+
             // [ at start
             let openBracketRange = NSRange(location: nsRange.location, length: 1)
             // ](...) from close bracket to end
@@ -256,19 +267,19 @@ enum SyntaxMarkerCalculator {
                 location: nsRange.location + closeBracketOffset,
                 length: nsRange.length - closeBracketOffset
             )
-            
+
             return [
-                SyntaxMarker(range: openBracketRange, parentRange: nsRange),
-                SyntaxMarker(range: urlPartRange, parentRange: nsRange)
+                SyntaxMarker(range: openBracketRange, parentRange: nsRange, parentKind: kind),
+                SyntaxMarker(range: urlPartRange, parentRange: nsRange, parentKind: kind)
             ]
-            
+
         case .blockquote:
             // > at start of each line - hide the > markers
             var markers: [SyntaxMarker] = []
             let nsString = text as NSString
             let content = nsString.substring(with: nsRange)
             let lines = content.components(separatedBy: .newlines)
-            
+
             var offset = nsRange.location
             for line in lines {
                 // Count leading > and space characters (for nested blockquotes)
@@ -284,24 +295,24 @@ enum SyntaxMarkerCalculator {
                     let markerRange = NSRange(location: offset, length: min(markerLen, line.utf16.count))
                     // For empty blockquote lines, preserve line height so the line doesn't collapse
                     let isEmptyLine = markerLen >= line.utf16.count
-                    markers.append(SyntaxMarker(range: markerRange, parentRange: nsRange, preserveLineHeight: isEmptyLine))
+                    markers.append(SyntaxMarker(range: markerRange, parentRange: nsRange, parentKind: kind, preserveLineHeight: isEmptyLine))
                 }
                 offset += line.utf16.count + 1  // +1 for newline
             }
             return markers
-            
+
         case .codeBlock:
             // ``` fences - find first and last lines
             let nsString = text as NSString
             let content = nsString.substring(with: nsRange)
             let lines = content.components(separatedBy: .newlines)
-            
+
             guard lines.count >= 2 else { return [] }
-            
+
             // Opening fence (first line)
             let openFenceLen = lines[0].utf16.count + 1 // +1 for newline
             let openRange = NSRange(location: nsRange.location, length: min(openFenceLen, nsRange.length))
-            
+
             // Closing fence (last line)
             let lastLine = lines[lines.count - 1]
             if lastLine.hasPrefix("```") || lastLine.hasPrefix("~~~") {
@@ -309,24 +320,24 @@ enum SyntaxMarkerCalculator {
                 let closeStart = NSMaxRange(nsRange) - closeLen
                 let closeRange = NSRange(location: max(nsRange.location, closeStart), length: closeLen)
                 return [
-                    SyntaxMarker(range: openRange, parentRange: nsRange),
-                    SyntaxMarker(range: closeRange, parentRange: nsRange)
+                    SyntaxMarker(range: openRange, parentRange: nsRange, parentKind: kind),
+                    SyntaxMarker(range: closeRange, parentRange: nsRange, parentKind: kind)
                 ]
             }
-            
-            return [SyntaxMarker(range: openRange, parentRange: nsRange)]
-            
+
+            return [SyntaxMarker(range: openRange, parentRange: nsRange, parentKind: kind)]
+
         case .table, .tableHeader, .tableCell:
             // Tables: hide | characters - complex, skip for now
             return []
-            
+
         case .frontmatter:
             // Frontmatter hiding handled separately
             return []
-            
+
         case .image:
             // Hide entire markdown syntax ![alt](url) when cursor outside
-            return [SyntaxMarker(range: nsRange, parentRange: nsRange)]
+            return [SyntaxMarker(range: nsRange, parentRange: nsRange, parentKind: kind)]
         }
     }
 }
@@ -514,22 +525,41 @@ struct ImageContext {
         if source.hasPrefix("/") {
             // Absolute path from site root -> static/
             let relativePath = String(source.dropFirst())
-            return siteURL.appendingPathComponent("static").appendingPathComponent(relativePath)
+            return sanitizedLocalURL(
+                siteURL.appendingPathComponent("static").appendingPathComponent(relativePath)
+            )
         }
 
         if source.hasPrefix("assets/") {
             let relativePath = String(source.dropFirst("assets/".count))
-            return siteURL.appendingPathComponent("assets").appendingPathComponent(relativePath)
+            return sanitizedLocalURL(
+                siteURL.appendingPathComponent("assets").appendingPathComponent(relativePath)
+            )
         }
 
         if source.hasPrefix("static/") {
             let relativePath = String(source.dropFirst("static/".count))
-            return siteURL.appendingPathComponent("static").appendingPathComponent(relativePath)
+            return sanitizedLocalURL(
+                siteURL.appendingPathComponent("static").appendingPathComponent(relativePath)
+            )
         }
 
         // Relative path from post's directory
         let postDirectory = postURL.deletingLastPathComponent()
-        return postDirectory.appendingPathComponent(source)
+        return sanitizedLocalURL(postDirectory.appendingPathComponent(source))
+    }
+
+    private func sanitizedLocalURL(_ url: URL) -> URL? {
+        let standardized = url.standardizedFileURL
+        let sitePath = siteURL.standardizedFileURL.path
+        let postPath = postURL.deletingLastPathComponent().standardizedFileURL.path
+        let candidatePath = standardized.path
+
+        guard candidatePath.hasPrefix(sitePath) || candidatePath.hasPrefix(postPath) else {
+            return nil
+        }
+
+        return standardized
     }
 }
 
@@ -565,11 +595,13 @@ struct MarkdownStyler {
     }
 
     /// Convenience wrapper matching EditorViewModel's expected API.
-    func applyStyles(to textStorage: NSTextStorage, in visibleRange: NSRange, document: Document, cursorPosition: Int? = nil, imageContext: ImageContext? = nil) {
+    @discardableResult
+    func applyStyles(to textStorage: NSTextStorage, in visibleRange: NSRange, document: Document, cursorPosition: Int? = nil, imageContext: ImageContext? = nil) -> StylePassCache {
         let text = textStorage.string
-        style(text: text, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: cursorPosition, imageContext: imageContext)
+        return style(text: text, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: cursorPosition, imageContext: imageContext)
     }
 
+    @discardableResult
     func style(
         text: String,
         document: Document,
@@ -578,11 +610,11 @@ struct MarkdownStyler {
         cursorPosition: Int? = nil,
         theme: Theme? = nil,
         imageContext: ImageContext? = nil
-    ) {
+    ) -> StylePassCache {
         let activeTheme = theme ?? self.theme
         let preferences = EditorPreferences.current()
         let fontScale = preferences.fontScale(for: activeTheme)
-        
+
         textStorage.beginEditing()
         defer { textStorage.endEditing() }
 
@@ -598,7 +630,7 @@ struct MarkdownStyler {
         let frontmatter = detectFrontmatter(in: text)
         var allMarkers: [SyntaxMarker] = []
         var imageSpans: [(range: NSRange, source: String?, altText: String)] = []
-        
+
         if let fm = frontmatter {
             applyFrontmatterStyle(
                 range: fm.range,
@@ -606,10 +638,10 @@ struct MarkdownStyler {
                 theme: activeTheme,
                 fontScale: fontScale
             )
-            
+
             // Add delimiter markers for hiding
-            allMarkers.append(SyntaxMarker(range: fm.openingDelimiterRange, parentRange: fm.range))
-            allMarkers.append(SyntaxMarker(range: fm.closingDelimiterRange, parentRange: fm.range))
+            allMarkers.append(SyntaxMarker(range: fm.openingDelimiterRange, parentRange: fm.range, parentKind: .frontmatter))
+            allMarkers.append(SyntaxMarker(range: fm.closingDelimiterRange, parentRange: fm.range, parentKind: .frontmatter))
         }
 
         var collector = StyleCollector()
@@ -617,12 +649,12 @@ struct MarkdownStyler {
 
         for span in collector.spans {
             guard let nsRange = convertRange(span.sourceRange, in: text) else { continue }
-            
+
             // Skip spans inside frontmatter
             if let fm = frontmatter, NSIntersectionRange(nsRange, fm.range).length > 0 {
                 continue
             }
-            
+
             let intersection = NSIntersectionRange(nsRange, visibleRange)
             guard intersection.length > 0 else { continue }
 
@@ -639,12 +671,12 @@ struct MarkdownStyler {
                 fontScale: fontScale,
                 lineSpacing: preferences.lineSpacing
             )
-            
+
             // Collect syntax markers for hiding
             let markers = SyntaxMarkerCalculator.markers(for: span, in: text)
             allMarkers.append(contentsOf: markers)
         }
-        
+
         // Apply syntax hiding based on cursor position
         applySyntaxHiding(
             markers: allMarkers,
@@ -652,7 +684,7 @@ struct MarkdownStyler {
             textStorage: textStorage,
             visibleRange: visibleRange
         )
-        
+
         // Apply image rendering (after syntax hiding so we can add attachments)
         if let context = imageContext {
             applyImageRendering(
@@ -663,8 +695,107 @@ struct MarkdownStyler {
                 lineSpacing: preferences.lineSpacing
             )
         }
+
+        return StylePassCache(
+            markers: allMarkers,
+            imageSpans: imageSpans,
+            fontScale: fontScale,
+            lineSpacing: preferences.lineSpacing
+        )
     }
     
+    /// Lightweight cursor-only update: only re-applies syntax hiding and image rendering
+    /// for markers whose visibility changed between oldCursor and newCursor.
+    func updateCursorStyles(
+        in textStorage: NSTextStorage,
+        cache: StylePassCache,
+        oldCursor: Int,
+        newCursor: Int,
+        imageContext: ImageContext?
+    ) {
+        let activeTheme = theme
+
+        // Update syntax markers that changed state
+        for marker in cache.markers {
+            let wasInside = oldCursor >= marker.parentRange.location && oldCursor <= NSMaxRange(marker.parentRange)
+            let nowInside = newCursor >= marker.parentRange.location && newCursor <= NSMaxRange(marker.parentRange)
+            guard wasInside != nowInside else { continue }
+
+            let clampedRange = NSIntersectionRange(marker.range, NSRange(location: 0, length: textStorage.length))
+            guard clampedRange.length > 0 else { continue }
+
+            if nowInside {
+                // Entering element: restore base attributes + parent style on marker range
+                resetBaseAttributes(
+                    textStorage: textStorage,
+                    range: clampedRange,
+                    theme: activeTheme,
+                    fontScale: cache.fontScale,
+                    lineSpacing: cache.lineSpacing
+                )
+                applyStyle(
+                    kind: marker.parentKind,
+                    range: clampedRange,
+                    textStorage: textStorage,
+                    theme: activeTheme,
+                    fontScale: cache.fontScale,
+                    lineSpacing: cache.lineSpacing
+                )
+            } else {
+                // Leaving element: apply hiding attributes
+                if marker.preserveLineHeight {
+                    textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
+                } else {
+                    let hiddenFont = NSFont.systemFont(ofSize: 0.01)
+                    textStorage.addAttribute(.font, value: hiddenFont, range: clampedRange)
+                    textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
+                }
+            }
+        }
+
+        // Update image spans that changed state
+        guard let context = imageContext else { return }
+        for imageSpan in cache.imageSpans {
+            let range = imageSpan.range
+            guard range.length > 0, range.location + range.length <= textStorage.length else { continue }
+
+            let wasInside = oldCursor >= range.location && oldCursor <= NSMaxRange(range)
+            let nowInside = newCursor >= range.location && newCursor <= NSMaxRange(range)
+            guard wasInside != nowInside else { continue }
+
+            if nowInside {
+                // Entering image: show raw markdown
+                textStorage.removeAttribute(.attachment, range: range)
+                textStorage.removeAttribute(.renderedImage, range: range)
+                // Restore base + image style
+                resetBaseAttributes(
+                    textStorage: textStorage,
+                    range: range,
+                    theme: activeTheme,
+                    fontScale: cache.fontScale,
+                    lineSpacing: cache.lineSpacing
+                )
+                applyStyle(
+                    kind: .image(source: imageSpan.source, altText: imageSpan.altText),
+                    range: range,
+                    textStorage: textStorage,
+                    theme: activeTheme,
+                    fontScale: cache.fontScale,
+                    lineSpacing: cache.lineSpacing
+                )
+            } else {
+                // Leaving image: render it (reuse existing logic for single span)
+                applyImageRendering(
+                    imageSpans: [imageSpan],
+                    cursorPosition: newCursor,
+                    textStorage: textStorage,
+                    imageContext: context,
+                    lineSpacing: cache.lineSpacing
+                )
+            }
+        }
+    }
+
     private func applyFrontmatterStyle(
         range: NSRange,
         textStorage: NSTextStorage,

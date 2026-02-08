@@ -13,6 +13,7 @@ final class EditorViewModel: ObservableObject {
     private var currentDocument: Document?
     private let parseQueue = DispatchQueue(label: "com.hugora.parse", qos: .userInitiated)
     private weak var currentTextView: NSTextView?
+    private var styleCache: StylePassCache?
     
     /// Context for resolving image paths. Set when opening a post.
     @Published var imageContext: ImageContext?
@@ -46,6 +47,7 @@ final class EditorViewModel: ObservableObject {
     }
 
     private func forceRestyle() {
+        styleCache = nil
         guard let textView = currentTextView else { return }
         let visibleRange = NSRange(location: 0, length: textView.string.utf16.count)
         applyStyles(to: textView, visibleRange: visibleRange)
@@ -78,26 +80,43 @@ final class EditorViewModel: ObservableObject {
     func applyStyles(to textView: NSTextView, visibleRange: NSRange) {
         currentTextView = textView
         cursorPosition = textView.selectedRange().location
-        
+
         guard let textStorage = textView.textStorage else { return }
         guard let doc = currentDocument else {
             parseSync()
             guard let doc = currentDocument else { return }
             textStorage.beginEditing()
-            styler.applyStyles(to: textStorage, in: visibleRange, document: doc, cursorPosition: cursorPosition, imageContext: imageContext)
+            styleCache = styler.applyStyles(to: textStorage, in: visibleRange, document: doc, cursorPosition: cursorPosition, imageContext: imageContext)
             textStorage.endEditing()
             return
         }
 
         textStorage.beginEditing()
-        styler.applyStyles(to: textStorage, in: visibleRange, document: doc, cursorPosition: cursorPosition, imageContext: imageContext)
+        styleCache = styler.applyStyles(to: textStorage, in: visibleRange, document: doc, cursorPosition: cursorPosition, imageContext: imageContext)
         textStorage.endEditing()
     }
     
     func updateCursorPosition(_ position: Int) {
         guard position != cursorPosition else { return }
+        let oldPosition = cursorPosition
         cursorPosition = position
-        forceRestyle()
+
+        guard let cache = styleCache,
+              let textView = currentTextView,
+              let textStorage = textView.textStorage else {
+            forceRestyle()
+            return
+        }
+
+        textStorage.beginEditing()
+        styler.updateCursorStyles(
+            in: textStorage,
+            cache: cache,
+            oldCursor: oldPosition,
+            newCursor: position,
+            imageContext: imageContext
+        )
+        textStorage.endEditing()
     }
 
     private func parseSync() {
@@ -105,6 +124,7 @@ final class EditorViewModel: ObservableObject {
     }
 
     func forceReparse() {
+        styleCache = nil
         parseSync()
     }
 
