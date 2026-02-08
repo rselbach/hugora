@@ -102,10 +102,23 @@ struct FrontmatterRange {
 func detectFrontmatter(in text: String) -> FrontmatterRange? {
     let nsString = text as NSString
     guard nsString.length >= 7 else { return nil }  // minimum: "---\n---"
-    
-    // Must start with ---
-    guard nsString.substring(with: NSRange(location: 0, length: 3)) == "---" else { return nil }
-    
+
+    // Detect opening delimiter: --- (YAML) or +++ (TOML)
+    // 0x2D = '-', 0x2B = '+'
+    let first = nsString.character(at: 0)
+    let delimChar: unichar
+    if first == 0x2D
+        && nsString.character(at: 1) == 0x2D
+        && nsString.character(at: 2) == 0x2D {
+        delimChar = 0x2D
+    } else if first == 0x2B
+        && nsString.character(at: 1) == 0x2B
+        && nsString.character(at: 2) == 0x2B {
+        delimChar = 0x2B
+    } else {
+        return nil
+    }
+
     // Find end of first line (opening delimiter)
     var openEnd = 3
     while openEnd < nsString.length {
@@ -120,30 +133,31 @@ func detectFrontmatter(in text: String) -> FrontmatterRange? {
         }
         openEnd += 1
     }
-    
-    // Find closing ---
+
+    // Find closing delimiter (must match opening)
     let searchStart = openEnd
-    let remaining = nsString.substring(from: searchStart)
-    
-    // Look for \n--- at start of a line
     var closeStart: Int? = nil
     var pos = 0
-    let remainingNS = remaining as NSString
-    
-    while pos < remainingNS.length {
-        // Check if we're at start of line with ---
-        if remainingNS.substring(from: pos).hasPrefix("---") {
-            // Verify it's start of line (pos == 0 or preceded by newline)
-            if pos == 0 || remainingNS.character(at: pos - 1) == 0x0A || remainingNS.character(at: pos - 1) == 0x0D {
+    let remaining = nsString.length - searchStart
+
+    while pos + 2 < remaining {
+        let isDashes = nsString.character(at: searchStart + pos) == delimChar
+            && nsString.character(at: searchStart + pos + 1) == delimChar
+            && nsString.character(at: searchStart + pos + 2) == delimChar
+        if isDashes {
+            let atLineStart = pos == 0
+                || nsString.character(at: searchStart + pos - 1) == 0x0A
+                || nsString.character(at: searchStart + pos - 1) == 0x0D
+            if atLineStart {
                 closeStart = searchStart + pos
                 break
             }
         }
         pos += 1
     }
-    
+
     guard let closeLocation = closeStart else { return nil }
-    
+
     // Find end of closing delimiter line
     var closeEnd = closeLocation + 3
     while closeEnd < nsString.length {
@@ -157,11 +171,11 @@ func detectFrontmatter(in text: String) -> FrontmatterRange? {
         }
         closeEnd += 1
     }
-    
+
     let fullRange = NSRange(location: 0, length: closeEnd)
     let openRange = NSRange(location: 0, length: openEnd)
     let closingRange = NSRange(location: closeLocation, length: closeEnd - closeLocation)
-    
+
     return FrontmatterRange(range: fullRange, openingDelimiterRange: openRange, closingDelimiterRange: closingRange)
 }
 
@@ -921,23 +935,20 @@ struct MarkdownStyler {
                 cursorInElement = false
             }
             
-            if cursorInElement {
-                // Show syntax: ensure normal visibility (already applied by base styling)
-                // Nothing extra needed - syntax is visible by default
+            guard !cursorInElement else { continue }
+
+            // Hide syntax: make it nearly invisible
+            let clampedRange = NSIntersectionRange(marker.range, NSRange(location: 0, length: textStorage.length))
+            guard clampedRange.length > 0 else { continue }
+
+            if marker.preserveLineHeight {
+                // For empty blockquote lines: hide color only, keep font to preserve line height
+                textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
             } else {
-                // Hide syntax: make it nearly invisible
-                let clampedRange = NSIntersectionRange(marker.range, NSRange(location: 0, length: textStorage.length))
-                guard clampedRange.length > 0 else { continue }
-                
-                if marker.preserveLineHeight {
-                    // For empty blockquote lines: hide color only, keep font to preserve line height
-                    textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
-                } else {
-                    // Normal hiding: tiny font to collapse space while maintaining string integrity
-                    let hiddenFont = NSFont.systemFont(ofSize: 0.01)
-                    textStorage.addAttribute(.font, value: hiddenFont, range: clampedRange)
-                    textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
-                }
+                // Normal hiding: tiny font to collapse space while maintaining string integrity
+                let hiddenFont = NSFont.systemFont(ofSize: 0.01)
+                textStorage.addAttribute(.font, value: hiddenFont, range: clampedRange)
+                textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
             }
         }
     }
@@ -1193,34 +1204,6 @@ struct MarkdownStyler {
         return image
     }
     
-    /// Creates an NSTextAttachment with the image scaled to fit the text container.
-    private func createImageAttachment(image: NSImage, altText: String, maxWidth: CGFloat = 600) -> NSTextAttachment {
-        // Scale image to fit within maxWidth while preserving aspect ratio
-        let originalSize = image.size
-        var targetSize = originalSize
-        
-        if originalSize.width > maxWidth {
-            let scale = maxWidth / originalSize.width
-            targetSize = NSSize(width: maxWidth, height: originalSize.height * scale)
-        }
-        
-        // Use custom attachment cell for better rendering control
-        let cell = NSTextAttachmentCell(imageCell: image)
-        cell.image = image
-        
-        let attachment = NSTextAttachment()
-        attachment.attachmentCell = cell
-        
-        // Set bounds to control display size (the cell will scale the image)
-        attachment.bounds = CGRect(origin: CGPoint(x: 0, y: -4), size: targetSize)
-        
-        #if DEBUG
-        print("[ImageDebug] Created attachment with bounds: \(attachment.bounds), cell: \(String(describing: attachment.attachmentCell))")
-        #endif
-        
-        return attachment
-    }
-
     /// Derives font with added traits from existing font runs to handle nested markup.
     private func applyFontTrait(
         _ trait: NSFontTraitMask,
