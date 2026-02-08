@@ -46,6 +46,7 @@ final class WorkspaceStore: ObservableObject {
     var onOpenFile: ((URL) -> Void)?
 
     private var securityScopedURL: URL?
+    private let hugoContentCreator: any HugoContentCreator
     private static let newPostDateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
@@ -60,7 +61,8 @@ final class WorkspaceStore: ObservableObject {
         return candidate
     }
 
-    init() {
+    init(hugoContentCreator: any HugoContentCreator = HugoCLIContentCreator()) {
+        self.hugoContentCreator = hugoContentCreator
         loadRecentWorkspaces()
         restoreLastWorkspace()
     }
@@ -184,6 +186,7 @@ final class WorkspaceStore: ObservableObject {
 
         let format = preferredNewPostFormat()
         let sectionDir = targetSection.url
+        let config = hugoConfig ?? .default
 
         let date = Date()
         let datePrefix = Self.newPostDateFormatter.string(from: date)
@@ -207,40 +210,30 @@ final class WorkspaceStore: ObservableObject {
 
         let folderName = "\(datePrefix)-\(slug)"
         let folderURL = sectionDir.appendingPathComponent(folderName)
-        let fileURL: URL
+        let expectedFileURL: URL
         switch format {
         case .bundle:
-            fileURL = folderURL.appendingPathComponent("index.md")
+            expectedFileURL = folderURL.appendingPathComponent("index.md")
         case .file:
-            fileURL = sectionDir.appendingPathComponent("\(folderName).md")
+            expectedFileURL = sectionDir.appendingPathComponent("\(folderName).md")
         }
 
-        let frontmatter = newPostContent(
-            sectionName: targetSection.name,
-            format: format,
-            slug: slug,
-            date: date,
-            siteURL: siteURL
-        )
-
         do {
-            if format == .bundle {
-                try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
-            }
-            try frontmatter.write(to: fileURL, atomically: true, encoding: .utf8)
-
-            let newItem = ContentItem(url: fileURL, format: format, section: targetSection.name)
-            if let idx = sections.firstIndex(where: { $0.name == targetSection.name }) {
-                sections[idx].items.insert(newItem, at: 0)
-                sections[idx].items.sort()
-            } else {
-                let newSection = ContentSection(name: targetSection.name, url: targetSection.url, items: [newItem])
-                sections.append(newSection)
-                sections.sort()
-            }
-
-            selectedFileURL = fileURL
-            onOpenFile?(fileURL)
+            let createdURL = try createNewPostFile(
+                siteURL: siteURL,
+                config: config,
+                sectionName: targetSection.name,
+                sectionDir: sectionDir,
+                format: format,
+                folderName: folderName,
+                expectedFileURL: expectedFileURL,
+                date: date,
+                slug: slug
+            )
+            loadContent(from: siteURL)
+            let finalURL = resolveCreatedURLAfterRefresh(createdURL: createdURL, fallbackURL: expectedFileURL)
+            selectedFileURL = finalURL
+            onOpenFile?(finalURL)
         } catch {
             NSApp.presentError(error)
         }
@@ -399,6 +392,88 @@ final class WorkspaceStore: ObservableObject {
         alert.informativeText = message
         alert.alertStyle = .warning
         alert.runModal()
+    }
+
+    private func createNewPostFile(
+        siteURL: URL,
+        config: HugoConfig,
+        sectionName: String,
+        sectionDir: URL,
+        format: ContentFormat,
+        folderName: String,
+        expectedFileURL: URL,
+        date: Date,
+        slug: String
+    ) throws -> URL {
+        if hugoContentCreator.isAvailable(at: siteURL) {
+            let relativePath = newPostRelativePath(
+                sectionName: sectionName,
+                format: format,
+                folderName: folderName
+            )
+            let kind = sectionName == "(root)" ? nil : sectionName
+            return try hugoContentCreator.createNewContent(
+                siteURL: siteURL,
+                contentDir: config.contentDir,
+                relativePath: relativePath,
+                kind: kind
+            )
+        }
+
+        let frontmatter = newPostContent(
+            sectionName: sectionName,
+            format: format,
+            slug: slug,
+            date: date,
+            siteURL: siteURL
+        )
+
+        if format == .bundle {
+            let folderURL = sectionDir.appendingPathComponent(folderName)
+            try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+        }
+
+        try frontmatter.write(to: expectedFileURL, atomically: true, encoding: .utf8)
+        return expectedFileURL
+    }
+
+    private func newPostRelativePath(
+        sectionName: String,
+        format: ContentFormat,
+        folderName: String
+    ) -> String {
+        var components: [String] = []
+        if sectionName != "(root)" {
+            components.append(sectionName)
+        }
+
+        switch format {
+        case .bundle:
+            components.append(folderName)
+            components.append("index.md")
+        case .file:
+            components.append("\(folderName).md")
+        }
+
+        return components.joined(separator: "/")
+    }
+
+    private func resolveCreatedURLAfterRefresh(createdURL: URL, fallbackURL: URL) -> URL {
+        let createdPath = createdURL.standardizedFileURL.path
+        if let item = sections
+            .flatMap(\.items)
+            .first(where: { $0.url.standardizedFileURL.path == createdPath }) {
+            return item.url
+        }
+
+        let fallbackPath = fallbackURL.standardizedFileURL.path
+        if let item = sections
+            .flatMap(\.items)
+            .first(where: { $0.url.standardizedFileURL.path == fallbackPath }) {
+            return item.url
+        }
+
+        return createdURL
     }
 
     private func collectItemsRecursively(in directoryURL: URL, sectionName: String) -> [ContentItem] {

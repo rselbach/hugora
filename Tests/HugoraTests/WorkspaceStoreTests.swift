@@ -15,6 +15,53 @@ import Testing
 @Suite("WorkspaceStore")
 @MainActor
 struct WorkspaceStoreTests {
+    private final class MockHugoContentCreator: HugoContentCreator {
+        struct Call {
+            let siteURL: URL
+            let contentDir: String
+            let relativePath: String
+            let kind: String?
+        }
+
+        var available: Bool
+        var calls: [Call] = []
+        var createHandler: ((Call) throws -> URL)?
+
+        init(available: Bool, createHandler: ((Call) throws -> URL)? = nil) {
+            self.available = available
+            self.createHandler = createHandler
+        }
+
+        func isAvailable(at siteURL: URL) -> Bool {
+            available
+        }
+
+        func createNewContent(
+            siteURL: URL,
+            contentDir: String,
+            relativePath: String,
+            kind: String?
+        ) throws -> URL {
+            let call = Call(siteURL: siteURL, contentDir: contentDir, relativePath: relativePath, kind: kind)
+            calls.append(call)
+            if let createHandler {
+                return try createHandler(call)
+            }
+
+            let fileURL = siteURL.appendingPathComponent(contentDir).appendingPathComponent(relativePath)
+            try FileManager.default.createDirectory(
+                at: fileURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try """
+            ---
+            title: "From Hugo CLI"
+            date: 2024-01-01
+            ---
+            """.write(to: fileURL, atomically: true, encoding: .utf8)
+            return fileURL
+        }
+    }
 
     // UserDefaults keys the store reads/writes.
     private static let defaultsKeys = [
@@ -25,14 +72,15 @@ struct WorkspaceStoreTests {
 
     /// Create a WorkspaceStore with a clean UserDefaults slate.
     /// Restores original values when the returned closure is called.
-    private func makeStore() -> (store: WorkspaceStore, cleanup: () -> Void) {
+    private func makeStore(hugoContentCreator: (any HugoContentCreator)? = nil) -> (store: WorkspaceStore, cleanup: () -> Void) {
         let defaults = UserDefaults.standard
         let saved = Self.defaultsKeys.map { ($0, defaults.object(forKey: $0)) }
 
         // Clear keys so the init doesn't try to restore a stale workspace.
         for key in Self.defaultsKeys { defaults.removeObject(forKey: key) }
 
-        let store = WorkspaceStore()
+        let creator = hugoContentCreator ?? MockHugoContentCreator(available: false)
+        let store = WorkspaceStore(hugoContentCreator: creator)
 
         let cleanup = {
             for (key, original) in saved {
@@ -422,6 +470,28 @@ struct WorkspaceStoreTests {
             #expect(content.contains("title:"))
             #expect(content.contains("date:"))
         }
+    }
+
+    @Test("createNewPost uses Hugo CLI creator when available")
+    func createNewPostUsesHugoCreator() throws {
+        let mockCreator = MockHugoContentCreator(available: true)
+        let (store, cleanup) = makeStore(hugoContentCreator: mockCreator)
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(sections: ["posts"])
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        store.openFolder(siteURL)
+        store.createNewPost()
+
+        #expect(mockCreator.calls.count == 1)
+        let call = mockCreator.calls[0]
+        #expect(call.relativePath.hasPrefix("posts/"))
+        #expect(call.relativePath.hasSuffix(".md"))
+        #expect(call.kind == "posts")
+
+        let postsSection = store.sections.first { $0.name == "posts" }
+        #expect(postsSection?.items.contains(where: { $0.title == "From Hugo CLI" }) == true)
     }
 
     @Test("New post uses bundle format by default")
