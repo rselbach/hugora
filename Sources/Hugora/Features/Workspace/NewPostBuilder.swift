@@ -1,6 +1,11 @@
 import Foundation
+import os
 
 struct NewPostBuilder {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
+        category: "NewPostBuilder"
+    )
     let siteURL: URL
     let config: HugoConfig
     let fileManager: FileManager
@@ -38,8 +43,10 @@ struct NewPostBuilder {
 
         for url in candidates {
             guard fileManager.fileExists(atPath: url.path) else { continue }
-            if let content = try? String(contentsOf: url, encoding: .utf8) {
-                return content
+            do {
+                return try String(contentsOf: url, encoding: .utf8)
+            } catch {
+                Self.logger.error("Failed to read archetype \(url.lastPathComponent): \(error.localizedDescription)")
             }
         }
 

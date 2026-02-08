@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 func slugify(_ string: String) -> String {
     string
@@ -130,6 +131,11 @@ enum ContentFormat: String, Codable, CaseIterable {
 }
 
 struct ContentItem: Identifiable, Equatable, Comparable {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
+        category: "ContentItem"
+    )
+
     let id: URL
     let url: URL          // path to the .md file
     let slug: String
@@ -169,13 +175,25 @@ struct ContentItem: Identifiable, Equatable, Comparable {
     }
 
     private static func extractTitle(from url: URL) -> String? {
-        guard let content = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        let content: String
+        do {
+            content = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            logger.error("Failed to read title from \(url.lastPathComponent): \(error.localizedDescription)")
+            return nil
+        }
         return parseFrontmatterValue(key: "title", from: content)
     }
 
     private static func extractDate(from url: URL) -> Date? {
-        guard let content = try? String(contentsOf: url, encoding: .utf8),
-              let dateString = parseFrontmatterValue(key: "date", from: content) else {
+        let content: String
+        do {
+            content = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            logger.error("Failed to read date from \(url.lastPathComponent): \(error.localizedDescription)")
+            return nil
+        }
+        guard let dateString = parseFrontmatterValue(key: "date", from: content) else {
             return nil
         }
 
