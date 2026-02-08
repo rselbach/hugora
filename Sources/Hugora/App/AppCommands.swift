@@ -46,11 +46,7 @@ struct AppCommands: Commands {
             Divider()
 
             Button(cliInstalled ? "Uninstall Command Line Tool…" : "Install Command Line Tool…") {
-                if cliInstalled {
-                    uninstallCLI()
-                } else {
-                    installCLI()
-                }
+                cliInstalled ? uninstallCLI() : installCLI()
             }
         }
 

@@ -2,14 +2,10 @@ import AppKit
 
 extension Theme {
     static func named(_ name: String, appearance: NSAppearance? = nil) -> Theme {
-        let resolvedAppearance: NSAppearance
-        if let appearance {
-            resolvedAppearance = appearance
-        } else if let appAppearance = NSApp?.effectiveAppearance {
-            resolvedAppearance = appAppearance
-        } else {
-            resolvedAppearance = NSAppearance(named: .aqua) ?? .currentDrawing()
-        }
+        let resolvedAppearance = appearance
+            ?? NSApp?.effectiveAppearance
+            ?? NSAppearance(named: .aqua)
+            ?? .currentDrawing()
         let isDark = resolvedAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
 
         switch name {

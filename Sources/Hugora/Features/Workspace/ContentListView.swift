@@ -67,15 +67,30 @@ struct ContentListView: View {
         .padding(.vertical, 8)
     }
 
+    private enum ViewState {
+        case error(WorkspaceError)
+        case sections
+        case emptyContent
+        case noWorkspace
+    }
+
+    private var viewState: ViewState {
+        if let error = workspaceStore.lastError { return .error(error) }
+        if !workspaceStore.sections.isEmpty { return .sections }
+        if workspaceStore.currentFolderURL != nil { return .emptyContent }
+        return .noWorkspace
+    }
+
     @ViewBuilder
     private var content: some View {
-        if let error = workspaceStore.lastError {
+        switch viewState {
+        case .error(let error):
             errorState(error)
-        } else if !workspaceStore.sections.isEmpty {
+        case .sections:
             sectionList
-        } else if workspaceStore.currentFolderURL != nil {
+        case .emptyContent:
             emptyContentState
-        } else {
+        case .noWorkspace:
             emptyState
         }
     }
