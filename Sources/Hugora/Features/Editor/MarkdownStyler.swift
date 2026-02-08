@@ -871,7 +871,6 @@ struct MarkdownStyler {
             }
         }
     }
-
     private func applyFrontmatterStyle(
         range: NSRange,
         textStorage: NSTextStorage,
