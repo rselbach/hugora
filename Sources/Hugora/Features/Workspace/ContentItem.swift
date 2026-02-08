@@ -155,6 +155,25 @@ struct ContentItem: Identifiable, Equatable, Comparable {
         self.date = Self.extractDate(from: url)
     }
 
+    /// Create a ContentItem with metadata extracted from already-loaded content.
+    /// Avoids a second file read when the caller has the content in hand.
+    init(url: URL, format: ContentFormat, section: String, content: String) {
+        self.id = url
+        self.url = url
+        self.format = format
+        self.section = section
+
+        switch format {
+        case .bundle:
+            self.slug = url.deletingLastPathComponent().lastPathComponent
+        case .file:
+            self.slug = url.deletingPathExtension().lastPathComponent
+        }
+
+        self.title = parseFrontmatterValue(key: "title", from: content) ?? slug
+        self.date = Self.parseDate(from: content)
+    }
+
     static func < (lhs: ContentItem, rhs: ContentItem) -> Bool {
         switch (lhs.date, rhs.date) {
         case let (l?, r?):
@@ -174,8 +193,14 @@ struct ContentItem: Identifiable, Equatable, Comparable {
     }
 
     private static func extractDate(from url: URL) -> Date? {
-        guard let content = try? String(contentsOf: url, encoding: .utf8),
-              let dateString = parseFrontmatterValue(key: "date", from: content) else {
+        guard let content = try? String(contentsOf: url, encoding: .utf8) else {
+            return nil
+        }
+        return parseDate(from: content)
+    }
+
+    fileprivate static func parseDate(from content: String) -> Date? {
+        guard let dateString = parseFrontmatterValue(key: "date", from: content) else {
             return nil
         }
 

@@ -186,7 +186,7 @@ final class EditorState: ObservableObject {
         do {
             let rawContent = try String(contentsOf: url, encoding: .utf8)
             let decoded = HTMLEntityCodec.decode(rawContent)
-            currentItem = ContentItem(url: url, format: format, section: section)
+            currentItem = ContentItem(url: url, format: format, section: section, content: rawContent)
             content = decoded.decoded
             entityMappings = decoded.mappings
             isDirty = false
