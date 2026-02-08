@@ -674,12 +674,22 @@ struct ImageHandlingTests {
         #expect(resolved?.path == "/tmp/greendale/site/static/other-post/image.png")
     }
     
-    @Test("Image context handles remote URLs")
-    func testRemoteURL() {
+    @Test("Image context blocks remote URLs by default")
+    func testRemoteURLBlocked() {
         let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/post.md")
         let siteURL = URL(fileURLWithPath: "/tmp/greendale/site")
         let context = ImageContext(postURL: postURL, siteURL: siteURL)
-        
+
+        let resolved = context.resolveImagePath("https://example.com/image.png")
+        #expect(resolved == nil)
+    }
+
+    @Test("Image context allows remote URLs when enabled")
+    func testRemoteURLEnabled() {
+        let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/post.md")
+        let siteURL = URL(fileURLWithPath: "/tmp/greendale/site")
+        let context = ImageContext(postURL: postURL, siteURL: siteURL, remoteImagesEnabled: true)
+
         let resolved = context.resolveImagePath("https://example.com/image.png")
         #expect(resolved?.absoluteString == "https://example.com/image.png")
     }
@@ -730,14 +740,174 @@ struct ImageHandlingTests {
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
         let styler = MarkdownStyler(theme: Theme.default)
-        
+
         // Cursor inside the image markdown
         styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 5)
-        
+
         // Image syntax should be visible (normal font)
         var effectiveRange = NSRange()
         let font = textStorage.attribute(.font, at: 0, effectiveRange: &effectiveRange) as? NSFont
         #expect(font != nil)
         #expect(font!.pointSize >= 1.0)
+    }
+}
+
+// MARK: - Cursor-Only Update Tests
+
+@Suite("Cursor-Only Update")
+struct CursorOnlyUpdateTests {
+    let styler = MarkdownStyler(theme: .default)
+
+    @Test("Moving cursor out of bold hides syntax via lightweight update")
+    func testLeavingBoldHidesSyntax() {
+        let markdown = "Some **bold** text"
+        let textStorage = NSTextStorage(string: markdown)
+        let document = Document(parsing: markdown)
+        let visibleRange = NSRange(location: 0, length: textStorage.length)
+
+        // Full restyle with cursor inside bold
+        let cache = styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 8)
+
+        // ** at position 5 should be visible
+        let fontBefore = textStorage.attribute(.font, at: 5, effectiveRange: nil) as? NSFont
+        #expect(fontBefore != nil)
+        #expect(fontBefore!.pointSize > 1.0)
+
+        // Lightweight cursor-only update: move cursor outside bold
+        textStorage.beginEditing()
+        styler.updateCursorStyles(in: textStorage, cache: cache, oldCursor: 8, newCursor: 0, imageContext: nil)
+        textStorage.endEditing()
+
+        // ** at position 5 should now be hidden
+        let fontAfter = textStorage.attribute(.font, at: 5, effectiveRange: nil) as? NSFont
+        #expect(fontAfter != nil)
+        #expect(fontAfter!.pointSize < 1.0)
+    }
+
+    @Test("Moving cursor into bold reveals syntax via lightweight update")
+    func testEnteringBoldRevealsSyntax() {
+        let markdown = "Some **bold** text"
+        let textStorage = NSTextStorage(string: markdown)
+        let document = Document(parsing: markdown)
+        let visibleRange = NSRange(location: 0, length: textStorage.length)
+
+        // Full restyle with cursor outside bold
+        let cache = styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
+
+        // ** at position 5 should be hidden
+        let fontBefore = textStorage.attribute(.font, at: 5, effectiveRange: nil) as? NSFont
+        #expect(fontBefore != nil)
+        #expect(fontBefore!.pointSize < 1.0)
+
+        // Lightweight cursor-only update: move cursor into bold
+        textStorage.beginEditing()
+        styler.updateCursorStyles(in: textStorage, cache: cache, oldCursor: 0, newCursor: 8, imageContext: nil)
+        textStorage.endEditing()
+
+        // ** at position 5 should now be visible
+        let fontAfter = textStorage.attribute(.font, at: 5, effectiveRange: nil) as? NSFont
+        #expect(fontAfter != nil)
+        #expect(fontAfter!.pointSize > 1.0)
+    }
+
+    @Test("Moving cursor within same element is a no-op")
+    func testMovingWithinElement() {
+        let markdown = "Some **bold** text"
+        let textStorage = NSTextStorage(string: markdown)
+        let document = Document(parsing: markdown)
+        let visibleRange = NSRange(location: 0, length: textStorage.length)
+
+        // Full restyle with cursor inside bold
+        let cache = styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 7)
+
+        // Snapshot font at ** position
+        let fontBefore = textStorage.attribute(.font, at: 5, effectiveRange: nil) as? NSFont
+
+        // Move cursor within same bold element
+        textStorage.beginEditing()
+        styler.updateCursorStyles(in: textStorage, cache: cache, oldCursor: 7, newCursor: 9, imageContext: nil)
+        textStorage.endEditing()
+
+        let fontAfter = textStorage.attribute(.font, at: 5, effectiveRange: nil) as? NSFont
+        #expect(fontBefore?.pointSize == fontAfter?.pointSize)
+    }
+
+    @Test("Heading hash hides/reveals via lightweight update")
+    func testHeadingCursorUpdate() {
+        let markdown = "# Heading\n\nParagraph"
+        let textStorage = NSTextStorage(string: markdown)
+        let document = Document(parsing: markdown)
+        let visibleRange = NSRange(location: 0, length: textStorage.length)
+
+        // Full restyle with cursor on heading
+        let cache = styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 5)
+
+        // # at position 0 should be visible
+        let fontVisible = textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+        #expect(fontVisible!.pointSize > 1.0)
+
+        // Move cursor to paragraph
+        textStorage.beginEditing()
+        styler.updateCursorStyles(in: textStorage, cache: cache, oldCursor: 5, newCursor: 15, imageContext: nil)
+        textStorage.endEditing()
+
+        // # at position 0 should be hidden
+        let fontHidden = textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+        #expect(fontHidden!.pointSize < 1.0)
+    }
+
+    @Test("Lightweight update matches full restyle result")
+    func testLightweightMatchesFullRestyle() {
+        let markdown = "# Title\n\nSome **bold** and *italic* text"
+        let textStorage1 = NSTextStorage(string: markdown)
+        let textStorage2 = NSTextStorage(string: markdown)
+        let document = Document(parsing: markdown)
+        let visibleRange = NSRange(location: 0, length: markdown.utf16.count)
+
+        // Path 1: full restyle with cursor inside bold, then lightweight move to outside
+        let cache = styler.style(text: markdown, document: document, textStorage: textStorage1, visibleRange: visibleRange, cursorPosition: 16)
+        textStorage1.beginEditing()
+        styler.updateCursorStyles(in: textStorage1, cache: cache, oldCursor: 16, newCursor: 0, imageContext: nil)
+        textStorage1.endEditing()
+
+        // Path 2: full restyle directly with cursor at 0
+        styler.style(text: markdown, document: document, textStorage: textStorage2, visibleRange: visibleRange, cursorPosition: 0)
+
+        // The ** markers should match: both hidden
+        let font1 = textStorage1.attribute(.font, at: 14, effectiveRange: nil) as? NSFont
+        let font2 = textStorage2.attribute(.font, at: 14, effectiveRange: nil) as? NSFont
+        #expect(font1!.pointSize < 1.0)
+        #expect(font2!.pointSize < 1.0)
+    }
+
+    @Test("String content unchanged after cursor-only update")
+    func testContentIntegrity() {
+        let markdown = "# Title\n\n**bold** and *italic* with `code`"
+        let textStorage = NSTextStorage(string: markdown)
+        let document = Document(parsing: markdown)
+        let visibleRange = NSRange(location: 0, length: textStorage.length)
+
+        let cache = styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
+
+        textStorage.beginEditing()
+        styler.updateCursorStyles(in: textStorage, cache: cache, oldCursor: 0, newCursor: 15, imageContext: nil)
+        textStorage.endEditing()
+
+        #expect(textStorage.string == markdown)
+    }
+
+    @Test("Cache contains expected markers")
+    func testCacheContents() {
+        let markdown = "# Heading\n\nSome **bold** text"
+        let textStorage = NSTextStorage(string: markdown)
+        let document = Document(parsing: markdown)
+        let visibleRange = NSRange(location: 0, length: textStorage.length)
+
+        let cache = styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
+
+        // Should have markers for heading (# ) and bold (** **)
+        #expect(cache.markers.count >= 3)  // 1 heading prefix + 2 bold markers
+        #expect(cache.fontScale > 0)
+        #expect(cache.lineSpacing > 0)
     }
 }
