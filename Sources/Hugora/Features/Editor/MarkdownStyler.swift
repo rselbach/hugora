@@ -509,6 +509,13 @@ struct RenderedImageInfo {
 struct ImageContext {
     let postURL: URL           // URL of the current .md file
     let siteURL: URL           // URL of the Hugo site root
+    let remoteImagesEnabled: Bool
+
+    init(postURL: URL, siteURL: URL, remoteImagesEnabled: Bool = false) {
+        self.postURL = postURL
+        self.siteURL = siteURL
+        self.remoteImagesEnabled = remoteImagesEnabled
+    }
     
     /// Resolves an image path according to Hugo conventions:
     /// - `/some-path/my-image.png` → static/some-path/my-image.png
@@ -516,10 +523,10 @@ struct ImageContext {
     /// - `my-image.png` → same directory as the post
     func resolveImagePath(_ source: String) -> URL? {
         guard !source.isEmpty else { return nil }
-        
+
         // Handle remote URLs
         if source.hasPrefix("http://") || source.hasPrefix("https://") {
-            return URL(string: source)
+            return remoteImagesEnabled ? URL(string: source) : nil
         }
         
         if source.hasPrefix("/") {
@@ -568,20 +575,85 @@ struct ImageContext {
 /// Simple in-memory cache for loaded images.
 final class ImageCache {
     static let shared = ImageCache()
-    
-    private var cache: [URL: NSImage] = [:]
+
+    private struct Entry {
+        let image: NSImage
+        let cost: Int
+    }
+
+    private var cache: [URL: Entry] = [:]
+    private var order: [URL] = []
+    private var totalCost: Int = 0
+    private let countLimit: Int
+    private let totalCostLimit: Int
     private let queue = DispatchQueue(label: "com.hugora.imagecache", attributes: .concurrent)
-    
+
+    init(countLimit: Int = 128, totalCostLimit: Int = 128 * 1024 * 1024) {
+        self.countLimit = max(countLimit, 1)
+        self.totalCostLimit = max(totalCostLimit, 1)
+    }
+
     func image(for url: URL) -> NSImage? {
-        queue.sync { cache[url] }
+        queue.sync {
+            guard let entry = cache[url] else { return nil }
+            markAsRecentlyUsed(url)
+            return entry.image
+        }
     }
-    
+
     func setImage(_ image: NSImage, for url: URL) {
-        queue.async(flags: .barrier) { self.cache[url] = image }
+        let cost = imageCost(image)
+        queue.sync(flags: .barrier) {
+            if let existing = cache[url] {
+                totalCost -= existing.cost
+                removeFromOrder(url)
+            }
+
+            cache[url] = Entry(image: image, cost: cost)
+            order.append(url)
+            totalCost += cost
+            enforceLimits()
+        }
     }
-    
+
     func clear() {
-        queue.async(flags: .barrier) { self.cache.removeAll() }
+        queue.sync(flags: .barrier) {
+            cache.removeAll()
+            order.removeAll()
+            totalCost = 0
+        }
+    }
+
+    private func markAsRecentlyUsed(_ url: URL) {
+        guard let index = order.firstIndex(of: url) else { return }
+        order.remove(at: index)
+        order.append(url)
+    }
+
+    private func removeFromOrder(_ url: URL) {
+        if let index = order.firstIndex(of: url) {
+            order.remove(at: index)
+        }
+    }
+
+    private func enforceLimits() {
+        while cache.count > countLimit || totalCost > totalCostLimit {
+            guard let oldest = order.first,
+                  let entry = cache[oldest] else {
+                break
+            }
+            cache.removeValue(forKey: oldest)
+            order.removeFirst()
+            totalCost -= entry.cost
+        }
+    }
+
+    private func imageCost(_ image: NSImage) -> Int {
+        let reps = image.representations
+        let maxPixels = reps.map { $0.pixelsWide * $0.pixelsHigh }.max() ?? 0
+        let fallbackPixels = Int(image.size.width * image.size.height)
+        let pixels = max(maxPixels, fallbackPixels)
+        return max(pixels * 4, 1)
     }
 }
 
@@ -692,6 +764,8 @@ struct MarkdownStyler {
                 cursorPosition: cursorPosition,
                 textStorage: textStorage,
                 imageContext: context,
+                theme: activeTheme,
+                fontScale: fontScale,
                 lineSpacing: preferences.lineSpacing
             )
         }
@@ -790,6 +864,8 @@ struct MarkdownStyler {
                     cursorPosition: newCursor,
                     textStorage: textStorage,
                     imageContext: context,
+                    theme: activeTheme,
+                    fontScale: cache.fontScale,
                     lineSpacing: cache.lineSpacing
                 )
             }
@@ -976,6 +1052,8 @@ struct MarkdownStyler {
         cursorPosition: Int?,
         textStorage: NSTextStorage,
         imageContext: ImageContext,
+        theme: Theme,
+        fontScale: CGFloat,
         lineSpacing: CGFloat
     ) {
         for imageSpan in imageSpans {
@@ -994,49 +1072,115 @@ struct MarkdownStyler {
             
             if cursorInImage {
                 // Cursor is in image: show raw markdown, remove any attachment
-                textStorage.removeAttribute(.attachment, range: range)
-            } else {
-                // Cursor outside: load and display image
-                guard let source = imageSpan.source,
-                      let imageURL = imageContext.resolveImagePath(source) else {
-                    continue
-                }
-                
-                // Try to load image (from cache or file)
-                let image: NSImage?
-                if let cached = ImageCache.shared.image(for: imageURL) {
-                    image = cached
-                } else if imageURL.isFileURL {
-                    image = loadLocalImage(from: imageURL)
-                } else {
-                    // Remote images: async load would be needed, skip for now
-                    image = nil
-                }
-                
-                guard let nsImage = image else { continue }
-                
-                // Store image info as custom attribute for later rendering
-                // NSTextAttachment only works with the U+FFFC character, not arbitrary text
-                // We'll use custom drawing in EditorTextView instead
-                let maxWidth: CGFloat = 600
-                let originalSize = nsImage.size
-                var targetHeight = originalSize.height
-                if originalSize.width > maxWidth {
-                    let scale = maxWidth / originalSize.width
-                    targetHeight = originalSize.height * scale
-                }
-                
-                let imageInfo = RenderedImageInfo(image: nsImage, altText: imageSpan.altText, originalSize: nsImage.size)
-                textStorage.addAttribute(.renderedImage, value: imageInfo, range: range)
-                
-                // Add paragraph spacing after this line to make room for the image
-                let paragraphStyle = NSMutableParagraphStyle()
-                paragraphStyle.paragraphSpacingBefore = 0
-                paragraphStyle.paragraphSpacing = targetHeight + 12  // image height + padding
-                paragraphStyle.lineHeightMultiple = lineSpacing
-                textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: range)
+                showImageMarkdown(
+                    range: range,
+                    source: imageSpan.source,
+                    altText: imageSpan.altText,
+                    textStorage: textStorage,
+                    theme: theme,
+                    fontScale: fontScale,
+                    lineSpacing: lineSpacing
+                )
+                continue
             }
+
+            // Cursor outside: load and display image
+            guard let source = imageSpan.source,
+                  let imageURL = imageContext.resolveImagePath(source) else {
+                showImageMarkdown(
+                    range: range,
+                    source: imageSpan.source,
+                    altText: imageSpan.altText,
+                    textStorage: textStorage,
+                    theme: theme,
+                    fontScale: fontScale,
+                    lineSpacing: lineSpacing
+                )
+                continue
+            }
+
+            guard imageURL.isFileURL else {
+                showImageMarkdown(
+                    range: range,
+                    source: imageSpan.source,
+                    altText: imageSpan.altText,
+                    textStorage: textStorage,
+                    theme: theme,
+                    fontScale: fontScale,
+                    lineSpacing: lineSpacing
+                )
+                continue
+            }
+
+            // Try to load image (from cache or file)
+            let image: NSImage?
+            if let cached = ImageCache.shared.image(for: imageURL) {
+                image = cached
+            } else {
+                image = loadLocalImage(from: imageURL)
+            }
+
+            guard let nsImage = image else {
+                showImageMarkdown(
+                    range: range,
+                    source: imageSpan.source,
+                    altText: imageSpan.altText,
+                    textStorage: textStorage,
+                    theme: theme,
+                    fontScale: fontScale,
+                    lineSpacing: lineSpacing
+                )
+                continue
+            }
+
+            // Store image info as custom attribute for later rendering
+            // NSTextAttachment only works with the U+FFFC character, not arbitrary text
+            // We'll use custom drawing in EditorTextView instead
+            let maxWidth: CGFloat = 600
+            let originalSize = nsImage.size
+            var targetHeight = originalSize.height
+            if originalSize.width > maxWidth {
+                let scale = maxWidth / originalSize.width
+                targetHeight = originalSize.height * scale
+            }
+
+            let imageInfo = RenderedImageInfo(image: nsImage, altText: imageSpan.altText, originalSize: nsImage.size)
+            textStorage.addAttribute(.renderedImage, value: imageInfo, range: range)
+
+            // Add paragraph spacing after this line to make room for the image
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.paragraphSpacingBefore = 0
+            paragraphStyle.paragraphSpacing = targetHeight + 12  // image height + padding
+            paragraphStyle.lineHeightMultiple = lineSpacing
+            textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: range)
         }
+    }
+
+    private func showImageMarkdown(
+        range: NSRange,
+        source: String?,
+        altText: String,
+        textStorage: NSTextStorage,
+        theme: Theme,
+        fontScale: CGFloat,
+        lineSpacing: CGFloat
+    ) {
+        textStorage.removeAttribute(.renderedImage, range: range)
+        resetBaseAttributes(
+            textStorage: textStorage,
+            range: range,
+            theme: theme,
+            fontScale: fontScale,
+            lineSpacing: lineSpacing
+        )
+        applyStyle(
+            kind: .image(source: source, altText: altText),
+            range: range,
+            textStorage: textStorage,
+            theme: theme,
+            fontScale: fontScale,
+            lineSpacing: lineSpacing
+        )
     }
     
     /// Loads a local image file and caches it.

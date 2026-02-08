@@ -674,12 +674,22 @@ struct ImageHandlingTests {
         #expect(resolved?.path == "/tmp/greendale/site/static/other-post/image.png")
     }
     
-    @Test("Image context handles remote URLs")
-    func testRemoteURL() {
+    @Test("Image context blocks remote URLs by default")
+    func testRemoteURLBlocked() {
         let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/post.md")
         let siteURL = URL(fileURLWithPath: "/tmp/greendale/site")
         let context = ImageContext(postURL: postURL, siteURL: siteURL)
-        
+
+        let resolved = context.resolveImagePath("https://example.com/image.png")
+        #expect(resolved == nil)
+    }
+
+    @Test("Image context allows remote URLs when enabled")
+    func testRemoteURLEnabled() {
+        let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/post.md")
+        let siteURL = URL(fileURLWithPath: "/tmp/greendale/site")
+        let context = ImageContext(postURL: postURL, siteURL: siteURL, remoteImagesEnabled: true)
+
         let resolved = context.resolveImagePath("https://example.com/image.png")
         #expect(resolved?.absoluteString == "https://example.com/image.png")
     }
