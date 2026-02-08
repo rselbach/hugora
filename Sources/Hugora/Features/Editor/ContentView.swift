@@ -32,12 +32,20 @@ struct ContentView: View {
             }
         }
         .navigationTitle(editorState.title)
-        .onChange(of: workspaceStore.selectedFileURL) { _, newURL in
-            guard let url = newURL else { return }
-            openPostAtURL(url)
-            workspaceStore.selectedFileURL = nil
-        }
         .onAppear {
+            workspaceStore.onOpenFile = { [weak editorState, weak viewModel, weak workspaceStore] url in
+                guard let editorState, let viewModel, let workspaceStore else { return }
+                let item = workspaceStore.sections
+                    .flatMap { $0.items }
+                    .first { $0.url == url }
+                guard let item else { return }
+                editorState.openItem(item)
+                viewModel.setText(editorState.content)
+                if let siteURL = workspaceStore.currentFolderURL {
+                    viewModel.imageContext = ImageContext(postURL: item.url, siteURL: siteURL)
+                }
+            }
+
             // Set up image context for restored session
             if let item = editorState.currentItem,
                let siteURL = workspaceStore.currentFolderURL {
@@ -85,19 +93,6 @@ struct ContentView: View {
         )
     }
 
-    private func openPostAtURL(_ url: URL) {
-        let item = workspaceStore.sections
-            .flatMap { $0.items }
-            .first { $0.url == url }
-        guard let item else { return }
-        editorState.openItem(item)
-        viewModel.setText(editorState.content)
-        
-        // Set up image context for resolving image paths
-        if let siteURL = workspaceStore.currentFolderURL {
-            viewModel.imageContext = ImageContext(postURL: item.url, siteURL: siteURL)
-        }
-    }
 }
 
 #Preview {

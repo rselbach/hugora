@@ -31,8 +31,12 @@ final class WorkspaceStore: ObservableObject {
     @Published var recentWorkspaces: [WorkspaceRef] = []
     @Published var lastError: WorkspaceError?
     
-    /// File selected from sidebar to open in current editor
+    /// Which file is highlighted in the sidebar list (not an event — just selection state)
     @Published var selectedFileURL: URL?
+
+    /// Called when a file should be opened in the editor.
+    /// Wired up by ContentView so WorkspaceStore doesn't need to know about EditorState.
+    var onOpenFile: ((URL) -> Void)?
 
     private var securityScopedURL: URL?
     private let bookmarkKey = "hugora.workspace.bookmark"
@@ -143,6 +147,7 @@ final class WorkspaceStore: ObservableObject {
 
     func openFile(_ url: URL) {
         selectedFileURL = url
+        onOpenFile?(url)
     }
 
     // MARK: - Create New Post
@@ -218,6 +223,7 @@ final class WorkspaceStore: ObservableObject {
             }
 
             selectedFileURL = fileURL
+            onOpenFile?(fileURL)
         } catch {
             NSApp.presentError(error)
         }
