@@ -104,13 +104,11 @@ struct EditorSettingsView: View {
 struct ThemeSettingsView: View {
     @AppStorage("selectedTheme") private var selectedTheme = "Default"
 
-    private let themes = ["Default", "GitHub", "Dracula", "Solarized Light", "Solarized Dark", "rselbach.com"]
-
     var body: some View {
         Form {
             Section("Theme") {
                 Picker("Editor Theme", selection: $selectedTheme) {
-                    ForEach(themes, id: \.self) { theme in
+                    ForEach(Theme.availableThemeNames, id: \.self) { theme in
                         Text(theme).tag(theme)
                     }
                 }
