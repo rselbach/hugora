@@ -62,7 +62,7 @@ struct EditorStateRenameTests {
 
             #expect(FileManager.default.fileExists(atPath: fileURL.path))
 
-            let slug = slugify("Greendale Community College Rules")
+            let slug = Slug.from("Greendale Community College Rules")
             let renamedURL = tempDir.appendingPathComponent("2024-06-20-\(slug).md")
             #expect(!FileManager.default.fileExists(atPath: renamedURL.path))
         }

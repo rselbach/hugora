@@ -124,18 +124,18 @@ final class EditorState: ObservableObject {
     }
 
     private func deriveSlug(from content: String) -> String {
-        if let slugValue = parseFrontmatterValue(key: "slug", from: content),
+        if let slugValue = FrontmatterParser.value(forKey: "slug", in: content),
            let cleaned = cleanedSlugComponent(from: slugValue) {
             return cleaned
         }
 
-        if let urlValue = parseFrontmatterValue(key: "url", from: content),
+        if let urlValue = FrontmatterParser.value(forKey: "url", in: content),
            let cleaned = cleanedSlugComponent(from: urlValue) {
             return cleaned
         }
 
-        if let title = parseFrontmatterValue(key: "title", from: content) {
-            return slugify(title)
+        if let title = FrontmatterParser.value(forKey: "title", in: content) {
+            return Slug.from(title)
         }
         
         return "untitled"
@@ -154,7 +154,7 @@ final class EditorState: ObservableObject {
     }
 
     private func deriveDatePrefix(from content: String, fallback: Date?) -> String {
-        if let dateString = parseFrontmatterValue(key: "date", from: content) {
+        if let dateString = FrontmatterParser.value(forKey: "date", in: content) {
             return String(dateString.prefix(10))
         }
 
