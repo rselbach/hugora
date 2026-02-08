@@ -7,13 +7,13 @@ final class ThemeManager: ObservableObject {
 
     @Published private(set) var currentTheme: Theme
 
-    @AppStorage("selectedTheme") private var selectedThemeName = "Default"
+    @AppStorage(DefaultsKey.selectedTheme) private var selectedThemeName = "Default"
 
     private var cancellables = Set<AnyCancellable>()
     private var appearanceObserver: NSObjectProtocol?
 
     init() {
-        currentTheme = Theme.named(UserDefaults.standard.string(forKey: "selectedTheme") ?? "Default")
+        currentTheme = Theme.named(UserDefaults.standard.string(forKey: DefaultsKey.selectedTheme) ?? "Default")
         setupBindings()
         observeAppearance()
     }
@@ -56,6 +56,6 @@ extension Notification.Name {
 
 extension UserDefaults {
     @objc dynamic var selectedTheme: String? {
-        string(forKey: "selectedTheme")
+        string(forKey: DefaultsKey.selectedTheme)
     }
 }

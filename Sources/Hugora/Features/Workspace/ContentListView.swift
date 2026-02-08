@@ -67,15 +67,30 @@ struct ContentListView: View {
         .padding(.vertical, 8)
     }
 
+    private enum ViewState {
+        case error(WorkspaceError)
+        case sections
+        case emptyContent
+        case noWorkspace
+    }
+
+    private var viewState: ViewState {
+        if let error = workspaceStore.lastError { return .error(error) }
+        if !workspaceStore.sections.isEmpty { return .sections }
+        if workspaceStore.currentFolderURL != nil { return .emptyContent }
+        return .noWorkspace
+    }
+
     @ViewBuilder
     private var content: some View {
-        if let error = workspaceStore.lastError {
+        switch viewState {
+        case .error(let error):
             errorState(error)
-        } else if !workspaceStore.sections.isEmpty {
+        case .sections:
             sectionList
-        } else if workspaceStore.currentFolderURL != nil {
+        case .emptyContent:
             emptyContentState
-        } else {
+        case .noWorkspace:
             emptyState
         }
     }
@@ -180,12 +195,12 @@ struct ContentRow: View {
     @State private var isHovering = false
     @State private var showDeleteConfirmation = false
 
-    private var dateFormatter: DateFormatter {
+    private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .medium
         f.timeStyle = .none
         return f
-    }
+    }()
 
     var body: some View {
         HStack(spacing: 8) {
@@ -201,7 +216,7 @@ struct ContentRow: View {
 
                 HStack(spacing: 4) {
                     if let date = item.date {
-                        Text(dateFormatter.string(from: date))
+                        Text(Self.dateFormatter.string(from: date))
                             .font(.system(size: 10))
                             .foregroundStyle(.tertiary)
                     }

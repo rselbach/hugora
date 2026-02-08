@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Combine
+import os
 
 struct EditorView: NSViewRepresentable {
     @Binding var text: String
@@ -83,6 +84,7 @@ struct EditorView: NSViewRepresentable {
         Coordinator(text: $text, viewModel: viewModel)
     }
 
+    @MainActor
     class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
         let viewModel: EditorViewModel
@@ -115,8 +117,10 @@ struct EditorView: NSViewRepresentable {
                 object: nil,
                 queue: .main
             ) { [weak self] _ in
-                self?.triggerStyling()
-                self?.reportScrollPosition()
+                MainActor.assumeIsolated {
+                    self?.triggerStyling()
+                    self?.reportScrollPosition()
+                }
             }
         }
 
@@ -201,6 +205,11 @@ class EditorTextView: NSTextView {
     /// Context for saving pasted images. Set by the coordinator.
     var imageContext: ImageContext?
 
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
+        category: "EditorTextView"
+    )
+
     private static let pairs: [Character: Character] = [
         "(": ")",
         "[": "]",
@@ -262,12 +271,12 @@ class EditorTextView: NSTextView {
 
     private func applyPreferences() {
         let defaults = UserDefaults.standard
-        let storedFontSize = defaults.object(forKey: "editorFontSize") as? Double
-        let storedLineSpacing = defaults.object(forKey: "editorLineSpacing") as? Double
+        let storedFontSize = defaults.object(forKey: DefaultsKey.editorFontSize) as? Double
+        let storedLineSpacing = defaults.object(forKey: DefaultsKey.editorLineSpacing) as? Double
         fontSize = max(storedFontSize ?? 16, 1)
         lineSpacing = max(storedLineSpacing ?? 1.4, 1)
-        spellCheckEnabled = defaults.object(forKey: "spellCheckEnabled") as? Bool ?? true
-        autoPairEnabled = defaults.object(forKey: "autoPairEnabled") as? Bool ?? true
+        spellCheckEnabled = defaults.object(forKey: DefaultsKey.spellCheckEnabled) as? Bool ?? true
+        autoPairEnabled = defaults.object(forKey: DefaultsKey.autoPairEnabled) as? Bool ?? true
 
         font = .monospacedSystemFont(ofSize: fontSize, weight: .regular)
         isContinuousSpellCheckingEnabled = spellCheckEnabled
@@ -345,27 +354,34 @@ class EditorTextView: NSTextView {
 
         let nsString = (self.string as NSString)
         let prevLocation = selectedRange.location - 1
-        let prevChar = Character(UnicodeScalar(nsString.character(at: prevLocation))!)
+        guard let prevScalar = UnicodeScalar(nsString.character(at: prevLocation)) else {
+            super.deleteBackward(sender)
+            return
+        }
+        let prevChar = Character(prevScalar)
 
         guard let expectedCloser = Self.pairs[prevChar],
               selectedRange.location < nsString.length else {
             super.deleteBackward(sender)
-    
             return
         }
 
-        let nextChar = Character(UnicodeScalar(nsString.character(at: selectedRange.location))!)
-
-        if nextChar == expectedCloser {
-            let deleteRange = NSRange(location: prevLocation, length: 2)
-            if shouldChangeText(in: deleteRange, replacementString: "") {
-                replaceCharacters(in: deleteRange, with: "")
-                didChangeText()
-            }
-        } else {
+        guard let nextScalar = UnicodeScalar(nsString.character(at: selectedRange.location)) else {
             super.deleteBackward(sender)
+            return
+        }
+        let nextChar = Character(nextScalar)
+
+        guard nextChar == expectedCloser else {
+            super.deleteBackward(sender)
+            return
         }
 
+        let deleteRange = NSRange(location: prevLocation, length: 2)
+        if shouldChangeText(in: deleteRange, replacementString: "") {
+            replaceCharacters(in: deleteRange, with: "")
+            didChangeText()
+        }
     }
 
     private func wrapSelection(opener: Character, closer: Character, range: NSRange) {
@@ -393,8 +409,11 @@ class EditorTextView: NSTextView {
 
     private func shouldSkipOver(char: Character, at location: Int) -> Bool {
         let nsString = (self.string as NSString)
-        guard location < nsString.length else { return false }
-        let nextChar = Character(UnicodeScalar(nsString.character(at: location))!)
+        guard location < nsString.length,
+              let scalar = UnicodeScalar(nsString.character(at: location)) else {
+            return false
+        }
+        let nextChar = Character(scalar)
         return nextChar == char
     }
 
@@ -648,8 +667,12 @@ class EditorTextView: NSTextView {
         }
     }
     
+    private static let imageTimestampFormatter: ISO8601DateFormatter = {
+        ISO8601DateFormatter()
+    }()
+
     private func generateImageFilename() -> String {
-        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let timestamp = Self.imageTimestampFormatter.string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
             .replacingOccurrences(of: "+", with: "")
         return "image-\(timestamp).png"
@@ -666,7 +689,7 @@ class EditorTextView: NSTextView {
             try pngData.write(to: url)
             return true
         } catch {
-            print("Failed to save image: \(error)")
+            Self.logger.error("Failed to save image: \(error.localizedDescription)")
             return false
         }
     }

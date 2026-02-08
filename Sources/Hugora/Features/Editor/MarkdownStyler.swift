@@ -33,41 +33,6 @@ struct Theme {
     let frontmatterBackground: NSColor
     let frontmatterKeyColor: NSColor
 
-    static var `default`: Theme {
-        let baseSize: CGFloat = 16
-        return Theme(
-            baseFont: .systemFont(ofSize: baseSize),
-            baseColor: .textColor,
-            headings: [
-                HeadingStyle(font: .systemFont(ofSize: baseSize * 2.0, weight: .bold), color: .textColor),
-                HeadingStyle(font: .systemFont(ofSize: baseSize * 1.5, weight: .bold), color: .textColor),
-                HeadingStyle(font: .systemFont(ofSize: baseSize * 1.25, weight: .semibold), color: .textColor),
-                HeadingStyle(font: .systemFont(ofSize: baseSize * 1.1, weight: .semibold), color: .textColor),
-                HeadingStyle(font: .systemFont(ofSize: baseSize, weight: .medium), color: .secondaryLabelColor),
-                HeadingStyle(font: .systemFont(ofSize: baseSize * 0.9, weight: .medium), color: .secondaryLabelColor),
-            ],
-            boldColor: .textColor,
-            italicColor: .textColor,
-            inlineCodeFont: .monospacedSystemFont(ofSize: baseSize * 0.9, weight: .regular),
-            inlineCodeColor: .systemPink,
-            inlineCodeBackground: NSColor.quaternaryLabelColor.withAlphaComponent(0.3),
-            linkColor: .linkColor,
-            blockquoteColor: .secondaryLabelColor,
-            blockquoteBorderColor: .systemOrange,
-            codeBlockFont: .monospacedSystemFont(ofSize: baseSize * 0.9, weight: .regular),
-            codeBlockColor: .textColor,
-            codeBlockBackground: NSColor.quaternaryLabelColor.withAlphaComponent(0.2),
-            tableFont: .monospacedSystemFont(ofSize: baseSize * 0.9, weight: .regular),
-            tableBackground: NSColor.quaternaryLabelColor.withAlphaComponent(0.1),
-            tableHeaderBackground: NSColor.quaternaryLabelColor.withAlphaComponent(0.25),
-            tableBorderColor: .separatorColor,
-            frontmatterFont: .monospacedSystemFont(ofSize: baseSize * 0.85, weight: .regular),
-            frontmatterColor: .secondaryLabelColor,
-            frontmatterBackground: NSColor.quaternaryLabelColor.withAlphaComponent(0.15),
-            frontmatterKeyColor: .systemTeal
-        )
-    }
-
     func headingStyle(level: Int) -> HeadingStyle {
         let index = max(0, min(level - 1, headings.count - 1))
         return headings[index]
@@ -76,7 +41,6 @@ struct Theme {
 
 // MARK: - Custom Attribute Keys
 
-/// Custom attribute keys for styling
 extension NSAttributedString.Key {
     static let renderedImage = NSAttributedString.Key("com.hugora.renderedImage")
     static let blockquoteInfo = NSAttributedString.Key("com.hugora.blockquoteInfo")
@@ -100,7 +64,7 @@ struct RenderedImageInfo {
 struct MarkdownStyler {
     let theme: Theme
 
-    init(theme: Theme = .default) {
+    init(theme: Theme = .defaultLight) {
         self.theme = theme
     }
 
@@ -359,23 +323,22 @@ struct MarkdownStyler {
                 cursorInElement = false
             }
 
-            if cursorInElement {
-                // Show syntax: ensure normal visibility (already applied by base styling)
-                // Nothing extra needed - syntax is visible by default
-            } else {
-                // Hide syntax: make it nearly invisible
-                let clampedRange = NSIntersectionRange(marker.range, NSRange(location: 0, length: textStorage.length))
-                guard clampedRange.length > 0 else { continue }
+            guard !cursorInElement else { continue }
 
-                if marker.preserveLineHeight {
-                    // For empty blockquote lines: hide color only, keep font to preserve line height
-                    textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
-                } else {
-                    // Normal hiding: tiny font to collapse space while maintaining string integrity
-                    let hiddenFont = NSFont.systemFont(ofSize: 0.01)
-                    textStorage.addAttribute(.font, value: hiddenFont, range: clampedRange)
-                    textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
-                }
+            // Hide syntax: make it nearly invisible
+            let clampedRange = NSIntersectionRange(marker.range, NSRange(location: 0, length: textStorage.length))
+            guard clampedRange.length > 0 else { continue }
+
+            if marker.preserveLineHeight {
+                // For empty blockquote lines: hide color only, keep font to preserve line height
+                textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
+            } else {
+                // Normal hiding: tiny font to collapse space while maintaining string integrity
+                let hiddenFont = NSFont.systemFont(ofSize: 0.01)
+                textStorage.addAttribute(.font, value: hiddenFont, range: clampedRange)
+                textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
+            }
+
             }
         }
     }
@@ -631,34 +594,6 @@ struct MarkdownStyler {
         return image
     }
 
-    /// Creates an NSTextAttachment with the image scaled to fit the text container.
-    private func createImageAttachment(image: NSImage, altText: String, maxWidth: CGFloat = 600) -> NSTextAttachment {
-        // Scale image to fit within maxWidth while preserving aspect ratio
-        let originalSize = image.size
-        var targetSize = originalSize
-
-        if originalSize.width > maxWidth {
-            let scale = maxWidth / originalSize.width
-            targetSize = NSSize(width: maxWidth, height: originalSize.height * scale)
-        }
-
-        // Use custom attachment cell for better rendering control
-        let cell = NSTextAttachmentCell(imageCell: image)
-        cell.image = image
-
-        let attachment = NSTextAttachment()
-        attachment.attachmentCell = cell
-
-        // Set bounds to control display size (the cell will scale the image)
-        attachment.bounds = CGRect(origin: CGPoint(x: 0, y: -4), size: targetSize)
-
-        #if DEBUG
-        print("[ImageDebug] Created attachment with bounds: \(attachment.bounds), cell: \(String(describing: attachment.attachmentCell))")
-        #endif
-
-        return attachment
-    }
-
     /// Derives font with added traits from existing font runs to handle nested markup.
     private func applyFontTrait(
         _ trait: NSFontTraitMask,
@@ -690,8 +625,8 @@ private struct EditorPreferences {
 
     static func current() -> EditorPreferences {
         let defaults = UserDefaults.standard
-        let storedFontSize = defaults.object(forKey: "editorFontSize") as? Double ?? 16
-        let storedLineSpacing = defaults.object(forKey: "editorLineSpacing") as? Double ?? 1.4
+        let storedFontSize = defaults.object(forKey: DefaultsKey.editorFontSize) as? Double ?? 16
+        let storedLineSpacing = defaults.object(forKey: DefaultsKey.editorLineSpacing) as? Double ?? 1.4
         return EditorPreferences(
             fontSize: CGFloat(max(storedFontSize, 1)),
             lineSpacing: CGFloat(max(storedLineSpacing, 1))

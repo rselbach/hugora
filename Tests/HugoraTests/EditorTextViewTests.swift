@@ -5,51 +5,58 @@ import Testing
 
 @Suite("EditorTextView Preferences")
 struct EditorTextViewPreferencesTests {
-    @Test("Applies UserDefaults changes without crashing")
-    @MainActor
-    func appliesDefaultsUpdates() {
-        let defaults = UserDefaults.standard
-        let keys = [
-            "editorFontSize",
-            "editorLineSpacing",
-            "spellCheckEnabled",
-            "autoPairEnabled"
-        ]
-        let originalValues = keys.map { defaults.object(forKey: $0) }
 
+    // All UserDefaults keys that these tests (or the code under test) touch.
+    private static let touchedKeys = [
+        "editorFontSize",
+        "editorLineSpacing",
+        "spellCheckEnabled",
+        "autoPairEnabled",
+    ]
+
+    /// Snapshot current values, run body, then restore originals.
+    private func withCleanDefaults(_ body: () throws -> Void) throws {
+        let defaults = UserDefaults.standard
+        let saved = Self.touchedKeys.map { ($0, defaults.object(forKey: $0)) }
         defer {
-            for (key, value) in zip(keys, originalValues) {
-                if let value {
-                    defaults.set(value, forKey: key)
-                } else {
-                    defaults.removeObject(forKey: key)
-                }
+            for (key, original) in saved {
+                if let original { defaults.set(original, forKey: key) }
+                else { defaults.removeObject(forKey: key) }
             }
         }
+        try body()
+    }
 
-        defaults.set(14.0, forKey: "editorFontSize")
-        defaults.set(1.3, forKey: "editorLineSpacing")
-        defaults.set(true, forKey: "spellCheckEnabled")
-        defaults.set(true, forKey: "autoPairEnabled")
+    @Test("Applies UserDefaults changes without crashing")
+    @MainActor
+    func appliesDefaultsUpdates() throws {
+        try withCleanDefaults {
+            let defaults = UserDefaults.standard
 
-        let textView = EditorTextView(frame: .zero)
+            defaults.set(14.0, forKey: "editorFontSize")
+            defaults.set(1.3, forKey: "editorLineSpacing")
+            defaults.set(true, forKey: "spellCheckEnabled")
+            defaults.set(true, forKey: "autoPairEnabled")
 
-        defaults.set(20.0, forKey: "editorFontSize")
-        defaults.set(1.8, forKey: "editorLineSpacing")
-        defaults.set(false, forKey: "spellCheckEnabled")
-        defaults.set(false, forKey: "autoPairEnabled")
+            let textView = EditorTextView(frame: .zero)
 
-        NotificationCenter.default.post(name: UserDefaults.didChangeNotification, object: nil)
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
+            defaults.set(20.0, forKey: "editorFontSize")
+            defaults.set(1.8, forKey: "editorLineSpacing")
+            defaults.set(false, forKey: "spellCheckEnabled")
+            defaults.set(false, forKey: "autoPairEnabled")
 
-        #expect(textView.font?.pointSize == 20)
-        #expect(textView.isContinuousSpellCheckingEnabled == false)
+            NotificationCenter.default.post(name: UserDefaults.didChangeNotification, object: nil)
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
 
-        let paragraphStyle = textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle
-        #expect(paragraphStyle != nil)
+            #expect(textView.font?.pointSize == 20)
+            #expect(textView.isContinuousSpellCheckingEnabled == false)
 
-        if let paragraphStyle {
-            #expect(abs(paragraphStyle.lineHeightMultiple - 1.8) < 0.001)
+            let paragraphStyle = textView.typingAttributes[.paragraphStyle] as? NSParagraphStyle
+            #expect(paragraphStyle != nil)
+
+            if let paragraphStyle {
+                #expect(abs(paragraphStyle.lineHeightMultiple - 1.8) < 0.001)
+            }
         }
     }
 }

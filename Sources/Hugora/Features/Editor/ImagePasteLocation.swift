@@ -19,7 +19,7 @@ enum ImagePasteLocation: String, CaseIterable, Identifiable {
     }
 
     static func current() -> ImagePasteLocation {
-        let raw = UserDefaults.standard.string(forKey: "imagePasteLocation") ?? ImagePasteLocation.pageFolder.rawValue
+        let raw = UserDefaults.standard.string(forKey: DefaultsKey.imagePasteLocation) ?? ImagePasteLocation.pageFolder.rawValue
         return ImagePasteLocation(rawValue: raw) ?? .pageFolder
     }
 }

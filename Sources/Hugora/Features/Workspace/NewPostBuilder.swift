@@ -1,6 +1,11 @@
 import Foundation
+import os
 
 struct NewPostBuilder {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
+        category: "NewPostBuilder"
+    )
     let siteURL: URL
     let config: HugoConfig
     let fileManager: FileManager
@@ -38,8 +43,10 @@ struct NewPostBuilder {
 
         for url in candidates {
             guard fileManager.fileExists(atPath: url.path) else { continue }
-            if let content = try? String(contentsOf: url, encoding: .utf8) {
-                return content
+            do {
+                return try String(contentsOf: url, encoding: .utf8)
+            } catch {
+                Self.logger.error("Failed to read archetype \(url.lastPathComponent): \(error.localizedDescription)")
             }
         }
 
@@ -47,11 +54,12 @@ struct NewPostBuilder {
     }
 
     private func archetypeBaseURL() -> URL {
-        let expanded = (config.archetypeDir as NSString).expandingTildeInPath
-        if expanded.hasPrefix("/") {
-            return URL(fileURLWithPath: expanded)
+        let dir = config.archetypeDir
+        let candidate = siteURL.appendingPathComponent(dir).standardizedFileURL
+        guard candidate.path.hasPrefix(siteURL.standardizedFileURL.path) else {
+            return siteURL.appendingPathComponent("archetypes")
         }
-        return siteURL.appendingPathComponent(expanded)
+        return candidate
     }
 
     private func archetypeCandidates(
@@ -75,6 +83,12 @@ struct NewPostBuilder {
         return candidates
     }
 
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
     private func render(
         template: String,
         title: String,
@@ -82,9 +96,7 @@ struct NewPostBuilder {
         sectionName: String?,
         date: Date
     ) -> String {
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime]
-        let dateString = isoFormatter.string(from: date)
+        let dateString = Self.isoFormatter.string(from: date)
 
         let typeValue = sectionName ?? ""
         var rendered = template
@@ -107,9 +119,7 @@ struct NewPostBuilder {
     }
 
     private func defaultFrontmatter(title: String, date: Date) -> String {
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime]
-        let dateString = isoFormatter.string(from: date)
+        let dateString = Self.isoFormatter.string(from: date)
 
         return """
         ---

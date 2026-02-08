@@ -1,6 +1,11 @@
 import Foundation
+import os
 
 struct HugoConfig {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
+        category: "HugoConfig"
+    )
     let contentDir: String
     let archetypeDir: String
     let title: String?
@@ -35,7 +40,11 @@ struct HugoConfig {
     }
 
     private static func parse(fileAt url: URL) -> HugoConfig? {
-        guard let content = try? String(contentsOf: url, encoding: .utf8) else {
+        let content: String
+        do {
+            content = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            logger.error("Failed to read config \(url.lastPathComponent): \(error.localizedDescription)")
             return nil
         }
 
@@ -56,7 +65,11 @@ struct HugoConfig {
         // Match: key = "value" or key = 'value'
         func extract(_ key: String) -> String? {
             let pattern = #"^\s*"# + NSRegularExpression.escapedPattern(for: key) + #"\s*=\s*["']([^"']*)["']"#
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: .anchorsMatchLines) else {
+            let regex: NSRegularExpression
+            do {
+                regex = try NSRegularExpression(pattern: pattern, options: .anchorsMatchLines)
+            } catch {
+                logger.error("Failed to compile TOML regex for key '\(key)': \(error.localizedDescription)")
                 return nil
             }
             let range = NSRange(content.startIndex..., in: content)
@@ -79,7 +92,11 @@ struct HugoConfig {
         // Match: key: "value" or key: 'value' or key: value (unquoted)
         func extract(_ key: String) -> String? {
             let pattern = #"^\s*"# + NSRegularExpression.escapedPattern(for: key) + #"\s*:\s*["']?([^"'\n]+?)["']?\s*$"#
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: .anchorsMatchLines) else {
+            let regex: NSRegularExpression
+            do {
+                regex = try NSRegularExpression(pattern: pattern, options: .anchorsMatchLines)
+            } catch {
+                logger.error("Failed to compile YAML regex for key '\(key)': \(error.localizedDescription)")
                 return nil
             }
             let range = NSRange(content.startIndex..., in: content)
@@ -99,9 +116,18 @@ struct HugoConfig {
     }
 
     private static func parseJSON(_ content: String) -> HugoConfig? {
-        guard let data = content.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else {
+        guard let data = content.data(using: .utf8) else {
+            return nil
+        }
+
+        let json: [String: Any]
+        do {
+            guard let parsed = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return nil
+            }
+            json = parsed
+        } catch {
+            logger.error("Failed to parse JSON config: \(error.localizedDescription)")
             return nil
         }
 
