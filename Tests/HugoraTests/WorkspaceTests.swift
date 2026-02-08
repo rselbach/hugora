@@ -177,18 +177,38 @@ struct ContentItemTests {
         #expect(components.month == 5)
         #expect(components.day == 2)
     }
+
+    @Test("Title and date extracted from JSON frontmatter")
+    func jsonFrontmatterParsing() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let postFile = tempDir.appendingPathComponent("test.markdown")
+        try """
+        {
+          "title": "Dean Pelton",
+          "date": "2024-08-20T12:34:56Z"
+        }
+        Content
+        """.write(to: postFile, atomically: true, encoding: .utf8)
+
+        let item = ContentItem(url: postFile, format: .file, section: "blog")
+        #expect(item.title == "Dean Pelton")
+        #expect(item.date != nil)
+    }
 }
 
 @Suite("ContentFormat Tests")
 struct ContentFormatTests {
     @Test("Bundle display name")
     func bundleDisplayName() {
-        #expect(ContentFormat.bundle.displayName == "Bundle (folder/index.md)")
+        #expect(ContentFormat.bundle.displayName == "Bundle (folder/index.*)")
     }
 
     @Test("File display name")
     func fileDisplayName() {
-        #expect(ContentFormat.file.displayName == "File (slug.md)")
+        #expect(ContentFormat.file.displayName == "File (slug.*)")
     }
 
     @Test("All cases available")

@@ -314,21 +314,8 @@ final class WorkspaceStore: ObservableObject {
             return
         }
 
-        let sectionDirs: [URL]
-        do {
-            sectionDirs = try fm.contentsOfDirectory(
-                at: contentDir,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles]
-            )
-        } catch {
-            Self.logger.error("Failed to list content directory \(contentDir.lastPathComponent): \(error.localizedDescription)")
-            sectionDirs = []
-        }
-
+        let sectionDirs = listDirectoryEntries(at: contentDir)
         var loadedSections: [ContentSection] = []
-
-        // Collect root-level .md files as "Root Pages"
         var rootItems: [ContentItem] = []
 
         for itemURL in sectionDirs {
@@ -344,21 +331,15 @@ final class WorkspaceStore: ObservableObject {
             }
 
             if isDir {
-                // It's a section directory
                 let sectionName = itemURL.lastPathComponent
-                let items = loadItems(in: itemURL, sectionName: sectionName)
-                let section = ContentSection(name: sectionName, url: itemURL, items: items.sorted())
+                let items = collectItemsRecursively(in: itemURL, sectionName: sectionName).sorted()
+                let section = ContentSection(name: sectionName, url: itemURL, items: items)
                 loadedSections.append(section)
-            } else if itemURL.pathExtension.lowercased() == "md" {
-                // Root-level markdown file (e.g., about.md)
-                let fileName = itemURL.lastPathComponent
-                if fileName != "_index.md" {
-                    rootItems.append(ContentItem(url: itemURL, format: .file, section: "(root)"))
-                }
+            } else if ContentFile.isSupportedContentFile(itemURL) {
+                rootItems.append(ContentItem(url: itemURL, format: .file, section: "(root)"))
             }
         }
 
-        // Add root pages as a special section if any exist
         if !rootItems.isEmpty {
             let rootSection = ContentSection(name: "(root)", url: contentDir, items: rootItems.sorted())
             loadedSections.append(rootSection)
@@ -420,45 +401,55 @@ final class WorkspaceStore: ObservableObject {
         alert.runModal()
     }
 
-    private func loadItems(in sectionURL: URL, sectionName: String) -> [ContentItem] {
-        let fm = FileManager.default
-        let contents: [URL]
+    private func collectItemsRecursively(in directoryURL: URL, sectionName: String) -> [ContentItem] {
+        let entries = listDirectoryEntries(at: directoryURL)
+
+        if let leafIndex = preferredLeafBundleIndex(in: entries) {
+            // Leaf bundle: index.* is the page, descendants are page resources.
+            return [ContentItem(url: leafIndex, format: .bundle, section: sectionName)]
+        }
+
+        var items: [ContentItem] = []
+        for entry in entries {
+            let values: URLResourceValues
+            do {
+                values = try entry.resourceValues(forKeys: [.isDirectoryKey])
+            } catch {
+                Self.logger.error("Failed to read resource values for \(entry.lastPathComponent): \(error.localizedDescription)")
+                continue
+            }
+
+            guard let isDirectory = values.isDirectory else { continue }
+
+            if isDirectory {
+                items.append(contentsOf: collectItemsRecursively(in: entry, sectionName: sectionName))
+                continue
+            }
+
+            guard ContentFile.isSupportedContentFile(entry) else { continue }
+            items.append(ContentItem(url: entry, format: .file, section: sectionName))
+        }
+
+        return items
+    }
+
+    private func preferredLeafBundleIndex(in entries: [URL]) -> URL? {
+        entries.first { entry in
+            ContentFile.isSupportedContentFile(entry) && ContentFile.isLeafBundleIndex(entry)
+        }
+    }
+
+    private func listDirectoryEntries(at url: URL) -> [URL] {
         do {
-            contents = try fm.contentsOfDirectory(
-                at: sectionURL,
+            return try FileManager.default.contentsOfDirectory(
+                at: url,
                 includingPropertiesForKeys: [.isDirectoryKey],
                 options: [.skipsHiddenFiles]
             )
         } catch {
-            Self.logger.error("Failed to list section \(sectionURL.lastPathComponent): \(error.localizedDescription)")
-            contents = []
+            Self.logger.error("Failed to list directory \(url.lastPathComponent): \(error.localizedDescription)")
+            return []
         }
-
-        var items: [ContentItem] = []
-
-        for itemURL in contents {
-            let resourceValues: URLResourceValues
-            do {
-                resourceValues = try itemURL.resourceValues(forKeys: [.isDirectoryKey])
-            } catch {
-                Self.logger.error("Failed to read resource values for \(itemURL.lastPathComponent): \(error.localizedDescription)")
-                continue
-            }
-            guard let isDir = resourceValues.isDirectory else {
-                continue
-            }
-
-            if isDir {
-                let indexURL = itemURL.appendingPathComponent("index.md")
-                if fm.fileExists(atPath: indexURL.path) {
-                    items.append(ContentItem(url: indexURL, format: .bundle, section: sectionName))
-                }
-            } else if itemURL.pathExtension.lowercased() == "md" {
-                items.append(ContentItem(url: itemURL, format: .file, section: sectionName))
-            }
-        }
-
-        return items
     }
 
     // MARK: - Private: Security-Scoped Bookmarks

@@ -110,7 +110,8 @@ struct MarkdownStyler {
                 range: fm.range,
                 textStorage: textStorage,
                 theme: activeTheme,
-                fontScale: fontScale
+                fontScale: fontScale,
+                format: fm.format
             )
 
             // Add delimiter markers for hiding
@@ -278,7 +279,8 @@ struct MarkdownStyler {
         range: NSRange,
         textStorage: NSTextStorage,
         theme: Theme,
-        fontScale: CGFloat
+        fontScale: CGFloat,
+        format: FrontmatterFormat
     ) {
         let clampedRange = NSIntersectionRange(range, NSRange(location: 0, length: textStorage.length))
         guard clampedRange.length > 0 else { return }
@@ -288,17 +290,36 @@ struct MarkdownStyler {
         textStorage.addAttribute(.foregroundColor, value: theme.frontmatterColor, range: clampedRange)
         textStorage.addAttribute(.backgroundColor, value: theme.frontmatterBackground, range: clampedRange)
 
-        // Highlight YAML keys (word followed by colon at start of line)
+        // Highlight front matter keys.
         let nsString = textStorage.string as NSString
         let content = nsString.substring(with: clampedRange)
         let lines = content.components(separatedBy: .newlines)
         var offset = clampedRange.location
 
         for line in lines {
-            if let colonIdx = line.firstIndex(of: ":"), colonIdx != line.startIndex {
-                let keyLength = line.distance(from: line.startIndex, to: colonIdx)
+            let keyLength: Int?
+            switch format {
+            case .yaml, .json:
+                if let colonIdx = line.firstIndex(of: ":"), colonIdx != line.startIndex {
+                    keyLength = line.distance(from: line.startIndex, to: colonIdx)
+                } else {
+                    keyLength = nil
+                }
+            case .toml:
+                if let equalsIdx = line.firstIndex(of: "="), equalsIdx != line.startIndex {
+                    keyLength = line.distance(from: line.startIndex, to: equalsIdx)
+                } else {
+                    keyLength = nil
+                }
+            }
+
+            if let keyLength, keyLength > 0 {
                 let keyRange = NSRange(location: offset, length: keyLength)
-                textStorage.addAttribute(.foregroundColor, value: theme.frontmatterKeyColor, range: keyRange)
+                textStorage.addAttribute(
+                    .foregroundColor,
+                    value: theme.frontmatterKeyColor,
+                    range: keyRange
+                )
             }
             offset += line.utf16.count + 1  // +1 for newline
         }

@@ -301,6 +301,38 @@ struct StyleCollectorTests {
     }
 }
 
+@Suite("Frontmatter Detection")
+struct FrontmatterDetectionTests {
+    @Test("Detects TOML frontmatter")
+    func detectsTomlFrontmatter() {
+        let text = """
+        +++
+        title = "Greendale"
+        +++
+        Body
+        """
+
+        let frontmatter = detectFrontmatter(in: text)
+        #expect(frontmatter != nil)
+        #expect(frontmatter?.format == .toml)
+    }
+
+    @Test("Detects JSON frontmatter")
+    func detectsJSONFrontmatter() {
+        let text = """
+        {
+          "title": "Human Being",
+          "date": "2025-01-01T00:00:00Z"
+        }
+        Body
+        """
+
+        let frontmatter = detectFrontmatter(in: text)
+        #expect(frontmatter != nil)
+        #expect(frontmatter?.format == .json)
+    }
+}
+
 // MARK: - Style Application Integration Tests
 
 @Suite("Style Application")

@@ -289,8 +289,8 @@ struct WorkspaceStoreTests {
         #expect(rootSection?.items.count == 1)
     }
 
-    @Test("_index.md at root content level is excluded")
-    func indexMdExcludedFromRoot() throws {
+    @Test("_index.md at root content level is included as root content")
+    func indexMdIncludedInRoot() throws {
         let (store, cleanup) = makeStore()
         defer { cleanup() }
 
@@ -307,9 +307,87 @@ struct WorkspaceStoreTests {
 
         store.openFolder(siteURL)
 
-        // _index.md should be excluded, so no root section
         let rootSection = store.sections.first { $0.name == "(root)" }
-        #expect(rootSection == nil)
+        #expect(rootSection != nil)
+        #expect(rootSection?.items.count == 1)
+        #expect(rootSection?.items.first?.slug == "_index")
+    }
+
+    @Test("Loads nested files recursively under the top-level section")
+    func loadsNestedFilesRecursively() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(sections: ["blog"])
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        let nestedDir = siteURL.appendingPathComponent("content/blog/swift/hugo")
+        try FileManager.default.createDirectory(at: nestedDir, withIntermediateDirectories: true)
+        let nestedFile = nestedDir.appendingPathComponent("deep-dive.md")
+        try """
+        ---
+        title: "Deep Dive"
+        date: 2024-11-07
+        ---
+        Nested content.
+        """.write(to: nestedFile, atomically: true, encoding: .utf8)
+
+        store.openFolder(siteURL)
+
+        let blogSection = store.sections.first { $0.name == "blog" }
+        #expect(blogSection != nil)
+        #expect(blogSection?.items.contains(where: { $0.slug == "deep-dive" }) == true)
+    }
+
+    @Test("Recognizes .markdown files as content")
+    func loadsMarkdownExtensionFiles() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(sections: ["posts"])
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        let markdownFile = siteURL.appendingPathComponent("content/posts/troy-barnes.markdown")
+        try """
+        ---
+        title: "Troy Barnes"
+        date: 2024-12-01
+        ---
+        Troy and Abed.
+        """.write(to: markdownFile, atomically: true, encoding: .utf8)
+
+        store.openFolder(siteURL)
+
+        let postsSection = store.sections.first { $0.name == "posts" }
+        #expect(postsSection != nil)
+        #expect(postsSection?.items.contains(where: { $0.slug == "troy-barnes" }) == true)
+    }
+
+    @Test("Leaf bundle with index.markdown is loaded as bundle")
+    func loadsLeafBundleWithMarkdownExtension() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(sections: ["posts"])
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        let bundleDir = siteURL.appendingPathComponent("content/posts/greendale")
+        try FileManager.default.createDirectory(at: bundleDir, withIntermediateDirectories: true)
+        let indexFile = bundleDir.appendingPathComponent("index.markdown")
+        try """
+        ---
+        title: "Greendale"
+        date: 2025-01-01
+        ---
+        Leaf bundle with markdown extension.
+        """.write(to: indexFile, atomically: true, encoding: .utf8)
+
+        store.openFolder(siteURL)
+
+        let postsSection = store.sections.first { $0.name == "posts" }
+        let item = postsSection?.items.first(where: { $0.slug == "greendale" })
+        #expect(item != nil)
+        #expect(item?.format == .bundle)
     }
 
     // MARK: - createNewPost

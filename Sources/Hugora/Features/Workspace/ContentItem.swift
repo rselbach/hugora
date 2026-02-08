@@ -1,4 +1,6 @@
 import Foundation
+import TOMLKit
+import Yams
 import os
 
 enum Slug {
@@ -13,123 +15,180 @@ enum Slug {
     }
 }
 
+enum ContentFile {
+    static let supportedExtensions: Set<String> = ["md", "markdown"]
+
+    static func isSupportedContentFile(_ url: URL) -> Bool {
+        supportedExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    static func basenameWithoutExtension(_ url: URL) -> String {
+        url.deletingPathExtension().lastPathComponent
+    }
+
+    static func isLeafBundleIndex(_ url: URL) -> Bool {
+        basenameWithoutExtension(url).lowercased() == "index"
+    }
+
+    static func isBranchBundleIndex(_ url: URL) -> Bool {
+        basenameWithoutExtension(url).lowercased() == "_index"
+    }
+}
+
 enum FrontmatterParser {
     static func value(forKey key: String, in content: String) -> String? {
-        let lines = content.components(separatedBy: .newlines)
-        guard let firstLine = lines.first?.trimmingCharacters(in: .whitespaces) else { return nil }
+        guard let value = rawValue(forKey: key, in: content) else { return nil }
 
-        let delimiter: String
-        switch firstLine {
-        case "---":
-            delimiter = "---"
-        case "+++":
-            delimiter = "+++"
-        default:
-            return nil
-        }
-
-        switch delimiter {
-        case "---":
-            return parseYAMLValue(key: key, lines: lines.dropFirst(), endDelimiter: delimiter)
-        case "+++":
-            return parseTOMLValue(key: key, lines: lines.dropFirst(), endDelimiter: delimiter)
+        switch value {
+        case let string as String:
+            return string
+        case let date as Date:
+            return isoFormatter.string(from: date)
+        case let number as NSNumber:
+            return number.stringValue
+        case let bool as Bool:
+            return bool ? "true" : "false"
         default:
             return nil
         }
     }
 
-    private static func parseYAMLValue(
-        key: String,
-        lines: ArraySlice<String>,
-        endDelimiter: String
-    ) -> String? {
+    static func date(forKey key: String, in content: String) -> Date? {
+        guard let value = rawValue(forKey: key, in: content) else { return nil }
+
+        switch value {
+        case let date as Date:
+            return date
+        case let string as String:
+            return parseDateString(string)
+        case let number as NSNumber:
+            let timestamp = number.doubleValue
+            guard timestamp.isFinite else { return nil }
+            return Date(timeIntervalSince1970: timestamp)
+        default:
+            return nil
+        }
+    }
+
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let isoFormatterNoFractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    private static let fullDateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
+        return formatter
+    }()
+
+    private static let customDateFormatters: [DateFormatter] = {
+        let formats = [
+            "yyyy-MM-dd HH:mm:ssZZZZZ",
+            "yyyy-MM-dd HH:mm:ss ZZZZZ",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd",
+        ]
+        return formats.map { format in
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = format
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            return formatter
+        }
+    }()
+
+    private static func rawValue(forKey key: String, in content: String) -> Any? {
+        guard let map = parseFrontmatter(in: content) else { return nil }
         let lowerKey = key.lowercased()
+        return map.first { $0.key.lowercased() == lowerKey }?.value
+    }
 
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed == endDelimiter { break }
+    private static func parseFrontmatter(in content: String) -> [String: Any]? {
+        guard let block = detectFrontmatterBlock(in: content) else { return nil }
 
-            let lowerTrimmed = trimmed.lowercased()
-            guard lowerTrimmed.hasPrefix("\(lowerKey):") else { continue }
+        switch block.format {
+        case .yaml:
+            return parseYAMLFrontmatter(block.payload)
+        case .toml:
+            return parseTOMLFrontmatter(block.payload)
+        case .json:
+            return parseJSONFrontmatter(block.payload)
+        }
+    }
 
-            var value = String(trimmed.dropFirst(key.count + 1))
-                .trimmingCharacters(in: .whitespaces)
-            value = trimInlineValue(value)
-            value = unquote(value)
+    private static func parseYAMLFrontmatter(_ payload: String) -> [String: Any]? {
+        do {
+            return try Yams.load(yaml: payload) as? [String: Any]
+        } catch {
+            return nil
+        }
+    }
 
-            return value.isEmpty ? nil : value
+    private static func parseTOMLFrontmatter(_ payload: String) -> [String: Any]? {
+        do {
+            let table = try TOMLTable(string: payload)
+            let jsonString = table.convert(to: .json)
+            return parseJSONFrontmatter(jsonString)
+        } catch {
+            return nil
+        }
+    }
+
+    private static func parseJSONFrontmatter(_ payload: String) -> [String: Any]? {
+        guard let data = payload.data(using: .utf8) else { return nil }
+
+        do {
+            return try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        } catch {
+            return nil
+        }
+    }
+
+    private static func parseDateString(_ value: String) -> Date? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        if let parsed = isoFormatter.date(from: trimmed) {
+            return parsed
         }
 
-        return nil
-    }
-
-    private static func parseTOMLValue(
-        key: String,
-        lines: ArraySlice<String>,
-        endDelimiter: String
-    ) -> String? {
-        let lowerKey = key.lowercased()
-
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed == endDelimiter { break }
-            guard !trimmed.hasPrefix("#") else { continue }
-
-            let parts = trimmed.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: true)
-            guard parts.count == 2 else { continue }
-
-            let keyPart = parts[0].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard keyPart == lowerKey else { continue }
-
-            var value = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
-            value = trimInlineValue(value)
-            value = unquote(value)
-
-            return value.isEmpty ? nil : value
+        if let parsed = isoFormatterNoFractional.date(from: trimmed) {
+            return parsed
         }
 
-        return nil
-    }
+        if let parsed = fullDateFormatter.date(from: trimmed) {
+            return parsed
+        }
 
-    private static func stripInlineComment(from value: String) -> String {
-        guard let hashIndex = value.firstIndex(of: "#") else { return value }
-        let beforeHash = value[..<hashIndex].trimmingCharacters(in: .whitespaces)
-        return String(beforeHash)
-    }
-
-    private static func trimInlineValue(_ value: String) -> String {
-        guard let firstChar = value.first else { return value }
-
-        if firstChar == "\"" || firstChar == "'" {
-            let afterFirst = value.index(after: value.startIndex)
-            if let endQuote = value[afterFirst...].firstIndex(of: firstChar) {
-                return String(value[afterFirst..<endQuote])
+        for formatter in customDateFormatters {
+            if let parsed = formatter.date(from: trimmed) {
+                return parsed
             }
         }
 
-        return stripInlineComment(from: value)
-    }
+        if let timestamp = Double(trimmed), timestamp.isFinite {
+            return Date(timeIntervalSince1970: timestamp)
+        }
 
-    private static func unquote(_ value: String) -> String {
-        guard value.count >= 2 else { return value }
-        if value.hasPrefix("\""), value.hasSuffix("\"") {
-            return String(value.dropFirst().dropLast())
-        }
-        if value.hasPrefix("'"), value.hasSuffix("'") {
-            return String(value.dropFirst().dropLast())
-        }
-        return value
+        return nil
     }
 }
 
 enum ContentFormat: String, Codable, CaseIterable {
-    case bundle  // content/section/slug/index.md
-    case file    // content/section/slug.md
+    case bundle  // content/section/slug/index.*
+    case file    // content/section/slug.*
 
     var displayName: String {
         switch self {
-        case .bundle: "Bundle (folder/index.md)"
-        case .file: "File (slug.md)"
+        case .bundle: "Bundle (folder/index.*)"
+        case .file: "File (slug.*)"
         }
     }
 }
@@ -208,18 +267,6 @@ struct ContentItem: Identifiable, Equatable, Comparable {
         return FrontmatterParser.value(forKey: "title", in: content)
     }
 
-    private static let isoDateFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withFullDate, .withDashSeparatorInDate]
-        return f
-    }()
-
-    private static let fallbackDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-
     private static func extractDate(from url: URL) -> Date? {
         let content: String
         do {
@@ -232,13 +279,7 @@ struct ContentItem: Identifiable, Equatable, Comparable {
     }
 
     fileprivate static func parseDate(from content: String) -> Date? {
-        guard let dateString = FrontmatterParser.value(forKey: "date", in: content) else {
-            return nil
-        }
-
-        let prefix = String(dateString.prefix(10))
-        return isoDateFormatter.date(from: prefix)
-            ?? fallbackDateFormatter.date(from: prefix)
+        FrontmatterParser.date(forKey: "date", in: content)
     }
 
 }

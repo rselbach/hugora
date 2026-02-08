@@ -3,6 +3,17 @@ import Combine
 import AppKit
 import os
 
+enum EditorStateError: LocalizedError {
+    case utf8EncodingFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .utf8EncodingFailed:
+            "Failed to encode document content as UTF-8."
+        }
+    }
+}
+
 @MainActor
 final class EditorState: ObservableObject {
     private static let logger = Logger(
@@ -78,8 +89,12 @@ final class EditorState: ObservableObject {
         displayContent: String,
         saveContent: String
     ) throws -> URL {
+        guard let saveData = saveContent.data(using: .utf8) else {
+            throw EditorStateError.utf8EncodingFailed
+        }
+
         guard autoRenameOnSave else {
-            try saveContent.data(using: .utf8)?.write(to: item.url)
+            try saveData.write(to: item.url)
             return item.url
         }
 
@@ -119,7 +134,7 @@ final class EditorState: ObservableObject {
             }
         }
 
-        try saveContent.data(using: .utf8)?.write(to: finalURL)
+        try saveData.write(to: finalURL)
         return finalURL
     }
 
@@ -188,7 +203,7 @@ final class EditorState: ObservableObject {
         }
 
         let url = URL(fileURLWithPath: path)
-        let format: ContentFormat = url.lastPathComponent == "index.md" ? .bundle : .file
+        let format: ContentFormat = ContentFile.isLeafBundleIndex(url) ? .bundle : .file
         let section = extractSectionFromPath(url)
 
         do {
@@ -199,7 +214,7 @@ final class EditorState: ObservableObject {
             entityMappings = decoded.mappings
             isDirty = false
         } catch {
-            // Silently fail on restore
+            Self.logger.error("Failed to restore session file \(url.lastPathComponent): \(error.localizedDescription)")
         }
     }
 
