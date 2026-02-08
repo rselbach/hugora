@@ -144,7 +144,8 @@ final class EditorState: ObservableObject {
 
         let lastComponent = trimmed.components(separatedBy: "/").last ?? trimmed
         let cleaned = lastComponent.trimmingCharacters(in: .whitespacesAndNewlines)
-        return cleaned.isEmpty ? nil : cleaned
+        guard !cleaned.isEmpty, cleaned != ".", cleaned != ".." else { return nil }
+        return cleaned
     }
 
     private func deriveDatePrefix(from content: String, fallback: Date?) -> String {
@@ -191,7 +192,7 @@ final class EditorState: ObservableObject {
         do {
             let rawContent = try String(contentsOf: url, encoding: .utf8)
             let decoded = HTMLEntityCodec.decode(rawContent)
-            currentItem = ContentItem(url: url, format: format, section: section)
+            currentItem = ContentItem(url: url, format: format, section: section, content: rawContent)
             content = decoded.decoded
             entityMappings = decoded.mappings
             isDirty = false

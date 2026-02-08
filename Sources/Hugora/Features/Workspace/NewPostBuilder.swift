@@ -54,11 +54,12 @@ struct NewPostBuilder {
     }
 
     private func archetypeBaseURL() -> URL {
-        let expanded = (config.archetypeDir as NSString).expandingTildeInPath
-        if expanded.hasPrefix("/") {
-            return URL(fileURLWithPath: expanded)
+        let dir = config.archetypeDir
+        let candidate = siteURL.appendingPathComponent(dir).standardizedFileURL
+        guard candidate.path.hasPrefix(siteURL.standardizedFileURL.path) else {
+            return siteURL.appendingPathComponent("archetypes")
         }
-        return siteURL.appendingPathComponent(expanded)
+        return candidate
     }
 
     private func archetypeCandidates(

@@ -33,41 +33,6 @@ struct Theme {
     let frontmatterBackground: NSColor
     let frontmatterKeyColor: NSColor
 
-    static var `default`: Theme {
-        let baseSize: CGFloat = 16
-        return Theme(
-            baseFont: .systemFont(ofSize: baseSize),
-            baseColor: .textColor,
-            headings: [
-                HeadingStyle(font: .systemFont(ofSize: baseSize * 2.0, weight: .bold), color: .textColor),
-                HeadingStyle(font: .systemFont(ofSize: baseSize * 1.5, weight: .bold), color: .textColor),
-                HeadingStyle(font: .systemFont(ofSize: baseSize * 1.25, weight: .semibold), color: .textColor),
-                HeadingStyle(font: .systemFont(ofSize: baseSize * 1.1, weight: .semibold), color: .textColor),
-                HeadingStyle(font: .systemFont(ofSize: baseSize, weight: .medium), color: .secondaryLabelColor),
-                HeadingStyle(font: .systemFont(ofSize: baseSize * 0.9, weight: .medium), color: .secondaryLabelColor),
-            ],
-            boldColor: .textColor,
-            italicColor: .textColor,
-            inlineCodeFont: .monospacedSystemFont(ofSize: baseSize * 0.9, weight: .regular),
-            inlineCodeColor: .systemPink,
-            inlineCodeBackground: NSColor.quaternaryLabelColor.withAlphaComponent(0.3),
-            linkColor: .linkColor,
-            blockquoteColor: .secondaryLabelColor,
-            blockquoteBorderColor: .systemOrange,
-            codeBlockFont: .monospacedSystemFont(ofSize: baseSize * 0.9, weight: .regular),
-            codeBlockColor: .textColor,
-            codeBlockBackground: NSColor.quaternaryLabelColor.withAlphaComponent(0.2),
-            tableFont: .monospacedSystemFont(ofSize: baseSize * 0.9, weight: .regular),
-            tableBackground: NSColor.quaternaryLabelColor.withAlphaComponent(0.1),
-            tableHeaderBackground: NSColor.quaternaryLabelColor.withAlphaComponent(0.25),
-            tableBorderColor: .separatorColor,
-            frontmatterFont: .monospacedSystemFont(ofSize: baseSize * 0.85, weight: .regular),
-            frontmatterColor: .secondaryLabelColor,
-            frontmatterBackground: NSColor.quaternaryLabelColor.withAlphaComponent(0.15),
-            frontmatterKeyColor: .systemTeal
-        )
-    }
-
     func headingStyle(level: Int) -> HeadingStyle {
         let index = max(0, min(level - 1, headings.count - 1))
         return headings[index]
@@ -662,7 +627,7 @@ final class ImageCache {
 struct MarkdownStyler {
     let theme: Theme
 
-    init(theme: Theme = .default) {
+    init(theme: Theme = .defaultLight) {
         self.theme = theme
     }
 
