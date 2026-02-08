@@ -338,8 +338,6 @@ struct MarkdownStyler {
                 textStorage.addAttribute(.font, value: hiddenFont, range: clampedRange)
                 textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
             }
-
-            }
         }
     }
 
