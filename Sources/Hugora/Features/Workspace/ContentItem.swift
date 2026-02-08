@@ -14,21 +14,11 @@ func parseFrontmatterValue(key: String, from content: String) -> String? {
     let lines = content.components(separatedBy: .newlines)
     guard let firstLine = lines.first?.trimmingCharacters(in: .whitespaces) else { return nil }
 
-    let delimiter: String
     switch firstLine {
     case "---":
-        delimiter = "---"
+        return parseYAMLFrontmatterValue(key: key, lines: lines.dropFirst(), endDelimiter: "---")
     case "+++":
-        delimiter = "+++"
-    default:
-        return nil
-    }
-
-    switch delimiter {
-    case "---":
-        return parseYAMLFrontmatterValue(key: key, lines: lines.dropFirst(), endDelimiter: delimiter)
-    case "+++":
-        return parseTOMLFrontmatterValue(key: key, lines: lines.dropFirst(), endDelimiter: delimiter)
+        return parseTOMLFrontmatterValue(key: key, lines: lines.dropFirst(), endDelimiter: "+++")
     default:
         return nil
     }
