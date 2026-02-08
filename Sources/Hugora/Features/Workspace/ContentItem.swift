@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 func slugify(_ string: String) -> String {
     string
@@ -14,21 +15,11 @@ func parseFrontmatterValue(key: String, from content: String) -> String? {
     let lines = content.components(separatedBy: .newlines)
     guard let firstLine = lines.first?.trimmingCharacters(in: .whitespaces) else { return nil }
 
-    let delimiter: String
     switch firstLine {
     case "---":
-        delimiter = "---"
+        return parseYAMLFrontmatterValue(key: key, lines: lines.dropFirst(), endDelimiter: "---")
     case "+++":
-        delimiter = "+++"
-    default:
-        return nil
-    }
-
-    switch delimiter {
-    case "---":
-        return parseYAMLFrontmatterValue(key: key, lines: lines.dropFirst(), endDelimiter: delimiter)
-    case "+++":
-        return parseTOMLFrontmatterValue(key: key, lines: lines.dropFirst(), endDelimiter: delimiter)
+        return parseTOMLFrontmatterValue(key: key, lines: lines.dropFirst(), endDelimiter: "+++")
     default:
         return nil
     }
@@ -130,6 +121,11 @@ enum ContentFormat: String, Codable, CaseIterable {
 }
 
 struct ContentItem: Identifiable, Equatable, Comparable {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
+        category: "ContentItem"
+    )
+
     let id: URL
     let url: URL          // path to the .md file
     let slug: String
@@ -155,6 +151,25 @@ struct ContentItem: Identifiable, Equatable, Comparable {
         self.date = Self.extractDate(from: url)
     }
 
+    /// Create a ContentItem with metadata extracted from already-loaded content.
+    /// Avoids a second file read when the caller has the content in hand.
+    init(url: URL, format: ContentFormat, section: String, content: String) {
+        self.id = url
+        self.url = url
+        self.format = format
+        self.section = section
+
+        switch format {
+        case .bundle:
+            self.slug = url.deletingLastPathComponent().lastPathComponent
+        case .file:
+            self.slug = url.deletingPathExtension().lastPathComponent
+        }
+
+        self.title = parseFrontmatterValue(key: "title", from: content) ?? slug
+        self.date = Self.parseDate(from: content)
+    }
+
     static func < (lhs: ContentItem, rhs: ContentItem) -> Bool {
         switch (lhs.date, rhs.date) {
         case let (l?, r?):
@@ -169,7 +184,13 @@ struct ContentItem: Identifiable, Equatable, Comparable {
     }
 
     private static func extractTitle(from url: URL) -> String? {
-        guard let content = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        let content: String
+        do {
+            content = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            logger.error("Failed to read title from \(url.lastPathComponent): \(error.localizedDescription)")
+            return nil
+        }
         return parseFrontmatterValue(key: "title", from: content)
     }
 
@@ -186,8 +207,18 @@ struct ContentItem: Identifiable, Equatable, Comparable {
     }()
 
     private static func extractDate(from url: URL) -> Date? {
-        guard let content = try? String(contentsOf: url, encoding: .utf8),
-              let dateString = parseFrontmatterValue(key: "date", from: content) else {
+        let content: String
+        do {
+            content = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            logger.error("Failed to read date from \(url.lastPathComponent): \(error.localizedDescription)")
+            return nil
+        }
+        return parseDate(from: content)
+    }
+
+    fileprivate static func parseDate(from content: String) -> Date? {
+        guard let dateString = parseFrontmatterValue(key: "date", from: content) else {
             return nil
         }
 

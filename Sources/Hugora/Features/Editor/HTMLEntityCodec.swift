@@ -77,12 +77,7 @@ enum HTMLEntityCodec {
             result.append(nsDecoded.substring(with: prefixRange))
 
             let currentDecoded = nsDecoded.substring(with: range)
-            if currentDecoded == mapping.decodedText {
-                result.append(mapping.encodedText)
-            }
-            if currentDecoded != mapping.decodedText {
-                result.append(currentDecoded)
-            }
+            result.append(currentDecoded == mapping.decodedText ? mapping.encodedText : currentDecoded)
 
             cursor = NSMaxRange(range)
         }

@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Combine
+import os
 
 struct EditorView: NSViewRepresentable {
     @Binding var text: String
@@ -201,6 +202,11 @@ class EditorTextView: NSTextView {
     /// Context for saving pasted images. Set by the coordinator.
     var imageContext: ImageContext?
 
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
+        category: "EditorTextView"
+    )
+
     private static let pairs: [Character: Character] = [
         "(": ")",
         "[": "]",
@@ -345,16 +351,23 @@ class EditorTextView: NSTextView {
 
         let nsString = (self.string as NSString)
         let prevLocation = selectedRange.location - 1
-        let prevChar = Character(UnicodeScalar(nsString.character(at: prevLocation))!)
+        guard let prevScalar = UnicodeScalar(nsString.character(at: prevLocation)) else {
+            super.deleteBackward(sender)
+            return
+        }
+        let prevChar = Character(prevScalar)
 
         guard let expectedCloser = Self.pairs[prevChar],
               selectedRange.location < nsString.length else {
             super.deleteBackward(sender)
-    
             return
         }
 
-        let nextChar = Character(UnicodeScalar(nsString.character(at: selectedRange.location))!)
+        guard let nextScalar = UnicodeScalar(nsString.character(at: selectedRange.location)) else {
+            super.deleteBackward(sender)
+            return
+        }
+        let nextChar = Character(nextScalar)
 
         if nextChar == expectedCloser {
             let deleteRange = NSRange(location: prevLocation, length: 2)
@@ -393,8 +406,11 @@ class EditorTextView: NSTextView {
 
     private func shouldSkipOver(char: Character, at location: Int) -> Bool {
         let nsString = (self.string as NSString)
-        guard location < nsString.length else { return false }
-        let nextChar = Character(UnicodeScalar(nsString.character(at: location))!)
+        guard location < nsString.length,
+              let scalar = UnicodeScalar(nsString.character(at: location)) else {
+            return false
+        }
+        let nextChar = Character(scalar)
         return nextChar == char
     }
 
@@ -670,7 +686,7 @@ class EditorTextView: NSTextView {
             try pngData.write(to: url)
             return true
         } catch {
-            print("Failed to save image: \(error)")
+            Self.logger.error("Failed to save image: \(error.localizedDescription)")
             return false
         }
     }
