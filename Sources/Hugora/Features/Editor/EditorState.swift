@@ -1,8 +1,13 @@
 import Foundation
 import Combine
 import AppKit
+import os
 
 final class EditorState: ObservableObject {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
+        category: "EditorState"
+    )
     @Published var currentItem: ContentItem?
     @Published var content: String = ""
     @Published var isDirty: Bool = false
