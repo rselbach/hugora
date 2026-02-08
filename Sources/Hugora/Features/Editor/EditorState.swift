@@ -139,7 +139,8 @@ final class EditorState: ObservableObject {
 
         let lastComponent = trimmed.components(separatedBy: "/").last ?? trimmed
         let cleaned = lastComponent.trimmingCharacters(in: .whitespacesAndNewlines)
-        return cleaned.isEmpty ? nil : cleaned
+        guard !cleaned.isEmpty, cleaned != ".", cleaned != ".." else { return nil }
+        return cleaned
     }
 
     private func deriveDatePrefix(from content: String, fallback: Date?) -> String {
