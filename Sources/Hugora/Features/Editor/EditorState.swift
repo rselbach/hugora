@@ -3,6 +3,7 @@ import Combine
 import AppKit
 import os
 
+@MainActor
 final class EditorState: ObservableObject {
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",

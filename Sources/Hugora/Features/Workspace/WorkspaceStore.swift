@@ -24,6 +24,7 @@ enum WorkspaceError: LocalizedError {
     }
 }
 
+@MainActor
 final class WorkspaceStore: ObservableObject {
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
@@ -61,7 +62,7 @@ final class WorkspaceStore: ObservableObject {
     }
 
     deinit {
-        stopAccessingCurrentFolder()
+        securityScopedURL?.stopAccessingSecurityScopedResource()
     }
 
     // MARK: - Open Folder

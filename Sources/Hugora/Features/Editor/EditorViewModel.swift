@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import Markdown
 
+@MainActor
 final class EditorViewModel: ObservableObject {
     @Published var text: String
     @Published var cursorPosition: Int = 0
