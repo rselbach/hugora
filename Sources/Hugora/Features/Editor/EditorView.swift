@@ -262,12 +262,12 @@ class EditorTextView: NSTextView {
 
     private func applyPreferences() {
         let defaults = UserDefaults.standard
-        let storedFontSize = defaults.object(forKey: "editorFontSize") as? Double
-        let storedLineSpacing = defaults.object(forKey: "editorLineSpacing") as? Double
+        let storedFontSize = defaults.object(forKey: DefaultsKey.editorFontSize) as? Double
+        let storedLineSpacing = defaults.object(forKey: DefaultsKey.editorLineSpacing) as? Double
         fontSize = max(storedFontSize ?? 16, 1)
         lineSpacing = max(storedLineSpacing ?? 1.4, 1)
-        spellCheckEnabled = defaults.object(forKey: "spellCheckEnabled") as? Bool ?? true
-        autoPairEnabled = defaults.object(forKey: "autoPairEnabled") as? Bool ?? true
+        spellCheckEnabled = defaults.object(forKey: DefaultsKey.spellCheckEnabled) as? Bool ?? true
+        autoPairEnabled = defaults.object(forKey: DefaultsKey.autoPairEnabled) as? Bool ?? true
 
         font = .monospacedSystemFont(ofSize: fontSize, weight: .regular)
         isContinuousSpellCheckingEnabled = spellCheckEnabled
@@ -648,8 +648,12 @@ class EditorTextView: NSTextView {
         }
     }
     
+    private static let imageTimestampFormatter: ISO8601DateFormatter = {
+        ISO8601DateFormatter()
+    }()
+
     private func generateImageFilename() -> String {
-        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let timestamp = Self.imageTimestampFormatter.string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
             .replacingOccurrences(of: "+", with: "")
         return "image-\(timestamp).png"

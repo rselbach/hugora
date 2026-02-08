@@ -173,21 +173,27 @@ struct ContentItem: Identifiable, Equatable, Comparable {
         return parseFrontmatterValue(key: "title", from: content)
     }
 
+    private static let isoDateFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withFullDate, .withDashSeparatorInDate]
+        return f
+    }()
+
+    private static let fallbackDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
     private static func extractDate(from url: URL) -> Date? {
         guard let content = try? String(contentsOf: url, encoding: .utf8),
               let dateString = parseFrontmatterValue(key: "date", from: content) else {
             return nil
         }
 
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
-        if let date = formatter.date(from: String(dateString.prefix(10))) {
-            return date
-        }
-
-        let fallback = DateFormatter()
-        fallback.dateFormat = "yyyy-MM-dd"
-        return fallback.date(from: String(dateString.prefix(10)))
+        let prefix = String(dateString.prefix(10))
+        return isoDateFormatter.date(from: prefix)
+            ?? fallbackDateFormatter.date(from: prefix)
     }
 
 }

@@ -1,11 +1,11 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @AppStorage("editorFontSize") private var fontSize: Double = 16
-    @AppStorage("editorLineSpacing") private var lineSpacing: Double = 1.4
-    @AppStorage("autoSaveEnabled") private var autoSaveEnabled = true
-    @AppStorage("spellCheckEnabled") private var spellCheckEnabled = true
-    @AppStorage("autoRenameOnSave") private var autoRenameOnSave = false
+    @AppStorage(DefaultsKey.editorFontSize) private var fontSize: Double = 16
+    @AppStorage(DefaultsKey.editorLineSpacing) private var lineSpacing: Double = 1.4
+    @AppStorage(DefaultsKey.autoSaveEnabled) private var autoSaveEnabled = true
+    @AppStorage(DefaultsKey.spellCheckEnabled) private var spellCheckEnabled = true
+    @AppStorage(DefaultsKey.autoRenameOnSave) private var autoRenameOnSave = false
 
     var body: some View {
         TabView {
@@ -70,9 +70,9 @@ struct GeneralSettingsView: View {
 }
 
 struct EditorSettingsView: View {
-    @AppStorage("autoPairEnabled") private var autoPairEnabled = true
-    @AppStorage("newPostFormat") private var newPostFormat = ContentFormat.bundle.rawValue
-    @AppStorage("imagePasteLocation") private var imagePasteLocation = ImagePasteLocation.pageFolder.rawValue
+    @AppStorage(DefaultsKey.autoPairEnabled) private var autoPairEnabled = true
+    @AppStorage(DefaultsKey.newPostFormat) private var newPostFormat = ContentFormat.bundle.rawValue
+    @AppStorage(DefaultsKey.imagePasteLocation) private var imagePasteLocation = ImagePasteLocation.pageFolder.rawValue
 
     var body: some View {
         Form {
@@ -102,7 +102,7 @@ struct EditorSettingsView: View {
 }
 
 struct ThemeSettingsView: View {
-    @AppStorage("selectedTheme") private var selectedTheme = "Default"
+    @AppStorage(DefaultsKey.selectedTheme) private var selectedTheme = "Default"
 
     private let themes = ["Default", "GitHub", "Dracula", "Solarized Light", "Solarized Dark", "rselbach.com"]
 

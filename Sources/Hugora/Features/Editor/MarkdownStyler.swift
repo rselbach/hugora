@@ -1250,8 +1250,8 @@ private struct EditorPreferences {
 
     static func current() -> EditorPreferences {
         let defaults = UserDefaults.standard
-        let storedFontSize = defaults.object(forKey: "editorFontSize") as? Double ?? 16
-        let storedLineSpacing = defaults.object(forKey: "editorLineSpacing") as? Double ?? 1.4
+        let storedFontSize = defaults.object(forKey: DefaultsKey.editorFontSize) as? Double ?? 16
+        let storedLineSpacing = defaults.object(forKey: DefaultsKey.editorLineSpacing) as? Double ?? 1.4
         return EditorPreferences(
             fontSize: CGFloat(max(storedFontSize, 1)),
             lineSpacing: CGFloat(max(storedLineSpacing, 1))

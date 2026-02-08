@@ -9,7 +9,11 @@ final class EditorState: ObservableObject {
     @Published var cursorPosition: Int = 0
     @Published var scrollPosition: CGFloat = 0
 
-    private let sessionKey = "hugora.session.currentPost"
+    private static let datePrefixFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
     private var entityMappings: [HTMLEntityMapping] = []
 
     var title: String {
@@ -143,18 +147,15 @@ final class EditorState: ObservableObject {
     }
 
     private func deriveDatePrefix(from content: String, fallback: Date?) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        
         if let dateString = parseFrontmatterValue(key: "date", from: content) {
             return String(dateString.prefix(10))
         }
-        
+
         if let date = fallback {
-            return formatter.string(from: date)
+            return Self.datePrefixFormatter.string(from: date)
         }
-        
-        return formatter.string(from: Date())
+
+        return Self.datePrefixFormatter.string(from: Date())
     }
 
     func saveCurrentIfDirty() {
@@ -167,14 +168,14 @@ final class EditorState: ObservableObject {
 
     private func saveSession() {
         guard let item = currentItem else {
-            UserDefaults.standard.removeObject(forKey: sessionKey)
+            UserDefaults.standard.removeObject(forKey: DefaultsKey.sessionCurrentPost)
             return
         }
-        UserDefaults.standard.set(item.url.path, forKey: sessionKey)
+        UserDefaults.standard.set(item.url.path, forKey: DefaultsKey.sessionCurrentPost)
     }
 
     private func restoreSession() {
-        guard let path = UserDefaults.standard.string(forKey: sessionKey),
+        guard let path = UserDefaults.standard.string(forKey: DefaultsKey.sessionCurrentPost),
               FileManager.default.fileExists(atPath: path) else {
             return
         }
@@ -213,7 +214,7 @@ final class EditorState: ObservableObject {
 
 private extension EditorState {
     var autoRenameOnSave: Bool {
-        UserDefaults.standard.object(forKey: "autoRenameOnSave") as? Bool ?? false
+        UserDefaults.standard.object(forKey: DefaultsKey.autoRenameOnSave) as? Bool ?? false
     }
 }
 

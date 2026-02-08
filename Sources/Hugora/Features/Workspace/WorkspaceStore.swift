@@ -35,8 +35,11 @@ final class WorkspaceStore: ObservableObject {
     @Published var selectedFileURL: URL?
 
     private var securityScopedURL: URL?
-    private let bookmarkKey = "hugora.workspace.bookmark"
-    private let recentKey = "hugora.workspace.recent"
+    private static let newPostDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
     private let maxRecent = 10
 
     var contentDirectoryURL: URL? {
@@ -131,7 +134,7 @@ final class WorkspaceStore: ObservableObject {
         currentFolderURL = nil
         siteName = nil
         lastError = nil
-        UserDefaults.standard.removeObject(forKey: bookmarkKey)
+        UserDefaults.standard.removeObject(forKey: DefaultsKey.workspaceBookmark)
     }
 
     func refreshPosts() {
@@ -162,9 +165,7 @@ final class WorkspaceStore: ObservableObject {
         let sectionDir = targetSection.url
 
         let date = Date()
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let datePrefix = formatter.string(from: date)
+        let datePrefix = Self.newPostDateFormatter.string(from: date)
 
         let baseSlug = "new-post"
         var slug = baseSlug
@@ -333,7 +334,7 @@ final class WorkspaceStore: ObservableObject {
     }
 
     private func preferredNewPostFormat() -> ContentFormat {
-        let stored = UserDefaults.standard.string(forKey: "newPostFormat") ?? ""
+        let stored = UserDefaults.standard.string(forKey: DefaultsKey.newPostFormat) ?? ""
         return ContentFormat(rawValue: stored) ?? .bundle
     }
 
@@ -448,11 +449,11 @@ final class WorkspaceStore: ObservableObject {
     // MARK: - Private: Persistence
 
     private func saveCurrentBookmark(_ data: Data) {
-        UserDefaults.standard.set(data, forKey: bookmarkKey)
+        UserDefaults.standard.set(data, forKey: DefaultsKey.workspaceBookmark)
     }
 
     private func restoreLastWorkspace() {
-        guard let data = UserDefaults.standard.data(forKey: bookmarkKey) else { return }
+        guard let data = UserDefaults.standard.data(forKey: DefaultsKey.workspaceBookmark) else { return }
 
         var isStale = false
         guard let url = try? URL(
@@ -461,12 +462,12 @@ final class WorkspaceStore: ObservableObject {
             relativeTo: nil,
             bookmarkDataIsStale: &isStale
         ) else {
-            UserDefaults.standard.removeObject(forKey: bookmarkKey)
+            UserDefaults.standard.removeObject(forKey: DefaultsKey.workspaceBookmark)
             return
         }
 
         guard validateHugoSite(at: url) else {
-            UserDefaults.standard.removeObject(forKey: bookmarkKey)
+            UserDefaults.standard.removeObject(forKey: DefaultsKey.workspaceBookmark)
             return
         }
 
@@ -481,7 +482,7 @@ final class WorkspaceStore: ObservableObject {
     }
 
     private func loadRecentWorkspaces() {
-        guard let data = UserDefaults.standard.data(forKey: recentKey),
+        guard let data = UserDefaults.standard.data(forKey: DefaultsKey.workspaceRecent),
               let refs = try? JSONDecoder().decode([WorkspaceRef].self, from: data) else {
             return
         }
@@ -490,7 +491,7 @@ final class WorkspaceStore: ObservableObject {
 
     private func saveRecentWorkspaces() {
         guard let data = try? JSONEncoder().encode(recentWorkspaces) else { return }
-        UserDefaults.standard.set(data, forKey: recentKey)
+        UserDefaults.standard.set(data, forKey: DefaultsKey.workspaceRecent)
     }
 
     private func addToRecent(url: URL, bookmarkData: Data) {
