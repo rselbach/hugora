@@ -537,6 +537,20 @@ struct ImageContext {
         // Relative path from post's directory
         let postDirectory = postURL.deletingLastPathComponent()
         return postDirectory.appendingPathComponent(source)
+        return sanitizedLocalURL(postDirectory.appendingPathComponent(source))
+    }
+
+    private func sanitizedLocalURL(_ url: URL) -> URL? {
+        let resolved = url.standardizedFileURL.resolvingSymlinksInPath()
+        let sitePath = siteURL.standardizedFileURL.resolvingSymlinksInPath().path
+        let postPath = postURL.deletingLastPathComponent().standardizedFileURL.resolvingSymlinksInPath().path
+        let candidatePath = resolved.path
+
+        guard candidatePath.hasPrefix(sitePath) || candidatePath.hasPrefix(postPath) else {
+            return nil
+        }
+
+        return resolved
     }
 }
 
@@ -564,7 +578,7 @@ final class ImageCache {
     }
 
     func image(for url: URL) -> NSImage? {
-        queue.sync {
+        queue.sync(flags: .barrier) {
             guard let entry = cache[url] else { return nil }
             markAsRecentlyUsed(url)
             return entry.image
@@ -1147,6 +1161,9 @@ struct MarkdownStyler {
     /// Loads a local image file and caches it.
     private func loadLocalImage(from url: URL) -> NSImage? {
         guard FileManager.default.fileExists(atPath: url.path),
+              let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let fileSize = attrs[.size] as? Int,
+              fileSize <= 50_000_000,
               let image = NSImage(contentsOf: url) else {
             return nil
         }
