@@ -86,15 +86,11 @@ final class EditorViewModel: ObservableObject {
         guard let doc = currentDocument else {
             parseSync()
             guard let doc = currentDocument else { return }
-            textStorage.beginEditing()
             styleCache = styler.applyStyles(to: textStorage, in: visibleRange, document: doc, cursorPosition: cursorPosition, imageContext: imageContext)
-            textStorage.endEditing()
             return
         }
 
-        textStorage.beginEditing()
         styleCache = styler.applyStyles(to: textStorage, in: visibleRange, document: doc, cursorPosition: cursorPosition, imageContext: imageContext)
-        textStorage.endEditing()
     }
     
     func updateCursorPosition(_ position: Int) {
