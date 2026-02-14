@@ -37,7 +37,8 @@ final class WorkspaceStore: ObservableObject {
     @Published private(set) var siteName: String?
     @Published var recentWorkspaces: [WorkspaceRef] = []
     @Published var lastError: WorkspaceError?
-    
+    @Published var isLoading: Bool = false
+
     /// Which file is highlighted in the sidebar list (not an event — just selection state)
     @Published var selectedFileURL: URL?
 
@@ -161,6 +162,7 @@ final class WorkspaceStore: ObservableObject {
 
     func refreshPosts() {
         guard let url = currentFolderURL else { return }
+        isLoading = true
         loadContent(from: url)
     }
 
@@ -184,6 +186,7 @@ final class WorkspaceStore: ObservableObject {
             return
         }
 
+        isLoading = true
         let format = preferredNewPostFormat()
         let sectionDir = targetSection.url
         let config = hugoConfig ?? .default
@@ -234,7 +237,9 @@ final class WorkspaceStore: ObservableObject {
             let finalURL = resolveCreatedURLAfterRefresh(createdURL: createdURL, fallbackURL: expectedFileURL)
             selectedFileURL = finalURL
             onOpenFile?(finalURL)
+            isLoading = false
         } catch {
+            isLoading = false
             NSApp.presentError(error)
         }
     }
@@ -309,7 +314,10 @@ final class WorkspaceStore: ObservableObject {
 
         Task(priority: .userInitiated) {
             let loadedSections = await Self.collectContentSections(from: contentDir)
-            self.sections = loadedSections.sorted()
+            await MainActor.run {
+                self.sections = loadedSections.sorted()
+                self.isLoading = false
+            }
         }
     }
 

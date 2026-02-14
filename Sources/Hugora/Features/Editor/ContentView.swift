@@ -17,7 +17,17 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                if editorState.isDirty {
+                if editorState.isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .help("Loading...")
+                        .accessibilityLabel("Loading document")
+                } else if editorState.justSaved {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .help("Saved")
+                        .accessibilityLabel("Document saved")
+                } else if editorState.isDirty {
                     Circle()
                         .fill(.orange)
                         .frame(width: 8, height: 8)

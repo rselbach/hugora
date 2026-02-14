@@ -94,6 +94,10 @@ struct ContentListView: View {
         case .noWorkspace:
             emptyState
         }
+
+        if workspaceStore.isLoading {
+            loadingOverlay
+        }
     }
 
     private var sectionList: some View {
@@ -158,6 +162,18 @@ struct ContentListView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var loadingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.1)
+
+            ProgressView()
+                .controlSize(.large)
+                .progressViewStyle(.circular)
+                .scaleEffect(1.2)
+        }
+        .allowsHitTesting(false)
     }
 }
 

@@ -205,6 +205,9 @@ class EditorTextView: NSTextView {
     /// Context for saving pasted images. Set by the coordinator.
     var imageContext: ImageContext?
 
+    /// Indicates an image paste operation is in progress.
+    var isPastingImage = false
+
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
         category: "EditorTextView"
@@ -423,11 +426,71 @@ class EditorTextView: NSTextView {
     }
     
     // MARK: - Custom Drawing
-    
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         drawBlockquoteBorders(in: dirtyRect)
         drawRenderedImages(in: dirtyRect)
+        drawImagePasteIndicator(in: dirtyRect)
+    }
+
+    private func drawImagePasteIndicator(in dirtyRect: NSRect) {
+        guard isPastingImage else { return }
+
+        let bounds = bounds
+        let progressFrame = NSRect(
+            x: bounds.midX - 20,
+            y: bounds.midY - 20,
+            width: 40,
+            height: 40
+        )
+
+        guard progressFrame.intersects(dirtyRect) else { return }
+
+        let bgRect = NSRect(
+            x: progressFrame.minX - 10,
+            y: progressFrame.minY - 10,
+            width: progressFrame.width + 20,
+            height: progressFrame.height + 20
+        )
+
+        let bgPath = NSBezierPath(roundedRect: bgRect, xRadius: 8, yRadius: 8)
+
+        NSGraphicsContext.saveGraphicsState()
+        bgPath.addClip()
+
+        NSColor.black.withAlphaComponent(0.7).setFill()
+        bgPath.fill()
+
+        let center = NSPoint(x: progressFrame.midX, y: progressFrame.midY)
+        let radius: CGFloat = 12
+        let lineWidth: CGFloat = 3
+
+        NSColor.white.setStroke()
+        let trackPath = NSBezierPath()
+        trackPath.appendArc(
+            withCenter: center,
+            radius: radius,
+            startAngle: 0,
+            endAngle: 360
+        )
+        trackPath.lineWidth = lineWidth
+        trackPath.stroke()
+
+        let time = Date().timeIntervalSince1970 * 2
+        let endAngle = 360 * (time.truncatingRemainder(dividingBy: 1.0))
+        let progressPath = NSBezierPath()
+        progressPath.appendArc(
+            withCenter: center,
+            radius: radius,
+            startAngle: 0,
+            endAngle: endAngle,
+            clockwise: false
+        )
+        progressPath.lineWidth = lineWidth
+        progressPath.stroke()
+
+        NSGraphicsContext.restoreGraphicsState()
     }
     
     // MARK: - Blockquote Border Drawing
@@ -605,7 +668,6 @@ class EditorTextView: NSTextView {
     
     private func handleImagePaste(_ image: NSImage) {
         guard let context = imageContext else {
-            // No context = can't save, show alert
             let alert = NSAlert()
             alert.messageText = "Cannot paste image"
             alert.informativeText = "No post is currently open. Open a post first to paste images."
@@ -613,19 +675,22 @@ class EditorTextView: NSTextView {
             alert.runModal()
             return
         }
-        
-        // Generate unique filename
-        let filename = generateImageFilename()
 
+        isPastingImage = true
+        needsDisplay = true
+
+        let filename = generateImageFilename()
         let location = ImagePasteLocation.current()
         let destination = imagePasteDestination(context: context, location: location, filename: filename)
-        
+
         do {
             try FileManager.default.createDirectory(
                 at: destination.saveURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
         } catch {
+            isPastingImage = false
+            needsDisplay = true
             let alert = NSAlert()
             alert.messageText = "Failed to prepare image folder"
             alert.informativeText = error.localizedDescription
@@ -634,8 +699,9 @@ class EditorTextView: NSTextView {
             return
         }
 
-        // Save as PNG
         guard saveImageAsPNG(image, to: destination.saveURL) else {
+            isPastingImage = false
+            needsDisplay = true
             let alert = NSAlert()
             alert.messageText = "Failed to save image"
             alert.informativeText = "Could not save the image to \(destination.saveURL.path)"
@@ -643,8 +709,8 @@ class EditorTextView: NSTextView {
             alert.runModal()
             return
         }
-        
-        // Insert markdown at cursor position
+
+        isPastingImage = false
         let markdown = "![](\(destination.markdownPath))"
         insertText(markdown, replacementRange: selectedRange())
     }

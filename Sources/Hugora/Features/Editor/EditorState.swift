@@ -23,6 +23,8 @@ final class EditorState: ObservableObject {
     @Published var currentItem: ContentItem?
     @Published var content: String = ""
     @Published var isDirty: Bool = false
+    @Published var isLoading: Bool = false
+    @Published var justSaved: Bool = false
     @Published var cursorPosition: Int = 0
     @Published var scrollPosition: CGFloat = 0
 
@@ -43,6 +45,7 @@ final class EditorState: ObservableObject {
 
     func openItem(_ item: ContentItem) {
         saveCurrentIfDirty()
+        isLoading = true
 
         Task(priority: .userInitiated) {
             do {
@@ -54,10 +57,12 @@ final class EditorState: ObservableObject {
                 self.content = decoded.decoded
                 self.entityMappings = decoded.mappings
                 self.isDirty = false
+                self.isLoading = false
                 self.cursorPosition = 0
                 self.scrollPosition = 0
                 self.saveSession()
             } catch {
+                self.isLoading = false
                 NSApp.presentError(error)
             }
         }
@@ -71,6 +76,7 @@ final class EditorState: ObservableObject {
 
     func save() {
         guard let item = currentItem, isDirty else { return }
+        isLoading = true
         do {
             let encodedContent = HTMLEntityCodec.encode(content, mappings: entityMappings)
             let newURL = try saveWithRename(
@@ -83,7 +89,14 @@ final class EditorState: ObservableObject {
                 saveSession()
             }
             isDirty = false
+            isLoading = false
+            justSaved = true
+            Task { @MainActor in
+                try await Task.sleep(nanoseconds: 2_000_000_000)
+                self.justSaved = false
+            }
         } catch {
+            isLoading = false
             NSApp.presentError(error)
         }
     }
