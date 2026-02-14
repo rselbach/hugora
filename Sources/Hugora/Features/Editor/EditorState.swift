@@ -62,6 +62,7 @@ final class EditorState: ObservableObject {
                 self.scrollPosition = 0
                 self.saveSession()
             } catch {
+                Self.logger.error("Failed to open file \(item.url.lastPathComponent): \(error.localizedDescription)")
                 self.isLoading = false
                 NSApp.presentError(error)
             }
@@ -96,6 +97,7 @@ final class EditorState: ObservableObject {
                 self.justSaved = false
             }
         } catch {
+            Self.logger.error("Failed to save file \(item.url.lastPathComponent): \(error.localizedDescription)")
             isLoading = false
             NSApp.presentError(error)
         }
@@ -235,6 +237,9 @@ final class EditorState: ObservableObject {
                 self.isDirty = false
             } catch {
                 Self.logger.error("Failed to restore session file \(url.lastPathComponent): \(error.localizedDescription)")
+                Task { @MainActor in
+                    NSApp.presentError(error)
+                }
             }
         }
     }
