@@ -57,7 +57,9 @@ func findHugoraApp() -> URL? {
                 }
             }
         }
-    } catch {}
+    } catch {
+        fputs("warning: mdfind search failed: \(error.localizedDescription)\n", stderr)
+    }
     
     return nil
 }
