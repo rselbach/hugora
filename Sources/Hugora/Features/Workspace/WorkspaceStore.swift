@@ -53,6 +53,8 @@ final class WorkspaceStore: ObservableObject {
         f.dateFormat = "yyyy-MM-dd"
         return f
     }()
+    private static let defaultNewPostTitle = "New Post"
+    private static let defaultNewPostSlug = "new-post"
     private let maxRecent = 10
 
     var contentDirectoryURL: URL? {
@@ -194,7 +196,7 @@ final class WorkspaceStore: ObservableObject {
         let date = Date()
         let datePrefix = Self.newPostDateFormatter.string(from: date)
 
-        let baseSlug = "new-post"
+        let baseSlug = Self.defaultNewPostSlug
         var slug = baseSlug
         var counter = 1
 
@@ -395,7 +397,7 @@ final class WorkspaceStore: ObservableObject {
         return builder.buildContent(
             sectionName: sectionName,
             format: format,
-            title: "New Post",
+            title: Self.defaultNewPostTitle,
             slug: slug,
             date: date
         )
