@@ -204,7 +204,7 @@ struct ContentRow: View {
         return f
     }()
 
-    private func accessibilityLabel(for item: ContentItem) -> String {
+    private func accessibilityDescription(for item: ContentItem) -> String {
         let dateString = item.date.map { Self.dateFormatter.string(from: $0) } ?? "no date"
         return "\(item.title), \(dateString)"
     }
@@ -246,11 +246,11 @@ struct ContentRow: View {
         .padding(.vertical, 6)
         .background(isHovering ? Color.primary.opacity(0.06) : Color.clear)
         .contentShape(Rectangle())
+        .accessibilityLabel(accessibilityDescription(for: item))
         .onHover { isHovering = $0 }
         .onTapGesture {
             workspaceStore.openFile(item.url)
         }
-        .accessibilityLabel(accessibilityLabel(for: item))
         .contextMenu {
             Button("Open") {
                 workspaceStore.openFile(item.url)
