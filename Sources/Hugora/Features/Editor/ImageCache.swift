@@ -25,11 +25,15 @@ final class ImageCache {
     }
 
     func image(for url: URL) -> NSImage? {
+        var result: NSImage?
         queue.sync {
-            guard let entry = cache[url] else { return nil }
-            markAsRecentlyUsed(url)
-            return entry.image
+            guard let entry = cache[url] else { return }
+            result = entry.image
         }
+        if result != nil {
+            markAsRecentlyUsed(url)
+        }
+        return result
     }
 
     func setImage(_ image: NSImage, for url: URL) {
@@ -56,9 +60,11 @@ final class ImageCache {
     }
 
     private func markAsRecentlyUsed(_ url: URL) {
-        guard let index = order.firstIndex(of: url) else { return }
-        order.remove(at: index)
-        order.append(url)
+        queue.sync(flags: .barrier) {
+            guard let index = order.firstIndex(of: url) else { return }
+            order.remove(at: index)
+            order.append(url)
+        }
     }
 
     private func removeFromOrder(_ url: URL) {
