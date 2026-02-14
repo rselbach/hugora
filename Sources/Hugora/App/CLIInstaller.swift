@@ -121,21 +121,40 @@ enum CLIInstaller {
         bundledURL: URL,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
-        let installPathEscaped = escapeShellPath(installPath)
-        let bundledPathEscaped = escapeShellPath(bundledURL.path)
-        let script = """
-            do shell script "mkdir -p /usr/local/bin && rm -f '\(installPathEscaped)' && ln -s '\(bundledPathEscaped)' '\(installPathEscaped)'" with administrator privileges
-            """
-
-        runAppleScript(script, completion: completion)
+        runPrivilegedCommand("/bin/mkdir", args: ["-p", "/usr/local/bin"]) {
+            result in
+            switch result {
+            case .success:
+                runPrivilegedCommand("/bin/rm", args: ["-f", installPath]) {
+                    result in
+                    switch result {
+                    case .success:
+                        runPrivilegedCommand("/bin/ln", args: ["-s", bundledURL.path, installPath],
+                                              completion: completion)
+                    case .failure(let error):
+                        completion(.failure(error))
+                    }
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
     }
 
     private static func uninstallWithAdminPrivileges(
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
-        let installPathEscaped = escapeShellPath(installPath)
+        runPrivilegedCommand("/bin/rm", args: ["-f", installPath], completion: completion)
+    }
+
+    private static func runPrivilegedCommand(
+        _ command: String,
+        args: [String],
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let escapedArgs = args.map { escapeShellPath($0) }.map { "'\($0)'" }.joined(separator: " ")
         let script = """
-            do shell script "rm -f '\(installPathEscaped)'" with administrator privileges
+            do shell script "\(command) \(escapedArgs)" with administrator privileges
             """
 
         runAppleScript(script, completion: completion)
