@@ -2,6 +2,15 @@ import AppKit
 import Foundation
 import Markdown
 
+// MARK: - Constants
+
+private enum Constants {
+    static let minimumFontSize: CGFloat = 0.01
+    static let blockquoteIndentation: CGFloat = 20
+    static let imagePadding: CGFloat = 12
+    static let maxImageWidth: CGFloat = 600
+}
+
 // MARK: - Theme
 
 struct Theme {
@@ -223,7 +232,7 @@ struct MarkdownStyler {
                 if marker.preserveLineHeight {
                     textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
                 } else {
-                    let hiddenFont = NSFont.systemFont(ofSize: 0.01)
+                    let hiddenFont = NSFont.systemFont(ofSize: Constants.minimumFontSize)
                     textStorage.addAttribute(.font, value: hiddenFont, range: clampedRange)
                     textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
                 }
@@ -355,7 +364,7 @@ struct MarkdownStyler {
                 textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
             } else {
                 // Normal hiding: tiny font to collapse space while maintaining string integrity
-                let hiddenFont = NSFont.systemFont(ofSize: 0.01)
+                let hiddenFont = NSFont.systemFont(ofSize: Constants.minimumFontSize)
                 textStorage.addAttribute(.font, value: hiddenFont, range: clampedRange)
                 textStorage.addAttribute(.foregroundColor, value: NSColor.clear, range: clampedRange)
             }
@@ -431,7 +440,7 @@ struct MarkdownStyler {
             textStorage.addAttribute(.blockquoteInfo, value: info, range: clampedRange)
 
             // Apply paragraph style with left indent for the nesting level
-            let indent: CGFloat = CGFloat(nestingLevel) * 20  // 20pt per nesting level
+            let indent: CGFloat = CGFloat(nestingLevel) * Constants.blockquoteIndentation
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.headIndent = indent
             paragraphStyle.firstLineHeadIndent = indent
@@ -556,7 +565,7 @@ struct MarkdownStyler {
             // Store image info as custom attribute for later rendering
             // NSTextAttachment only works with the U+FFFC character, not arbitrary text
             // We'll use custom drawing in EditorTextView instead
-            let maxWidth: CGFloat = 600
+            let maxWidth: CGFloat = Constants.maxImageWidth
             let originalSize = nsImage.size
             var targetHeight = originalSize.height
             if originalSize.width > maxWidth {
@@ -570,7 +579,7 @@ struct MarkdownStyler {
             // Add paragraph spacing after this line to make room for the image
             let paragraphStyle = NSMutableParagraphStyle()
             paragraphStyle.paragraphSpacingBefore = 0
-            paragraphStyle.paragraphSpacing = targetHeight + 12  // image height + padding
+            paragraphStyle.paragraphSpacing = targetHeight + Constants.imagePadding
             paragraphStyle.lineHeightMultiple = lineSpacing
             textStorage.addAttribute(.paragraphStyle, value: paragraphStyle, range: range)
         }
