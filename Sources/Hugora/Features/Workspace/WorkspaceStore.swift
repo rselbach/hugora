@@ -307,6 +307,13 @@ final class WorkspaceStore: ObservableObject {
             return
         }
 
+        Task(priority: .userInitiated) {
+            let loadedSections = await Self.collectContentSections(from: contentDir)
+            self.sections = loadedSections.sorted()
+        }
+    }
+
+    private static func collectContentSections(from contentDir: URL) async -> [ContentSection] {
         let sectionDirs = listDirectoryEntries(at: contentDir)
         var loadedSections: [ContentSection] = []
         var rootItems: [ContentItem] = []
@@ -316,7 +323,7 @@ final class WorkspaceStore: ObservableObject {
             do {
                 resourceValues = try itemURL.resourceValues(forKeys: [.isDirectoryKey])
             } catch {
-                Self.logger.error("Failed to read resource values for \(itemURL.lastPathComponent): \(error.localizedDescription)")
+                logger.error("Failed to read resource values for \(itemURL.lastPathComponent): \(error.localizedDescription)")
                 continue
             }
             guard let isDir = resourceValues.isDirectory else {
@@ -338,7 +345,7 @@ final class WorkspaceStore: ObservableObject {
             loadedSections.append(rootSection)
         }
 
-        sections = loadedSections.sorted()
+        return loadedSections
     }
 
     private func preferredNewPostFormat() -> ContentFormat {
@@ -476,7 +483,7 @@ final class WorkspaceStore: ObservableObject {
         return createdURL
     }
 
-    private func collectItemsRecursively(in directoryURL: URL, sectionName: String) -> [ContentItem] {
+    private static func collectItemsRecursively(in directoryURL: URL, sectionName: String) -> [ContentItem] {
         let entries = listDirectoryEntries(at: directoryURL)
 
         if let leafIndex = preferredLeafBundleIndex(in: entries) {
@@ -490,7 +497,7 @@ final class WorkspaceStore: ObservableObject {
             do {
                 values = try entry.resourceValues(forKeys: [.isDirectoryKey])
             } catch {
-                Self.logger.error("Failed to read resource values for \(entry.lastPathComponent): \(error.localizedDescription)")
+                logger.error("Failed to read resource values for \(entry.lastPathComponent): \(error.localizedDescription)")
                 continue
             }
 
@@ -508,13 +515,13 @@ final class WorkspaceStore: ObservableObject {
         return items
     }
 
-    private func preferredLeafBundleIndex(in entries: [URL]) -> URL? {
+    private static func preferredLeafBundleIndex(in entries: [URL]) -> URL? {
         entries.first { entry in
             ContentFile.isSupportedContentFile(entry) && ContentFile.isLeafBundleIndex(entry)
         }
     }
 
-    private func listDirectoryEntries(at url: URL) -> [URL] {
+    private static func listDirectoryEntries(at url: URL) -> [URL] {
         do {
             return try FileManager.default.contentsOfDirectory(
                 at: url,
@@ -522,7 +529,7 @@ final class WorkspaceStore: ObservableObject {
                 options: [.skipsHiddenFiles]
             )
         } catch {
-            Self.logger.error("Failed to list directory \(url.lastPathComponent): \(error.localizedDescription)")
+            logger.error("Failed to list directory \(url.lastPathComponent): \(error.localizedDescription)")
             return []
         }
     }

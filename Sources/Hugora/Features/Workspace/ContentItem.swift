@@ -220,8 +220,9 @@ struct ContentItem: Identifiable, Equatable, Comparable {
             self.slug = url.deletingPathExtension().lastPathComponent
         }
 
-        self.title = Self.extractTitle(from: url) ?? slug
-        self.date = Self.extractDate(from: url)
+        let content = try? String(contentsOf: url, encoding: .utf8)
+        self.title = content.flatMap { FrontmatterParser.value(forKey: "title", in: $0) } ?? slug
+        self.date = content.flatMap { Self.parseDate(from: $0) }
     }
 
     /// Create a ContentItem with metadata extracted from already-loaded content.
@@ -254,28 +255,6 @@ struct ContentItem: Identifiable, Equatable, Comparable {
         case (nil, nil):
             return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
         }
-    }
-
-    private static func extractTitle(from url: URL) -> String? {
-        let content: String
-        do {
-            content = try String(contentsOf: url, encoding: .utf8)
-        } catch {
-            logger.error("Failed to read title from \(url.lastPathComponent): \(error.localizedDescription)")
-            return nil
-        }
-        return FrontmatterParser.value(forKey: "title", in: content)
-    }
-
-    private static func extractDate(from url: URL) -> Date? {
-        let content: String
-        do {
-            content = try String(contentsOf: url, encoding: .utf8)
-        } catch {
-            logger.error("Failed to read date from \(url.lastPathComponent): \(error.localizedDescription)")
-            return nil
-        }
-        return parseDate(from: content)
     }
 
     fileprivate static func parseDate(from content: String) -> Date? {

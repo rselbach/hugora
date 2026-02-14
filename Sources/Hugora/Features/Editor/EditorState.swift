@@ -44,18 +44,22 @@ final class EditorState: ObservableObject {
     func openItem(_ item: ContentItem) {
         saveCurrentIfDirty()
 
-        do {
-            let rawContent = try String(contentsOf: item.url, encoding: .utf8)
-            let decoded = HTMLEntityCodec.decode(rawContent)
-            currentItem = item
-            content = decoded.decoded
-            entityMappings = decoded.mappings
-            isDirty = false
-            cursorPosition = 0
-            scrollPosition = 0
-            saveSession()
-        } catch {
-            NSApp.presentError(error)
+        Task(priority: .userInitiated) {
+            do {
+                let rawContent = try await Task.detached {
+                    try String(contentsOf: item.url, encoding: .utf8)
+                }.value
+                let decoded = HTMLEntityCodec.decode(rawContent)
+                self.currentItem = item
+                self.content = decoded.decoded
+                self.entityMappings = decoded.mappings
+                self.isDirty = false
+                self.cursorPosition = 0
+                self.scrollPosition = 0
+                self.saveSession()
+            } catch {
+                NSApp.presentError(error)
+            }
         }
     }
 
@@ -206,15 +210,19 @@ final class EditorState: ObservableObject {
         let format: ContentFormat = ContentFile.isLeafBundleIndex(url) ? .bundle : .file
         let section = extractSectionFromPath(url)
 
-        do {
-            let rawContent = try String(contentsOf: url, encoding: .utf8)
-            let decoded = HTMLEntityCodec.decode(rawContent)
-            currentItem = ContentItem(url: url, format: format, section: section, content: rawContent)
-            content = decoded.decoded
-            entityMappings = decoded.mappings
-            isDirty = false
-        } catch {
-            Self.logger.error("Failed to restore session file \(url.lastPathComponent): \(error.localizedDescription)")
+        Task(priority: .utility) {
+            do {
+                let rawContent = try await Task.detached {
+                    try String(contentsOf: url, encoding: .utf8)
+                }.value
+                let decoded = HTMLEntityCodec.decode(rawContent)
+                self.currentItem = ContentItem(url: url, format: format, section: section, content: rawContent)
+                self.content = decoded.decoded
+                self.entityMappings = decoded.mappings
+                self.isDirty = false
+            } catch {
+                Self.logger.error("Failed to restore session file \(url.lastPathComponent): \(error.localizedDescription)")
+            }
         }
     }
 
