@@ -475,6 +475,26 @@ struct MarkdownStyler {
         }
     }
 
+    /// Helper to fall back to showing markdown for an image span.
+    private func fallbackToMarkdown(
+        _ imageSpan: (range: NSRange, source: String?, altText: String),
+        range: NSRange,
+        textStorage: NSTextStorage,
+        theme: Theme,
+        fontScale: CGFloat,
+        lineSpacing: CGFloat
+    ) {
+        showImageMarkdown(
+            range: range,
+            source: imageSpan.source,
+            altText: imageSpan.altText,
+            textStorage: textStorage,
+            theme: theme,
+            fontScale: fontScale,
+            lineSpacing: lineSpacing
+        )
+    }
+
     /// Renders images inline when cursor is not within the image markdown.
     private func applyImageRendering(
         imageSpans: [(range: NSRange, source: String?, altText: String)],
@@ -500,44 +520,19 @@ struct MarkdownStyler {
             }
 
             if cursorInImage {
-                // Cursor is in image: show raw markdown, remove any attachment
-                showImageMarkdown(
-                    range: range,
-                    source: imageSpan.source,
-                    altText: imageSpan.altText,
-                    textStorage: textStorage,
-                    theme: theme,
-                    fontScale: fontScale,
-                    lineSpacing: lineSpacing
-                )
+                fallbackToMarkdown(imageSpan, range: range, textStorage: textStorage, theme: theme, fontScale: fontScale, lineSpacing: lineSpacing)
                 continue
             }
 
             // Cursor outside: load and display image
             guard let source = imageSpan.source,
                   let imageURL = imageContext.resolveImagePath(source) else {
-                showImageMarkdown(
-                    range: range,
-                    source: imageSpan.source,
-                    altText: imageSpan.altText,
-                    textStorage: textStorage,
-                    theme: theme,
-                    fontScale: fontScale,
-                    lineSpacing: lineSpacing
-                )
+                fallbackToMarkdown(imageSpan, range: range, textStorage: textStorage, theme: theme, fontScale: fontScale, lineSpacing: lineSpacing)
                 continue
             }
 
             guard imageURL.isFileURL else {
-                showImageMarkdown(
-                    range: range,
-                    source: imageSpan.source,
-                    altText: imageSpan.altText,
-                    textStorage: textStorage,
-                    theme: theme,
-                    fontScale: fontScale,
-                    lineSpacing: lineSpacing
-                )
+                fallbackToMarkdown(imageSpan, range: range, textStorage: textStorage, theme: theme, fontScale: fontScale, lineSpacing: lineSpacing)
                 continue
             }
 
@@ -550,15 +545,7 @@ struct MarkdownStyler {
             }
 
             guard let nsImage = image else {
-                showImageMarkdown(
-                    range: range,
-                    source: imageSpan.source,
-                    altText: imageSpan.altText,
-                    textStorage: textStorage,
-                    theme: theme,
-                    fontScale: fontScale,
-                    lineSpacing: lineSpacing
-                )
+                fallbackToMarkdown(imageSpan, range: range, textStorage: textStorage, theme: theme, fontScale: fontScale, lineSpacing: lineSpacing)
                 continue
             }
 
