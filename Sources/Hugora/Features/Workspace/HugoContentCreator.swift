@@ -11,16 +11,25 @@ protocol HugoContentCreator {
     ) throws -> URL
 }
 
-enum HugoContentCreatorError: LocalizedError {
+enum HugoContentCreatorError: LocalizedError, CustomDebugStringConvertible {
     case commandFailed(command: String, status: Int32, output: String)
     case couldNotResolveCreatedPath(expectedPath: String, output: String)
 
     var errorDescription: String? {
         switch self {
+        case .commandFailed:
+            return "Could not create the post. Hugo reported an error."
+        case .couldNotResolveCreatedPath:
+            return "The post was created but couldn't be found at the expected location."
+        }
+    }
+
+    var debugDescription: String {
+        switch self {
         case .commandFailed(let command, let status, let output):
-            return "Hugo command failed (\(status)): \(command)\n\(output)"
+            return "Hugo command failed (exit \(status)): \(command)\nOutput: \(output)"
         case .couldNotResolveCreatedPath(let expectedPath, let output):
-            return "Hugo reported success, but created file was not found at \(expectedPath).\n\(output)"
+            return "Hugo reported success, but file not found at: \(expectedPath)\nOutput: \(output)"
         }
     }
 }
