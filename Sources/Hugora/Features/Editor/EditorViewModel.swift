@@ -15,9 +15,12 @@ final class EditorViewModel: ObservableObject {
     private let parseQueue = DispatchQueue(label: "com.hugora.parse", qos: .userInitiated)
     private weak var currentTextView: NSTextView?
     private var styleCache: StylePassCache?
-    
+
     /// Context for resolving image paths. Set when opening a post.
     @Published var imageContext: ImageContext?
+
+    private var cachedFontSize: Double?
+    private var cachedLineSpacing: Double?
 
     init(text: String = "", themeManager: ThemeManager = .shared) {
         self.text = text
@@ -40,9 +43,18 @@ final class EditorViewModel: ObservableObject {
 
     private func observeEditorPreferences() {
         NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
-            .receive(on: RunLoop.main)
+            .debounce(for: .milliseconds(100), scheduler: RunLoop.main)
             .sink { [weak self] _ in
-                self?.forceRestyle()
+                guard let self else { return }
+                let defaults = UserDefaults.standard
+                let currentFontSize = defaults.object(forKey: DefaultsKey.editorFontSize) as? Double ?? 16
+                let currentLineSpacing = defaults.object(forKey: DefaultsKey.editorLineSpacing) as? Double ?? 1.4
+
+                if cachedFontSize != currentFontSize || cachedLineSpacing != currentLineSpacing {
+                    cachedFontSize = currentFontSize
+                    cachedLineSpacing = currentLineSpacing
+                    forceRestyle()
+                }
             }
             .store(in: &cancellables)
     }
