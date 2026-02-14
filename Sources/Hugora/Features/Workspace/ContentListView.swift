@@ -62,6 +62,7 @@ struct ContentListView: View {
             }
             .menuStyle(.borderlessButton)
             .frame(width: 20)
+            .accessibilityLabel("Workspace actions menu")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -185,6 +186,7 @@ struct SectionGroup: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
+        .accessibilityLabel("Section: \(section.displayName), \(section.itemCount) items")
     }
 }
 
@@ -201,6 +203,11 @@ struct ContentRow: View {
         f.timeStyle = .none
         return f
     }()
+
+    private func accessibilityLabel(for item: ContentItem) -> String {
+        let dateString = item.date.map { Self.dateFormatter.string(from: $0) } ?? "no date"
+        return "\(item.title), \(dateString)"
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -243,6 +250,7 @@ struct ContentRow: View {
         .onTapGesture {
             workspaceStore.openFile(item.url)
         }
+        .accessibilityLabel(accessibilityLabel(for: item))
         .contextMenu {
             Button("Open") {
                 workspaceStore.openFile(item.url)

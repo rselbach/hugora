@@ -22,6 +22,7 @@ struct ContentView: View {
                         .fill(.orange)
                         .frame(width: 8, height: 8)
                         .help("Unsaved changes")
+                        .accessibilityLabel("Document has unsaved changes")
                 }
 
                 Button {
@@ -29,6 +30,7 @@ struct ContentView: View {
                 } label: {
                     Label("Posts", systemImage: "sidebar.left")
                 }
+                .accessibilityLabel("Toggle sidebar")
             }
         }
         .navigationTitle(editorState.title)
