@@ -24,6 +24,11 @@ enum WorkspaceError: LocalizedError {
     }
 }
 
+/// Manages the currently open Hugo workspace and its content.
+///
+/// Handles workspace validation, security-scoped bookmarks, content scanning,
+/// file operations (create, delete), and maintains a list of recently used
+/// workspaces. Delegates Hugo CLI interaction via ``HugoContentCreator``.
 @MainActor
 final class WorkspaceStore: ObservableObject {
     private static let logger = Logger(
@@ -31,19 +36,32 @@ final class WorkspaceStore: ObservableObject {
         category: "WorkspaceStore"
     )
 
+    /// Content sections detected in the Hugo site (e.g., blog, posts).
     @Published private(set) var sections: [ContentSection] = []
+
+    /// Loaded Hugo configuration for current workspace.
     @Published private(set) var hugoConfig: HugoConfig?
+
+    /// URL of currently opened workspace folder.
     @Published private(set) var currentFolderURL: URL?
+
+    /// Display name of current site (folder name).
     @Published private(set) var siteName: String?
+
+    /// Recently opened workspaces (persisted via bookmarks).
     @Published var recentWorkspaces: [WorkspaceRef] = []
+
+    /// Last workspace-related error (e.g., not a valid Hugo site).
     @Published var lastError: WorkspaceError?
+
+    /// Whether a workspace operation (open, refresh, create) is in progress.
     @Published var isLoading: Bool = false
 
-    /// Which file is highlighted in the sidebar list (not an event — just selection state)
+    /// Which file is highlighted in the sidebar list (selection state only).
     @Published var selectedFileURL: URL?
 
-    /// Called when a file should be opened in the editor.
-    /// Wired up by ContentView so WorkspaceStore doesn't need to know about EditorState.
+    /// Callback invoked when a file should be opened in the editor.
+    /// Wired up by ContentView so WorkspaceStore doesn't depend on EditorState.
     var onOpenFile: ((URL) -> Void)?
 
     private var securityScopedURL: URL?
@@ -57,6 +75,10 @@ final class WorkspaceStore: ObservableObject {
     private static let defaultNewPostSlug = "new-post"
     private let maxRecent = 10
 
+    /// The resolved URL of the Hugo content directory for the current workspace.
+    ///
+    /// Returns `nil` if no workspace is open or the resolved path escapes
+    /// the workspace folder (security check).
     var contentDirectoryURL: URL? {
         guard let folder = currentFolderURL, let config = hugoConfig else { return nil }
         let candidate = folder.appendingPathComponent(config.contentDir).standardizedFileURL
@@ -64,6 +86,9 @@ final class WorkspaceStore: ObservableObject {
         return candidate
     }
 
+    /// Initializes a new workspace store.
+    ///
+    /// - Parameter hugoContentCreator: Strategy for creating new content via Hugo CLI.
     init(hugoContentCreator: any HugoContentCreator = HugoCLIContentCreator()) {
         self.hugoContentCreator = hugoContentCreator
         loadRecentWorkspaces()
@@ -76,6 +101,7 @@ final class WorkspaceStore: ObservableObject {
 
     // MARK: - Open Folder
 
+    /// Displays open panel for user to select a Hugo site folder.
     func openFolderPanel() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
@@ -90,6 +116,12 @@ final class WorkspaceStore: ObservableObject {
         }
     }
 
+    /// Opens a Hugo workspace at the given URL.
+    ///
+    /// Validates that the folder is a Hugo site, creates a security-scoped bookmark,
+    /// and loads content sections.
+    ///
+    /// - Parameter url: The URL of the folder to open.
     func openFolder(_ url: URL) {
         stopAccessingCurrentFolder()
         lastError = nil
@@ -110,6 +142,12 @@ final class WorkspaceStore: ObservableObject {
         loadContent(from: url)
     }
 
+    /// Opens a recently used workspace from its bookmark reference.
+    ///
+    /// Resolves the security-scoped bookmark, validates the site, and handles
+    /// stale bookmarks by re-creating them.
+    ///
+    /// - Parameter ref: The workspace reference containing the bookmark data.
     func openRecent(_ ref: WorkspaceRef) {
         stopAccessingCurrentFolder()
         lastError = nil
@@ -152,6 +190,10 @@ final class WorkspaceStore: ObservableObject {
         loadContent(from: url)
     }
 
+    /// Closes the current workspace and clears all state.
+    ///
+    /// Stops accessing security-scoped resources and clears sections,
+    /// config, and selection state.
     func closeWorkspace() {
         stopAccessingCurrentFolder()
         sections = []
@@ -162,6 +204,9 @@ final class WorkspaceStore: ObservableObject {
         UserDefaults.standard.removeObject(forKey: DefaultsKey.workspaceBookmark)
     }
 
+    /// Reloads the content list from the current workspace.
+    ///
+    /// Useful for detecting external changes to the workspace.
     func refreshPosts() {
         guard let url = currentFolderURL else { return }
         isLoading = true
@@ -170,6 +215,11 @@ final class WorkspaceStore: ObservableObject {
 
     // MARK: - Open File
 
+    /// Opens a content file in the editor.
+    ///
+    /// Updates selection and calls ``onOpenFile`` callback to notify the editor.
+    ///
+    /// - Parameter url: The URL of the file to open.
     func openFile(_ url: URL) {
         selectedFileURL = url
         onOpenFile?(url)
@@ -177,6 +227,13 @@ final class WorkspaceStore: ObservableObject {
 
     // MARK: - Create New Post
 
+    /// Creates a new Hugo content post using Hugo CLI or fallback.
+    ///
+    /// Determines the target section (preferring "blog" or "posts"), generates
+    /// a unique slug based on today's date, and uses Hugo CLI if available.
+    /// Falls back to manual file creation if Hugo CLI is not found.
+    ///
+    /// - Note: The new post is automatically opened after creation.
     func createNewPost() {
         guard let siteURL = currentFolderURL else {
             presentNewPostError("No Hugo site is open.")
@@ -248,6 +305,13 @@ final class WorkspaceStore: ObservableObject {
 
     // MARK: - Delete Content
 
+    /// Moves the given content item to the system Trash.
+    ///
+    /// For bundle format, moves the entire folder. For file format,
+    /// moves just the markdown file. Updates the sections list and clears
+    /// the selected file if it was deleted.
+    ///
+    /// - Parameter item: The content item to delete.
     func deleteContent(_ item: ContentItem) {
         let fm = FileManager.default
 

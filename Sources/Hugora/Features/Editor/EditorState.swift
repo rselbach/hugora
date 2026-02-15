@@ -14,18 +14,37 @@ enum EditorStateError: LocalizedError {
     }
 }
 
+/// Manages the state of the currently open content item in the editor.
+///
+/// Handles loading, saving, and tracking changes to markdown content files.
+/// Manages HTML entity encoding/decoding for special characters, automatic
+/// file renaming based on frontmatter, and session persistence across app launches.
 @MainActor
 final class EditorState: ObservableObject {
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
         category: "EditorState"
     )
+
+    /// The currently loaded content item.
     @Published var currentItem: ContentItem?
+
+    /// The decoded markdown content (with HTML entities resolved).
     @Published var content: String = ""
+
+    /// Whether the current content has unsaved changes.
     @Published var isDirty: Bool = false
+
+    /// Whether a file operation (load/save) is in progress.
     @Published var isLoading: Bool = false
+
+    /// Transient flag set to true for 2 seconds after a successful save.
     @Published var justSaved: Bool = false
+
+    /// Current cursor position in the text (character offset).
     @Published var cursorPosition: Int = 0
+
+    /// Current scroll position for restoring view state.
     @Published var scrollPosition: CGFloat = 0
 
     private static let datePrefixFormatter: DateFormatter = {
@@ -35,14 +54,20 @@ final class EditorState: ObservableObject {
     }()
     private var entityMappings: [HTMLEntityMapping] = []
 
+    /// The display title of the current item, or placeholder if none selected.
     var title: String {
         currentItem?.title ?? "No Document Selected"
     }
 
+    /// Initializes the editor state and restores the previous session if available.
     init() {
         restoreSession()
     }
 
+    /// Opens a content item and loads its content into the editor.
+    ///
+    /// - Parameter item: The content item to open.
+    /// - Note: Saves the current item if dirty before opening the new one.
     func openItem(_ item: ContentItem) {
         saveCurrentIfDirty()
         isLoading = true
@@ -69,12 +94,24 @@ final class EditorState: ObservableObject {
         }
     }
 
+    /// Updates the editor content and marks it as dirty.
+    ///
+    /// Also updates HTML entity mappings to preserve them during edits.
+    ///
+    /// - Parameter newContent: The new content string.
     func updateContent(_ newContent: String) {
         updateEntityMappings(oldText: content, newText: newContent)
         content = newContent
         isDirty = true
     }
 
+    /// Saves the current content to disk.
+    ///
+    /// Encodes HTML entities back to their escaped form, optionally renames
+    /// the file based on frontmatter (if auto-rename is enabled), and updates
+    /// session state.
+    ///
+    /// - Note: No-op if no item is loaded or content is not dirty.
     func save() {
         guard let item = currentItem, isDirty else { return }
         isLoading = true
@@ -199,6 +236,9 @@ final class EditorState: ObservableObject {
         return Self.datePrefixFormatter.string(from: Date())
     }
 
+    /// Saves the current item if it has unsaved changes.
+    ///
+    /// Convenience method for saving before opening another file or closing.
     func saveCurrentIfDirty() {
         if isDirty {
             save()

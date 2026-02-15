@@ -77,7 +77,20 @@ struct MarkdownStyler {
         self.theme = theme
     }
 
-    /// Convenience wrapper matching EditorViewModel's expected API.
+    /// Applies markdown styling to text storage within a visible range.
+    ///
+    /// Convenience wrapper that extracts text from storage and delegates to the
+    /// full `style()` method. Resets base attributes, applies element-specific
+    /// styles, hides syntax markers when cursor is outside their elements,
+    /// and renders images inline when appropriate.
+    ///
+    /// - Parameters:
+    ///   - textStorage: The text storage to apply styles to.
+    ///   - visibleRange: The range of text to style (for performance).
+    ///   - document: The parsed markdown document.
+    ///   - cursorPosition: Optional cursor position for syntax hiding behavior.
+    ///   - imageContext: Optional context for resolving image paths.
+    /// - Returns: A cache of styled elements for efficient cursor-only updates.
     @discardableResult
     func applyStyles(to textStorage: NSTextStorage, in visibleRange: NSRange, document: Document, cursorPosition: Int? = nil, imageContext: ImageContext? = nil) -> StylePassCache {
         let text = textStorage.string

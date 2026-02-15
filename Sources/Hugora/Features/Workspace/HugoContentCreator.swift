@@ -1,8 +1,27 @@
 import Foundation
 import os
 
+/// Defines a strategy for creating new Hugo content.
+///
+/// Allows decoupling the app from Hugo CLI by providing an interface that
+/// can be swapped for different implementations (e.g., direct file creation,
+/// alternate CLI tools, or test mocks).
 protocol HugoContentCreator {
+    /// Checks whether the Hugo CLI is available at the given site.
+    ///
+    /// - Parameter siteURL: The URL of the Hugo site directory.
+    /// - Returns: `true` if Hugo CLI can be executed successfully.
     func isAvailable(at siteURL: URL) -> Bool
+
+    /// Creates new content using Hugo's `hugo new` command.
+    ///
+    /// - Parameters:
+    ///   - siteURL: The root URL of the Hugo site.
+    ///   - contentDir: The content directory name (e.g., "content").
+    ///   - relativePath: The relative path for the new content file.
+    ///   - kind: Optional content kind for Hugo archetype selection.
+    /// - Returns: The URL of the created content file.
+    /// - Throws: ``HugoContentCreatorError`` if Hugo CLI fails or file cannot be located.
     func createNewContent(
         siteURL: URL,
         contentDir: String,
