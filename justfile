@@ -73,10 +73,19 @@ clean:
     swift package clean
     rm -rf .build
 
+# Ensure required dev tools are installed
+ensure-swift-format:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! command -v swift-format >/dev/null 2>&1; then
+        echo "error: swift-format is required (install with: brew install swift-format)" >&2
+        exit 127
+    fi
+
 # Format Swift code
-fmt:
+fmt: ensure-swift-format
     swift-format format -i -r Sources/ Tests/
 
 # Lint
-lint:
+lint: ensure-swift-format
     swift-format lint -r Sources/ Tests/

@@ -10,7 +10,7 @@ Status legend: `TODO` | `IN_PROGRESS` | `BLOCKED` | `DONE`
 |---|---|---|---|---|---|
 | HUG-AUD-001 | P1 | Correctness | DONE | Fix editor open/save race causing rename test flake/failure. | `EditorStateRenameTests.autoRenameUsesSlugFrontmatterWhenEnabled` passes consistently. |
 | HUG-AUD-002 | P1 | CI | DONE | Add regular CI workflow for PRs/pushes (build + tests + lint). | PRs run automated checks without requiring release tags. |
-| HUG-AUD-003 | P2 | Tooling | TODO | Ensure lint tool availability in CI and local docs (`swift-format` install/use). | `just lint` works in CI and documented local setup. |
+| HUG-AUD-003 | P2 | Tooling | DONE | Ensure lint tool availability in CI and local docs (`swift-format` install/use). | `just lint` works in CI and documented local setup. |
 
 ## Phase 1 - Security Hardening
 

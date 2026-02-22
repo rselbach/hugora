@@ -37,6 +37,14 @@ swift run Hugora
 just bundle
 ```
 
+## Development Tooling
+
+`just lint` and `just fmt` require [`swift-format`](https://github.com/swiftlang/swift-format).
+
+```bash
+brew install swift-format
+```
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
