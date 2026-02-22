@@ -53,6 +53,7 @@ final class EditorState: ObservableObject {
         return f
     }()
     private var entityMappings: [HTMLEntityMapping] = []
+    private var openRevision: UInt64 = 0
 
     /// The display title of the current item, or placeholder if none selected.
     var title: String {
@@ -70,7 +71,15 @@ final class EditorState: ObservableObject {
     /// - Note: Saves the current item if dirty before opening the new one.
     func openItem(_ item: ContentItem) {
         saveCurrentIfDirty()
+        openRevision &+= 1
+        let capturedRevision = openRevision
         isLoading = true
+        currentItem = item
+        content = ""
+        entityMappings = []
+        isDirty = false
+        cursorPosition = 0
+        scrollPosition = 0
 
         Task(priority: .userInitiated) {
             do {
@@ -78,6 +87,10 @@ final class EditorState: ObservableObject {
                     try String(contentsOf: item.url, encoding: .utf8)
                 }.value
                 let decoded = HTMLEntityCodec.decode(rawContent)
+                guard self.openRevision == capturedRevision,
+                      self.currentItem?.url == item.url else {
+                    return
+                }
                 self.currentItem = item
                 self.content = decoded.decoded
                 self.entityMappings = decoded.mappings
@@ -87,6 +100,7 @@ final class EditorState: ObservableObject {
                 self.scrollPosition = 0
                 self.saveSession()
             } catch {
+                guard self.openRevision == capturedRevision else { return }
                 Self.logger.error("Failed to open file \(item.url.lastPathComponent): \(error.localizedDescription)")
                 self.isLoading = false
                 NSApp.presentError(error)
@@ -100,6 +114,11 @@ final class EditorState: ObservableObject {
     ///
     /// - Parameter newContent: The new content string.
     func updateContent(_ newContent: String) {
+        guard newContent != content else { return }
+        openRevision &+= 1
+        if isLoading {
+            isLoading = false
+        }
         updateEntityMappings(oldText: content, newText: newContent)
         content = newContent
         isDirty = true
