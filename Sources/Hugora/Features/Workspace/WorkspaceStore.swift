@@ -83,6 +83,7 @@ final class WorkspaceStore: ObservableObject {
     private var sectionWatchers: [String: DispatchSourceFileSystemObject] = [:]
     private var contentWatcherReloadTask: Task<Void, Never>?
     private var sectionRefreshTasks: [String: Task<Void, Never>] = [:]
+    private var lastSafetyWarning: String?
 
     /// The resolved URL of the Hugo content directory for the current workspace.
     ///
@@ -134,6 +135,7 @@ final class WorkspaceStore: ObservableObject {
     func openFolder(_ url: URL) {
         stopAccessingCurrentFolder()
         lastError = nil
+        lastSafetyWarning = nil
         isLoading = true
 
         guard validateHugoSite(at: url) else {
@@ -162,6 +164,7 @@ final class WorkspaceStore: ObservableObject {
     func openRecent(_ ref: WorkspaceRef) {
         stopAccessingCurrentFolder()
         lastError = nil
+        lastSafetyWarning = nil
         isLoading = true
 
         var isStale = false
@@ -210,6 +213,7 @@ final class WorkspaceStore: ObservableObject {
     /// config, and selection state.
     func closeWorkspace() {
         stopAccessingCurrentFolder()
+        lastSafetyWarning = nil
         sections = []
         hugoConfig = nil
         currentFolderURL = nil
@@ -430,16 +434,32 @@ final class WorkspaceStore: ObservableObject {
         hugoConfig = HugoConfig.load(from: siteURL)
         siteName = siteURL.lastPathComponent
 
-        guard let contentDir = contentDirectoryURL else {
+        guard let config = hugoConfig else {
             sections = []
             isLoading = false
             return
         }
 
+        let candidateContentDir = siteURL.appendingPathComponent(config.contentDir).standardizedFileURL
+        guard PathSafety.isSameOrDescendant(candidateContentDir, of: siteURL) else {
+            sections = []
+            isLoading = false
+            presentSafetyWarning(
+                title: "Blocked unsafe contentDir path",
+                detail: "Configured contentDir '\(config.contentDir)' escapes the workspace boundary and was ignored."
+            )
+            return
+        }
+        let contentDir = candidateContentDir
+
         let fm = FileManager.default
         guard fm.fileExists(atPath: contentDir.path) else {
             sections = []
             isLoading = false
+            presentSafetyWarning(
+                title: "Configured content directory not found",
+                detail: "Configured contentDir '\(config.contentDir)' does not exist in this workspace."
+            )
             return
         }
 
@@ -617,6 +637,23 @@ final class WorkspaceStore: ObservableObject {
         let alert = NSAlert()
         alert.messageText = "Cannot create new post"
         alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.runModal()
+    }
+
+    private func presentSafetyWarning(title: String, detail: String) {
+        let fingerprint = "\(title)|\(detail)"
+        guard fingerprint != lastSafetyWarning else { return }
+        lastSafetyWarning = fingerprint
+
+        guard NSApp != nil else {
+            Self.logger.error("\(title): \(detail)")
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = detail
         alert.alertStyle = .warning
         alert.runModal()
     }
