@@ -480,7 +480,16 @@ class EditorTextView: NSTextView {
         isPastingImage = true
         needsDisplay = true
 
-        let filename = generateImageFilename()
+        let outputFormat = ImagePasteFormat.current()
+        let namingStrategy = ImagePasteNamingStrategy.current()
+        let maxDimension = UserDefaults.standard.object(forKey: DefaultsKey.imagePasteMaxDimension) as? Double ?? 0
+        let jpegQuality = UserDefaults.standard.object(forKey: DefaultsKey.imagePasteJPEGQuality) as? Double ?? 0.85
+
+        let filename = generateImageFilename(
+            strategy: namingStrategy,
+            context: context,
+            fileExtension: outputFormat.fileExtension
+        )
         let location = ImagePasteLocation.current(siteURL: context.siteURL)
         let destination = imagePasteDestination(context: context, location: location, filename: filename)
         let insertionRange = selectedRange()
@@ -503,12 +512,16 @@ class EditorTextView: NSTextView {
                     withIntermediateDirectories: true
                 )
 
-                guard let bitmap = NSBitmapImageRep(data: tiffData),
-                      let pngData = bitmap.representation(using: .png, properties: [:]) else {
+                guard let encodedData = self?.encodeImageData(
+                    from: tiffData,
+                    format: outputFormat,
+                    maxDimension: maxDimension,
+                    jpegQuality: jpegQuality
+                ) else {
                     throw CocoaError(.fileWriteUnknown)
                 }
 
-                try pngData.write(to: destination.saveURL)
+                try encodedData.write(to: destination.saveURL)
 
                 DispatchQueue.main.async { [weak self] in
                     guard let self else { return }
@@ -557,11 +570,78 @@ class EditorTextView: NSTextView {
         ISO8601DateFormatter()
     }()
 
-    private func generateImageFilename() -> String {
+    private func generateImageFilename(
+        strategy: ImagePasteNamingStrategy,
+        context: ImageContext,
+        fileExtension: String
+    ) -> String {
         let timestamp = Self.imageTimestampFormatter.string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
             .replacingOccurrences(of: "+", with: "")
-        return "image-\(timestamp).png"
+        switch strategy {
+        case .timestamp:
+            return "image-\(timestamp).\(fileExtension)"
+        case .uuid:
+            return "image-\(UUID().uuidString.lowercased()).\(fileExtension)"
+        case .postSlugTimestamp:
+            let postSlug = context.postURL.deletingPathExtension().lastPathComponent
+            return "\(postSlug)-\(timestamp).\(fileExtension)"
+        }
+    }
+
+    private func encodeImageData(
+        from tiffData: Data,
+        format: ImagePasteFormat,
+        maxDimension: Double,
+        jpegQuality: Double
+    ) -> Data? {
+        guard let bitmap = NSBitmapImageRep(data: tiffData) else {
+            return nil
+        }
+
+        let scaledBitmap = scaledBitmapRep(bitmap, maxDimension: maxDimension) ?? bitmap
+        switch format {
+        case .png:
+            return scaledBitmap.representation(using: .png, properties: [:])
+        case .jpeg:
+            let quality = min(max(jpegQuality, 0.1), 1.0)
+            return scaledBitmap.representation(using: .jpeg, properties: [.compressionFactor: quality])
+        }
+    }
+
+    private func scaledBitmapRep(_ source: NSBitmapImageRep, maxDimension: Double) -> NSBitmapImageRep? {
+        guard maxDimension > 0 else { return source }
+
+        let sourceWidth = CGFloat(source.pixelsWide)
+        let sourceHeight = CGFloat(source.pixelsHigh)
+        let longestEdge = max(sourceWidth, sourceHeight)
+        guard longestEdge > CGFloat(maxDimension) else { return source }
+
+        let scale = CGFloat(maxDimension) / longestEdge
+        let targetSize = NSSize(
+            width: max(1, floor(sourceWidth * scale)),
+            height: max(1, floor(sourceHeight * scale))
+        )
+
+        let sourceImage = NSImage(size: NSSize(width: sourceWidth, height: sourceHeight))
+        sourceImage.addRepresentation(source)
+
+        let targetImage = NSImage(size: targetSize)
+        targetImage.lockFocus()
+        sourceImage.draw(
+            in: NSRect(origin: .zero, size: targetSize),
+            from: NSRect(origin: .zero, size: NSSize(width: sourceWidth, height: sourceHeight)),
+            operation: .copy,
+            fraction: 1.0
+        )
+        targetImage.unlockFocus()
+
+        guard let targetTIFF = targetImage.tiffRepresentation,
+              let targetBitmap = NSBitmapImageRep(data: targetTIFF) else {
+            return nil
+        }
+
+        return targetBitmap
     }
     
 }

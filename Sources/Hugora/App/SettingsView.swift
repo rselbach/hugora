@@ -73,6 +73,10 @@ struct EditorSettingsView: View {
     @AppStorage(DefaultsKey.autoPairEnabled) private var autoPairEnabled = true
     @AppStorage(DefaultsKey.newPostFormat) private var newPostFormat = ContentFormat.bundle.rawValue
     @AppStorage(DefaultsKey.imagePasteLocation) private var imagePasteLocation = ImagePasteLocation.pageFolder.rawValue
+    @AppStorage(DefaultsKey.imagePasteFormat) private var imagePasteFormat = ImagePasteFormat.png.rawValue
+    @AppStorage(DefaultsKey.imagePasteJPEGQuality) private var imagePasteJPEGQuality = 0.85
+    @AppStorage(DefaultsKey.imagePasteMaxDimension) private var imagePasteMaxDimension = 0.0
+    @AppStorage(DefaultsKey.imagePasteNamingStrategy) private var imagePasteNamingStrategy = ImagePasteNamingStrategy.timestamp.rawValue
 
     var body: some View {
         Form {
@@ -93,6 +97,34 @@ struct EditorSettingsView: View {
                 Picker("Paste destination", selection: $imagePasteLocation) {
                     ForEach(ImagePasteLocation.allCases) { location in
                         Text(location.displayName).tag(location.rawValue)
+                    }
+                }
+
+                Picker("Output format", selection: $imagePasteFormat) {
+                    ForEach(ImagePasteFormat.allCases) { format in
+                        Text(format.displayName).tag(format.rawValue)
+                    }
+                }
+
+                Picker("Filename strategy", selection: $imagePasteNamingStrategy) {
+                    ForEach(ImagePasteNamingStrategy.allCases) { strategy in
+                        Text(strategy.displayName).tag(strategy.rawValue)
+                    }
+                }
+
+                HStack {
+                    Text("Max dimension:")
+                    Slider(value: $imagePasteMaxDimension, in: 0...4096, step: 64)
+                    Text(imagePasteMaxDimension <= 0 ? "Off" : "\(Int(imagePasteMaxDimension))px")
+                        .frame(width: 70)
+                }
+
+                if imagePasteFormat == ImagePasteFormat.jpeg.rawValue {
+                    HStack {
+                        Text("JPEG quality:")
+                        Slider(value: $imagePasteJPEGQuality, in: 0.4...1.0, step: 0.05)
+                        Text(String(format: "%.2f", imagePasteJPEGQuality))
+                            .frame(width: 45)
                     }
                 }
             }
