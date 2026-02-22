@@ -113,6 +113,10 @@ struct EditorView: NSViewRepresentable {
         func attach(textView: EditorTextView) {
             self.textView = textView
             configureScrollObserver()
+            DispatchQueue.main.async { [weak self] in
+                self?.triggerStyling()
+                self?.reportScrollPosition()
+            }
         }
 
         private func configureScrollObserver() {
