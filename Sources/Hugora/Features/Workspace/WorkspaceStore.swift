@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import Combine
 import os
+import Darwin
 
 struct WorkspaceRef: Codable, Identifiable, Equatable {
     var id: String { path }
@@ -74,6 +75,10 @@ final class WorkspaceStore: ObservableObject {
     private static let defaultNewPostTitle = "New Post"
     private static let defaultNewPostSlug = "new-post"
     private let maxRecent = 10
+    private var contentDirectoryWatcher: DispatchSourceFileSystemObject?
+    private var sectionWatchers: [String: DispatchSourceFileSystemObject] = [:]
+    private var contentWatcherReloadTask: Task<Void, Never>?
+    private var sectionRefreshTasks: [String: Task<Void, Never>] = [:]
 
     /// The resolved URL of the Hugo content directory for the current workspace.
     ///
@@ -393,6 +398,7 @@ final class WorkspaceStore: ObservableObject {
 
         let loadedSections = WorkspaceContentScanner.collectContentSections(from: contentDir)
         sections = loadedSections.sorted()
+        configureContentWatchers(contentDir: contentDir)
         isLoading = false
     }
 
@@ -621,8 +627,140 @@ final class WorkspaceStore: ObservableObject {
     }
 
     private func stopAccessingCurrentFolder() {
+        stopWatchingContentChanges()
         securityScopedURL?.stopAccessingSecurityScopedResource()
         securityScopedURL = nil
+    }
+
+    private func configureContentWatchers(contentDir: URL) {
+        stopWatchingContentChanges()
+
+        configureContentDirectoryWatcher(contentDir: contentDir)
+
+        let watchedSections = sections.filter { $0.name != "(root)" }
+        for section in watchedSections {
+            configureSectionWatcher(section: section, contentDir: contentDir)
+        }
+    }
+
+    private func configureContentDirectoryWatcher(contentDir: URL) {
+        let fd = open(contentDir.path, O_EVTONLY)
+        guard fd >= 0 else {
+            Self.logger.error("Failed to watch content directory: \(contentDir.path)")
+            return
+        }
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .delete, .rename],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            self?.scheduleContentReload()
+        }
+        source.setCancelHandler {
+            close(fd)
+        }
+        source.resume()
+
+        contentDirectoryWatcher = source
+    }
+
+    private func configureSectionWatcher(section: ContentSection, contentDir: URL) {
+        let fd = open(section.url.path, O_EVTONLY)
+        guard fd >= 0 else {
+            Self.logger.error("Failed to watch section directory: \(section.url.path)")
+            return
+        }
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .delete, .rename],
+            queue: .main
+        )
+        let sectionName = section.name
+        let sectionURL = section.url
+        source.setEventHandler { [weak self] in
+            self?.scheduleSectionRefresh(sectionName: sectionName, sectionURL: sectionURL, contentDir: contentDir)
+        }
+        source.setCancelHandler {
+            close(fd)
+        }
+        source.resume()
+
+        sectionWatchers[sectionName] = source
+    }
+
+    private func scheduleContentReload() {
+        contentWatcherReloadTask?.cancel()
+        contentWatcherReloadTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard let self, let url = self.currentFolderURL else { return }
+            self.loadContent(from: url)
+        }
+    }
+
+    private func scheduleSectionRefresh(sectionName: String, sectionURL: URL, contentDir: URL) {
+        sectionRefreshTasks[sectionName]?.cancel()
+        sectionRefreshTasks[sectionName] = Task { @MainActor [weak self] in
+            defer { self?.sectionRefreshTasks.removeValue(forKey: sectionName) }
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard let self else { return }
+            guard self.currentFolderURL != nil else { return }
+            guard let currentContentDir = self.contentDirectoryURL else { return }
+            guard currentContentDir.standardizedFileURL == contentDir.standardizedFileURL else { return }
+
+            if !FileManager.default.fileExists(atPath: sectionURL.path) {
+                self.sections.removeAll { $0.name == sectionName }
+                return
+            }
+
+            let refreshedItems = WorkspaceContentScanner.collectSectionItems(
+                in: sectionURL,
+                sectionName: sectionName,
+                contentRoot: contentDir
+            )
+
+            if let idx = self.sections.firstIndex(where: { $0.name == sectionName }) {
+                self.sections[idx].items = refreshedItems
+            } else {
+                self.sections.append(ContentSection(name: sectionName, url: sectionURL, items: refreshedItems))
+                self.sections.sort()
+            }
+
+            let refreshedRootItems = WorkspaceContentScanner.collectRootItems(from: contentDir)
+            if let rootIdx = self.sections.firstIndex(where: { $0.name == "(root)" }) {
+                if refreshedRootItems.isEmpty {
+                    self.sections.remove(at: rootIdx)
+                } else {
+                    self.sections[rootIdx].items = refreshedRootItems
+                }
+            } else if !refreshedRootItems.isEmpty {
+                self.sections.append(ContentSection(name: "(root)", url: contentDir, items: refreshedRootItems))
+            }
+        }
+    }
+
+    private func stopWatchingContentChanges() {
+        contentWatcherReloadTask?.cancel()
+        contentWatcherReloadTask = nil
+
+        for task in sectionRefreshTasks.values {
+            task.cancel()
+        }
+        sectionRefreshTasks.removeAll()
+
+        if let watcher = contentDirectoryWatcher {
+            watcher.setEventHandler {}
+            watcher.cancel()
+        }
+        contentDirectoryWatcher = nil
+
+        for (_, watcher) in sectionWatchers {
+            watcher.setEventHandler {}
+            watcher.cancel()
+        }
+        sectionWatchers.removeAll()
     }
 
     private func openFolderWithoutBookmark(_ url: URL) {

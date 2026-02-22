@@ -35,11 +35,7 @@ enum WorkspaceContentScanner {
 
             if isDir {
                 let sectionName = itemURL.lastPathComponent
-                let items = collectItemsRecursively(
-                    in: itemURL,
-                    sectionName: sectionName,
-                    contentRoot: contentDir
-                ).sorted()
+                let items = collectSectionItems(in: itemURL, sectionName: sectionName, contentRoot: contentDir)
                 let section = ContentSection(name: sectionName, url: itemURL, items: items)
                 loadedSections.append(section)
             } else if ContentFile.isSupportedContentFile(itemURL) {
@@ -53,6 +49,23 @@ enum WorkspaceContentScanner {
         }
 
         return loadedSections
+    }
+
+    static func collectSectionItems(in sectionURL: URL, sectionName: String, contentRoot: URL) -> [ContentItem] {
+        collectItemsRecursively(in: sectionURL, sectionName: sectionName, contentRoot: contentRoot).sorted()
+    }
+
+    static func collectRootItems(from contentDir: URL) -> [ContentItem] {
+        listDirectoryEntries(at: contentDir)
+            .compactMap { entry -> ContentItem? in
+                let values = try? entry.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+                if values?.isDirectory == true || values?.isSymbolicLink == true {
+                    return nil
+                }
+                guard ContentFile.isSupportedContentFile(entry) else { return nil }
+                return makeContentItem(url: entry, format: .file, section: "(root)")
+            }
+            .sorted()
     }
 
     private static func collectItemsRecursively(

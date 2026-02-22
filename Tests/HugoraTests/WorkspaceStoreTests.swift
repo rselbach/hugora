@@ -874,6 +874,32 @@ struct WorkspaceStoreTests {
         #expect(section?.items.count == 1)
     }
 
+    @Test("External section changes update sidebar without manual refresh")
+    func externalSectionChangesAutoRefresh() async throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(sections: ["posts"])
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        store.openFolder(siteURL)
+        #expect(store.sections.first(where: { $0.name == "posts" })?.items.isEmpty == true)
+
+        let newFile = siteURL.appendingPathComponent("content/posts/abed-nadir.md")
+        try """
+        ---
+        title: "Abed Nadir's Meta Recap"
+        date: 2024-10-01
+        ---
+        Cool. Cool cool cool.
+        """.write(to: newFile, atomically: true, encoding: .utf8)
+
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        let section = store.sections.first { $0.name == "posts" }
+        #expect(section?.items.contains(where: { $0.slug == "abed-nadir" }) == true)
+    }
+
     // MARK: - openFile
 
     @Test("openFile sets selectedFileURL")
