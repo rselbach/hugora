@@ -1,6 +1,6 @@
 import Foundation
 
-enum ImagePasteLocation: String, CaseIterable, Identifiable {
+enum ImagePasteLocation: String, CaseIterable, Identifiable, Codable {
     case pageFolder
     case siteStatic
     case siteAssets
@@ -18,7 +18,10 @@ enum ImagePasteLocation: String, CaseIterable, Identifiable {
         }
     }
 
-    static func current() -> ImagePasteLocation {
+    static func current(siteURL: URL? = nil) -> ImagePasteLocation {
+        if let workspaceLocation = WorkspacePreferenceStore.preferences(for: siteURL).imagePasteLocation {
+            return workspaceLocation
+        }
         let raw = UserDefaults.standard.string(forKey: DefaultsKey.imagePasteLocation) ?? ImagePasteLocation.pageFolder.rawValue
         return ImagePasteLocation(rawValue: raw) ?? .pageFolder
     }

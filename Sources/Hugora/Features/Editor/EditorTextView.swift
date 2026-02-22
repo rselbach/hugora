@@ -481,7 +481,7 @@ class EditorTextView: NSTextView {
         needsDisplay = true
 
         let filename = generateImageFilename()
-        let location = ImagePasteLocation.current()
+        let location = ImagePasteLocation.current(siteURL: context.siteURL)
         let destination = imagePasteDestination(context: context, location: location, filename: filename)
         let insertionRange = selectedRange()
 

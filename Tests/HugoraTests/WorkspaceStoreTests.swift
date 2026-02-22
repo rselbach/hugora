@@ -68,6 +68,7 @@ struct WorkspaceStoreTests {
         "hugora.workspace.bookmark",
         "hugora.workspace.recent",
         "newPostFormat",
+        "hugora.workspace.preferences",
     ]
 
     /// Create a WorkspaceStore with a clean UserDefaults slate.
@@ -664,6 +665,74 @@ struct WorkspaceStoreTests {
             #expect(url.pathExtension == "md")
             #expect(url.lastPathComponent != "index.md")
         }
+    }
+
+    @Test("Workspace format preference overrides global default")
+    func workspaceFormatPreferenceOverridesGlobalDefault() async throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        UserDefaults.standard.set("bundle", forKey: "newPostFormat")
+
+        let siteURL = try makeTempHugoSite(sections: ["blog"])
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+        WorkspacePreferenceStore.setNewPostFormat(.file, for: siteURL)
+
+        store.openFolder(siteURL)
+        try await waitForAsyncScan()
+        store.createNewPost()
+        try await waitForAsyncScan()
+
+        let blogSection = store.sections.first { $0.name == "blog" }
+        #expect(blogSection?.items.first?.format == .file)
+    }
+
+    @Test("Workspace preferred section is used for new post creation")
+    func workspacePreferredSectionIsUsed() async throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(sections: ["blog", "docs"])
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+        WorkspacePreferenceStore.setPreferredSection("docs", for: siteURL)
+
+        store.openFolder(siteURL)
+        try await waitForAsyncScan()
+        store.createNewPost()
+        try await waitForAsyncScan()
+
+        let docsCount = store.sections.first(where: { $0.name == "docs" })?.items.count ?? 0
+        let blogCount = store.sections.first(where: { $0.name == "blog" })?.items.count ?? 0
+        #expect(docsCount == 1)
+        #expect(blogCount == 0)
+    }
+
+    @Test("Workspace image paste location overrides global setting")
+    func workspaceImagePasteLocationOverridesGlobalSetting() throws {
+        let defaults = UserDefaults.standard
+        let savedGlobalLocation = defaults.object(forKey: DefaultsKey.imagePasteLocation)
+        let savedWorkspacePrefs = defaults.object(forKey: DefaultsKey.workspacePreferences)
+        defer {
+            if let savedGlobalLocation {
+                defaults.set(savedGlobalLocation, forKey: DefaultsKey.imagePasteLocation)
+            } else {
+                defaults.removeObject(forKey: DefaultsKey.imagePasteLocation)
+            }
+
+            if let savedWorkspacePrefs {
+                defaults.set(savedWorkspacePrefs, forKey: DefaultsKey.workspacePreferences)
+            } else {
+                defaults.removeObject(forKey: DefaultsKey.workspacePreferences)
+            }
+        }
+
+        defaults.set(ImagePasteLocation.pageFolder.rawValue, forKey: DefaultsKey.imagePasteLocation)
+        let siteURL = URL(fileURLWithPath: "/tmp/greendale/site-\(UUID().uuidString)")
+
+        WorkspacePreferenceStore.setImagePasteLocation(.siteAssets, for: siteURL)
+        let location = ImagePasteLocation.current(siteURL: siteURL)
+
+        #expect(location == .siteAssets)
     }
 
     @Test("Creating multiple posts increments slug suffix")

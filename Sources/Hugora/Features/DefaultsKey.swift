@@ -11,4 +11,5 @@ enum DefaultsKey {
     static let sessionCurrentPost = "hugora.session.currentPost"
     static let workspaceBookmark = "hugora.workspace.bookmark"
     static let workspaceRecent = "hugora.workspace.recent"
+    static let workspacePreferences = "hugora.workspace.preferences"
 }

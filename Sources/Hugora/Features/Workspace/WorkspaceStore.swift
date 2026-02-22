@@ -271,6 +271,9 @@ final class WorkspaceStore: ObservableObject {
         let sectionDir = targetSection.url
         let config = hugoConfig ?? .default
         let contentCreator = hugoContentCreator
+        WorkspacePreferenceStore.setNewPostFormat(format, for: siteURL)
+        let preferredSectionName = targetSection.name == "(root)" ? nil : targetSection.name
+        WorkspacePreferenceStore.setPreferredSection(preferredSectionName, for: siteURL)
 
         let date = Date()
         let datePrefix = Self.newPostDateFormatter.string(from: date)
@@ -432,11 +435,19 @@ final class WorkspaceStore: ObservableObject {
     }
 
     private func preferredNewPostFormat() -> ContentFormat {
+        if let workspaceFormat = WorkspacePreferenceStore.preferences(for: currentFolderURL).newPostFormat {
+            return workspaceFormat
+        }
         let stored = UserDefaults.standard.string(forKey: DefaultsKey.newPostFormat) ?? ""
         return ContentFormat(rawValue: stored) ?? .bundle
     }
 
     private func resolveNewPostSection() -> ContentSection? {
+        if let preferredName = WorkspacePreferenceStore.preferences(for: currentFolderURL).preferredSection,
+           let preferred = sections.first(where: { $0.name == preferredName }) {
+            return preferred
+        }
+
         let preferredNames = ["blog", "posts"]
         if let preferred = sections.first(where: { preferredNames.contains($0.name.lowercased()) }) {
             return preferred
