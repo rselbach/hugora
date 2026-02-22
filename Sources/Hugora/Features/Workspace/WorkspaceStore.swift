@@ -125,8 +125,10 @@ final class WorkspaceStore: ObservableObject {
     func openFolder(_ url: URL) {
         stopAccessingCurrentFolder()
         lastError = nil
+        isLoading = true
 
         guard validateHugoSite(at: url) else {
+            isLoading = false
             lastError = .notHugoSite
             return
         }
@@ -151,6 +153,7 @@ final class WorkspaceStore: ObservableObject {
     func openRecent(_ ref: WorkspaceRef) {
         stopAccessingCurrentFolder()
         lastError = nil
+        isLoading = true
 
         var isStale = false
         let url: URL
@@ -164,11 +167,13 @@ final class WorkspaceStore: ObservableObject {
         } catch {
             Self.logger.error("Failed to resolve bookmark for recent workspace \(ref.path): \(error.localizedDescription)")
             removeFromRecent(ref)
+            isLoading = false
             return
         }
 
         guard validateHugoSite(at: url) else {
             removeFromRecent(ref)
+            isLoading = false
             lastError = .notHugoSite
             return
         }
@@ -201,6 +206,7 @@ final class WorkspaceStore: ObservableObject {
         currentFolderURL = nil
         siteName = nil
         lastError = nil
+        isLoading = false
         UserDefaults.standard.removeObject(forKey: DefaultsKey.workspaceBookmark)
     }
 
@@ -364,17 +370,20 @@ final class WorkspaceStore: ObservableObject {
     // MARK: - Content Loading
 
     private func loadContent(from siteURL: URL) {
+        isLoading = true
         hugoConfig = HugoConfig.load(from: siteURL)
         siteName = siteURL.lastPathComponent
 
         guard let contentDir = contentDirectoryURL else {
             sections = []
+            isLoading = false
             return
         }
 
         let fm = FileManager.default
         guard fm.fileExists(atPath: contentDir.path) else {
             sections = []
+            isLoading = false
             return
         }
 
@@ -658,6 +667,7 @@ final class WorkspaceStore: ObservableObject {
         if validateHugoSite(at: url) {
             loadContent(from: url)
         } else {
+            isLoading = false
             lastError = .notHugoSite
         }
     }

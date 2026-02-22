@@ -186,6 +186,7 @@ struct WorkspaceStoreTests {
 
         #expect(store.lastError == .notHugoSite)
         #expect(store.currentFolderURL == nil)
+        #expect(store.isLoading == false)
     }
 
     // MARK: - loadContent (tested via openFolder)
@@ -336,6 +337,7 @@ struct WorkspaceStoreTests {
 
         #expect(store.contentDirectoryURL == nil)
         #expect(store.sections.isEmpty)
+        #expect(store.isLoading == false)
     }
 
     @Test("Root-level markdown files appear in (root) section")
