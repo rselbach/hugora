@@ -48,7 +48,7 @@ Status legend: `TODO` | `IN_PROGRESS` | `BLOCKED` | `DONE`
 | HUG-AUD-023 | P2 | Performance | TODO | Async image loading/decode pipeline for rendered markdown images. | Scrolling/editing stays responsive with many images. |
 | HUG-AUD-024 | P2 | Performance | TODO | Async image paste encoding/writing with UI progress state. | Large paste operations no longer stall typing/UI. |
 | HUG-AUD-025 | P3 | Performance | DONE | Restrict scroll observer to current editor scroll view only. | Styling isn’t triggered by unrelated view scroll events. |
-| HUG-AUD-026 | P2 | Performance | TODO | Remove duplicate parse triggers (`forceReparse` + debounced pipeline overlap). | Parse workload per keystroke is reduced measurably. |
+| HUG-AUD-026 | P2 | Performance | DONE | Remove duplicate parse triggers (`forceReparse` + debounced pipeline overlap). | Parse workload per keystroke is reduced measurably. |
 | HUG-AUD-027 | P3 | Performance | TODO | Restyle only dirty/affected ranges on theme/prefs updates where safe. | Full-doc restyles are avoided for minor updates. |
 
 ## Phase 4 - Feature Improvements

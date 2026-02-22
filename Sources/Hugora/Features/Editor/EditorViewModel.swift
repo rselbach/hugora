@@ -15,6 +15,7 @@ final class EditorViewModel: ObservableObject {
     private let parseQueue = DispatchQueue(label: "com.hugora.parse", qos: .userInitiated)
     private weak var currentTextView: NSTextView?
     private var styleCache: StylePassCache?
+    private var skipNextAsyncParse = false
 
     /// Context for resolving image paths. Set when opening a post.
     @Published var imageContext: ImageContext?
@@ -70,7 +71,12 @@ final class EditorViewModel: ObservableObject {
         $text
             .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
             .sink { [weak self] newText in
-                self?.parseAsync(newText)
+                guard let self else { return }
+                if self.skipNextAsyncParse {
+                    self.skipNextAsyncParse = false
+                    return
+                }
+                self.parseAsync(newText)
             }
             .store(in: &cancellables)
     }
@@ -132,14 +138,17 @@ final class EditorViewModel: ObservableObject {
         currentDocument = Document(parsing: text, options: [.parseBlockDirectives, .parseSymbolLinks])
     }
 
-    func forceReparse() {
-        styleCache = nil
-        parseSync()
-    }
-
     func setText(_ newText: String) {
+        skipNextAsyncParse = true
         text = newText
         parseSync()
         forceRestyle()
+    }
+
+    func updateTextFromEditor(_ newText: String) {
+        skipNextAsyncParse = true
+        text = newText
+        styleCache = nil
+        parseSync()
     }
 }

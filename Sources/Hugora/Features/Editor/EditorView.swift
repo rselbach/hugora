@@ -159,9 +159,8 @@ struct EditorView: NSViewRepresentable {
             guard !textView.hasMarkedText() else { return }
             isUpdatingFromTextView = true
             text.wrappedValue = textView.string
-            viewModel.text = textView.string
+            viewModel.updateTextFromEditor(textView.string)
             isUpdatingFromTextView = false
-            viewModel.forceReparse()
             triggerStyling()
         }
 
