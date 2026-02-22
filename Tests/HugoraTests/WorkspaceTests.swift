@@ -283,6 +283,15 @@ struct WorkspaceErrorTests {
     }
 }
 
+@Suite("HugoContentCreatorError Tests")
+struct HugoContentCreatorErrorTests {
+    @Test("Executable not found error is user actionable")
+    func executableNotFoundErrorDescription() {
+        let error = HugoContentCreatorError.executableNotFound
+        #expect(error.localizedDescription.contains("HUGORA_HUGO_PATH"))
+    }
+}
+
 @Suite("HugoConfig Tests")
 struct HugoConfigTests {
     @Test("Default config values")
