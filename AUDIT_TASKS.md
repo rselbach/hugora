@@ -57,7 +57,7 @@ Status legend: `TODO` | `IN_PROGRESS` | `BLOCKED` | `DONE`
 |---|---|---|---|---|---|
 | HUG-AUD-028 | P2 | Feature | TODO | Add explicit section picker for new post creation. | User can choose target section before creating post. |
 | HUG-AUD-029 | P2 | Feature | DONE | Add auto-rename collision UX (prompt/resolve strategy). | Filename collisions are handled explicitly and safely. |
-| HUG-AUD-030 | P3 | Feature | TODO | Add searchable/filterable content list. | Users can quickly locate posts in large sites. |
+| HUG-AUD-030 | P3 | Feature | DONE | Add searchable/filterable content list. | Users can quickly locate posts in large sites. |
 | HUG-AUD-031 | P3 | Feature | TODO | Add per-workspace preferences (format, section, image paste location). | Settings can differ per site/workspace. |
 | HUG-AUD-032 | P3 | Feature | TODO | Add image paste options (resize/compression/naming strategy). | Image paste flow supports size/quality controls. |
 | HUG-AUD-033 | P3 | Feature | TODO | Add frontmatter template preview and validation during post creation. | Template issues are shown before file creation. |

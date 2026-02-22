@@ -2,10 +2,14 @@ import SwiftUI
 
 struct ContentListView: View {
     @EnvironmentObject private var workspaceStore: WorkspaceStore
+    @State private var searchText = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            if workspaceStore.currentFolderURL != nil {
+                searchField
+            }
             Divider()
             content
         }
@@ -68,16 +72,41 @@ struct ContentListView: View {
         .padding(.vertical, 8)
     }
 
+    private var searchField: some View {
+        TextField("Search posts", text: $searchText)
+            .textFieldStyle(.roundedBorder)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+    }
+
     private enum ViewState {
         case error(WorkspaceError)
         case sections
+        case noResults
         case emptyContent
         case noWorkspace
     }
 
+    private var filteredSections: [ContentSection] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return workspaceStore.sections }
+
+        return workspaceStore.sections.compactMap { section in
+            let filteredItems = section.items.filter { item in
+                item.title.lowercased().contains(query) || item.slug.lowercased().contains(query)
+            }
+            guard !filteredItems.isEmpty else { return nil }
+            return ContentSection(name: section.name, url: section.url, items: filteredItems)
+        }
+    }
+
     private var viewState: ViewState {
         if let error = workspaceStore.lastError { return .error(error) }
-        if !workspaceStore.sections.isEmpty { return .sections }
+        if !filteredSections.isEmpty { return .sections }
+        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !workspaceStore.sections.isEmpty {
+            return .noResults
+        }
         if workspaceStore.currentFolderURL != nil { return .emptyContent }
         return .noWorkspace
     }
@@ -89,6 +118,8 @@ struct ContentListView: View {
             errorState(error)
         case .sections:
             sectionList
+        case .noResults:
+            noResultsState
         case .emptyContent:
             emptyContentState
         case .noWorkspace:
@@ -103,12 +134,28 @@ struct ContentListView: View {
     private var sectionList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(workspaceStore.sections) { section in
+                ForEach(filteredSections) { section in
                     SectionGroup(section: section)
                 }
             }
             .padding(.vertical, 4)
         }
+    }
+
+    private var noResultsState: some View {
+        VStack(spacing: 10) {
+            Spacer()
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 28))
+                .foregroundStyle(.secondary)
+            Text("No matching posts")
+                .foregroundStyle(.secondary)
+            Text("Try a different title or slug")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private var emptyState: some View {
