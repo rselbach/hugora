@@ -281,6 +281,10 @@ final class EditorState: ObservableObject {
         }
 
         let url = URL(fileURLWithPath: path)
+        guard isSessionPathAllowed(url) else {
+            UserDefaults.standard.removeObject(forKey: DefaultsKey.sessionCurrentPost)
+            return
+        }
         let format: ContentFormat = ContentFile.isLeafBundleIndex(url) ? .bundle : .file
         let section = extractSectionFromPath(url)
 
@@ -300,6 +304,28 @@ final class EditorState: ObservableObject {
                     NSApp.presentError(error)
                 }
             }
+        }
+    }
+
+    private func isSessionPathAllowed(_ fileURL: URL) -> Bool {
+        guard let data = UserDefaults.standard.data(forKey: DefaultsKey.workspaceBookmark) else {
+            Self.logger.error("Session restore skipped: no workspace bookmark is available")
+            return false
+        }
+
+        var isStale = false
+        do {
+            let workspaceURL = try URL(
+                resolvingBookmarkData: data,
+                options: [.withSecurityScope],
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+            let standardizedFile = fileURL.standardizedFileURL
+            return PathSafety.isSameOrDescendant(standardizedFile, of: workspaceURL.standardizedFileURL)
+        } catch {
+            Self.logger.error("Session restore skipped: failed to resolve workspace bookmark: \(error.localizedDescription)")
+            return false
         }
     }
 
