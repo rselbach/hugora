@@ -56,7 +56,7 @@ struct NewPostBuilder {
     private func archetypeBaseURL() -> URL {
         let dir = config.archetypeDir
         let candidate = siteURL.appendingPathComponent(dir).standardizedFileURL
-        guard candidate.path.hasPrefix(siteURL.standardizedFileURL.path) else {
+        guard PathSafety.isSameOrDescendant(candidate, of: siteURL) else {
             return siteURL.appendingPathComponent("archetypes")
         }
         return candidate

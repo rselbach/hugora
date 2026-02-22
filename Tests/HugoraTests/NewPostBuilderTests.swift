@@ -112,4 +112,49 @@ struct NewPostBuilderTests {
         #expect(content.contains("title: \"Community Movie\""))
         #expect(content.contains("draft: true"))
     }
+
+    @Test("Escaped archetypeDir falls back to in-site archetypes directory")
+    func escapedArchetypeDirFallsBackToSafeDefault() throws {
+        let parent = FileManager.default.temporaryDirectory.appendingPathComponent("hugora-parent-\(UUID().uuidString)")
+        let siteDir = parent.appendingPathComponent("site")
+        let siblingDir = parent.appendingPathComponent("site2")
+        let fm = FileManager.default
+
+        try fm.createDirectory(at: siteDir, withIntermediateDirectories: true)
+        try fm.createDirectory(at: siblingDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: parent) }
+
+        // Safe fallback archetype inside the site.
+        let safeArchetypes = siteDir.appendingPathComponent("archetypes")
+        try fm.createDirectory(at: safeArchetypes, withIntermediateDirectories: true)
+        try """
+        ---
+        source: "safe"
+        title: "{{ .Title }}"
+        ---
+        """.write(to: safeArchetypes.appendingPathComponent("default.md"), atomically: true, encoding: .utf8)
+
+        // Escaped archetype dir should be ignored.
+        let escapedArchetypes = siblingDir.appendingPathComponent("archetypes")
+        try fm.createDirectory(at: escapedArchetypes, withIntermediateDirectories: true)
+        try """
+        ---
+        source: "escaped"
+        title: "{{ .Title }}"
+        ---
+        """.write(to: escapedArchetypes.appendingPathComponent("default.md"), atomically: true, encoding: .utf8)
+
+        let config = HugoConfig(contentDir: "content", archetypeDir: "../site2/archetypes", title: nil)
+        let builder = NewPostBuilder(siteURL: siteDir, config: config)
+        let content = builder.buildContent(
+            sectionName: "posts",
+            format: .file,
+            title: "Greendale News",
+            slug: "greendale-news",
+            date: Date(timeIntervalSince1970: 0)
+        )
+
+        #expect(content.contains("source: \"safe\""))
+        #expect(!content.contains("source: \"escaped\""))
+    }
 }
