@@ -35,7 +35,7 @@ Status legend: `TODO` | `IN_PROGRESS` | `BLOCKED` | `DONE`
 | HUG-AUD-015 | P2 | Product | DONE | Implement `autoSaveEnabled` behavior or remove the setting. | Setting has real effect and tests verify behavior. |
 | HUG-AUD-016 | P2 | Parsing | DONE | Replace fragile regex-based Hugo config parser with robust TOML/YAML/JSON parsing. | Real-world Hugo config variants parse reliably in tests. |
 | HUG-AUD-017 | P2 | Observability | DONE | Remove silent failures in metadata/frontmatter parse paths; log actionable details. | Failures include actionable logs without crashing UI. |
-| HUG-AUD-018 | P3 | Architecture | TODO | Split oversized files by responsibility (`WorkspaceStore`, `EditorView`, `MarkdownStyler`). | Core modules are smaller with focused responsibilities. |
+| HUG-AUD-018 | P3 | Architecture | DONE | Split oversized files by responsibility (`WorkspaceStore`, `EditorView`, `MarkdownStyler`). | Core modules are smaller with focused responsibilities. |
 | HUG-AUD-019 | P2 | Testing | TODO | Add regression tests for all audit fixes (security, race, loading, parser). | New tests fail before fixes and pass after fixes. |
 
 ## Phase 3 - Performance

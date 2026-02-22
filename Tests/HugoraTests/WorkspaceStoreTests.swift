@@ -12,7 +12,7 @@ import Testing
 // Community-themed test data because streets ahead.
 // ---------------------------------------------------------------------------
 
-@Suite("WorkspaceStore")
+@Suite("WorkspaceStore", .serialized)
 @MainActor
 struct WorkspaceStoreTests {
     private final class MockHugoContentCreator: HugoContentCreator {

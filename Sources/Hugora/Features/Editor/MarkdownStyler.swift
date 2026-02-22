@@ -11,65 +11,6 @@ private enum Constants {
     static let maxImageWidth: CGFloat = 600
 }
 
-// MARK: - Theme
-
-struct Theme {
-    struct HeadingStyle {
-        let font: NSFont
-        let color: NSColor
-    }
-
-    let baseFont: NSFont
-    let baseColor: NSColor
-    let headings: [HeadingStyle]  // Index 0 = h1, ... 5 = h6
-    let boldColor: NSColor
-    let italicColor: NSColor
-    let inlineCodeFont: NSFont
-    let inlineCodeColor: NSColor
-    let inlineCodeBackground: NSColor
-    let linkColor: NSColor
-    let blockquoteColor: NSColor
-    let blockquoteBorderColor: NSColor
-    let codeBlockFont: NSFont
-    let codeBlockColor: NSColor
-    let codeBlockBackground: NSColor
-    let tableFont: NSFont
-    let tableBackground: NSColor
-    let tableHeaderBackground: NSColor
-    let tableBorderColor: NSColor
-    let frontmatterFont: NSFont
-    let frontmatterColor: NSColor
-    let frontmatterBackground: NSColor
-    let frontmatterKeyColor: NSColor
-
-    func headingStyle(level: Int) -> HeadingStyle {
-        let index = max(0, min(level - 1, headings.count - 1))
-        return headings[index]
-    }
-}
-
-// MARK: - Custom Attribute Keys
-
-extension NSAttributedString.Key {
-    static let renderedImage = NSAttributedString.Key("com.hugora.renderedImage")
-    static let blockquoteInfo = NSAttributedString.Key("com.hugora.blockquoteInfo")
-}
-
-/// Information about a blockquote for custom border drawing
-struct BlockquoteInfo {
-    let nestingLevel: Int  // 1 = top-level, 2 = nested once, etc.
-    let borderColor: NSColor
-}
-
-/// Information about a rendered image for custom drawing
-struct RenderedImageInfo {
-    let image: NSImage
-    let altText: String
-    let originalSize: NSSize
-}
-
-// MARK: - MarkdownStyler
-
 struct MarkdownStyler {
     let theme: Theme
 
@@ -642,27 +583,5 @@ struct MarkdownStyler {
         let newSize = max(font.pointSize * scale, 1)
         guard let scaled = NSFont(descriptor: font.fontDescriptor, size: newSize) else { return font }
         return scaled
-    }
-}
-
-// MARK: - Editor Preferences
-
-private struct EditorPreferences {
-    let fontSize: CGFloat
-    let lineSpacing: CGFloat
-
-    static func current() -> EditorPreferences {
-        let defaults = UserDefaults.standard
-        let storedFontSize = defaults.object(forKey: DefaultsKey.editorFontSize) as? Double ?? 16
-        let storedLineSpacing = defaults.object(forKey: DefaultsKey.editorLineSpacing) as? Double ?? 1.4
-        return EditorPreferences(
-            fontSize: CGFloat(max(storedFontSize, 1)),
-            lineSpacing: CGFloat(max(storedLineSpacing, 1))
-        )
-    }
-
-    func fontScale(for theme: Theme) -> CGFloat {
-        let baseSize = max(theme.baseFont.pointSize, 1)
-        return fontSize / baseSize
     }
 }
