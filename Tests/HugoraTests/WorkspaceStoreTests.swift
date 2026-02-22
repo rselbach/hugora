@@ -241,6 +241,34 @@ struct WorkspaceStoreTests {
         #expect(pagesSection?.items.count == 1)
     }
 
+    @Test("Large frontmatter still loads title metadata")
+    func loadsTitleFromLargeFrontmatter() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let hugeDescription = String(repeating: "x", count: 20_000)
+        let siteURL = try makeTempHugoSite(
+            sections: ["posts"],
+            posts: [
+                (section: "posts", slug: "metadata-stress", content: """
+                ---
+                title: "Troy Barnes Metadata Stress Test"
+                description: "\(hugeDescription)"
+                date: 2024-01-15
+                ---
+                Troy and Abed audit in the morning!
+                """),
+            ]
+        )
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        store.openFolder(siteURL)
+
+        let postsSection = store.sections.first { $0.name == "posts" }
+        let item = postsSection?.items.first
+        #expect(item?.title == "Troy Barnes Metadata Stress Test")
+    }
+
     @Test("Loads bundle-format posts (index.md inside folder)")
     func loadsBundlePosts() throws {
         let (store, cleanup) = makeStore()

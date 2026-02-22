@@ -42,7 +42,7 @@ Status legend: `TODO` | `IN_PROGRESS` | `BLOCKED` | `DONE`
 
 | ID | Pri | Area | Status | Task | Done When |
 |---|---|---|---|---|---|
-| HUG-AUD-020 | P2 | Performance | TODO | Avoid full-file reads during list scan; parse minimal frontmatter window. | Large content trees load faster and with reduced IO. |
+| HUG-AUD-020 | P2 | Performance | DONE | Avoid full-file reads during list scan; parse minimal frontmatter window. | Large content trees load faster and with reduced IO. |
 | HUG-AUD-021 | P2 | Performance | TODO | Add incremental refresh/file watching instead of full recursive rescan each time. | External changes update sidebar without full reload. |
 | HUG-AUD-022 | P2 | Performance | TODO | Move Hugo CLI availability/create operations off main actor. | New post creation does not block UI thread. |
 | HUG-AUD-023 | P2 | Performance | TODO | Async image loading/decode pipeline for rendered markdown images. | Scrolling/editing stays responsive with many images. |
