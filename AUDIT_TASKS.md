@@ -61,5 +61,5 @@ Status legend: `TODO` | `IN_PROGRESS` | `BLOCKED` | `DONE`
 | HUG-AUD-031 | P3 | Feature | DONE | Add per-workspace preferences (format, section, image paste location). | Settings can differ per site/workspace. |
 | HUG-AUD-032 | P3 | Feature | DONE | Add image paste options (resize/compression/naming strategy). | Image paste flow supports size/quality controls. |
 | HUG-AUD-033 | P3 | Feature | DONE | Add frontmatter template preview and validation during post creation. | Template issues are shown before file creation. |
-| HUG-AUD-034 | P3 | Feature | TODO | Add Hugo command diagnostics panel (stdout/stderr details). | Errors are debuggable without generic alerts only. |
+| HUG-AUD-034 | P3 | Feature | DONE | Add Hugo command diagnostics panel (stdout/stderr details). | Errors are debuggable without generic alerts only. |
 | HUG-AUD-035 | P3 | Security UX | TODO | Add explicit UI warnings for blocked path escapes/config anomalies. | Users get clear warnings when unsafe paths are rejected. |

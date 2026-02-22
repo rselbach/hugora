@@ -359,7 +359,7 @@ final class WorkspaceStore: ObservableObject {
                 await MainActor.run {
                     guard let self else { return }
                     self.isLoading = false
-                    NSApp.presentError(error)
+                    self.presentHugoDiagnostics(for: error)
                 }
             }
         }
@@ -618,6 +618,35 @@ final class WorkspaceStore: ObservableObject {
         alert.messageText = "Cannot create new post"
         alert.informativeText = message
         alert.alertStyle = .warning
+        alert.runModal()
+    }
+
+    private func presentHugoDiagnostics(for error: Error) {
+        guard let hugoError = error as? HugoContentCreatorError else {
+            NSApp.presentError(error)
+            return
+        }
+
+        guard NSApp != nil else {
+            Self.logger.error("Hugo error: \(hugoError.debugDescription)")
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Hugo command diagnostics"
+        alert.informativeText = hugoError.errorDescription ?? "Hugo reported an unknown error."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 420, height: 180))
+        textView.string = hugoError.debugDescription
+        textView.isEditable = false
+        textView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 420, height: 180))
+        scrollView.documentView = textView
+        scrollView.hasVerticalScroller = true
+        alert.accessoryView = scrollView
         alert.runModal()
     }
 
