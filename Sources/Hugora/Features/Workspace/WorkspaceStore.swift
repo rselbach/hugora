@@ -313,6 +313,21 @@ final class WorkspaceStore: ObservableObject {
             siteURL: siteURL
         )
 
+        if let validationError = validateFrontmatterTemplate(frontmatter) {
+            isLoading = false
+            presentNewPostError(validationError)
+            return
+        }
+
+        guard confirmFrontmatterPreview(
+            frontmatter: frontmatter,
+            sectionName: targetSection.name,
+            format: format
+        ) else {
+            isLoading = false
+            return
+        }
+
         Task(priority: .userInitiated) { [weak self] in
             do {
                 let createdURL = try await Self.createNewPostFileInBackground(
@@ -552,6 +567,50 @@ final class WorkspaceStore: ObservableObject {
             slug: slug,
             date: date
         )
+    }
+
+    private func validateFrontmatterTemplate(_ template: String) -> String? {
+        guard detectFrontmatterBlock(in: template) != nil else {
+            return "Template is missing a valid front matter block."
+        }
+
+        if FrontmatterParser.value(forKey: "title", in: template) == nil {
+            return "Template front matter is missing a valid title."
+        }
+
+        if FrontmatterParser.date(forKey: "date", in: template) == nil {
+            return "Template front matter is missing a valid date."
+        }
+
+        return nil
+    }
+
+    private func confirmFrontmatterPreview(
+        frontmatter: String,
+        sectionName: String,
+        format: ContentFormat
+    ) -> Bool {
+        guard NSApp != nil else { return true }
+
+        let alert = NSAlert()
+        alert.messageText = "Review front matter template"
+        let target = sectionName == "(root)" ? "root content" : sectionName
+        alert.informativeText = "Section: \(target) • Format: \(format.displayName)"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Create")
+        alert.addButton(withTitle: "Cancel")
+
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 360, height: 180))
+        textView.string = frontmatter
+        textView.isEditable = false
+        textView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 360, height: 180))
+        scrollView.documentView = textView
+        scrollView.hasVerticalScroller = true
+        alert.accessoryView = scrollView
+
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     private func presentNewPostError(_ message: String) {
