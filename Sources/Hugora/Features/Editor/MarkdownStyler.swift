@@ -490,15 +490,8 @@ struct MarkdownStyler {
                 continue
             }
 
-            // Try to load image (from cache or file)
-            let image: NSImage?
-            if let cached = ImageCache.shared.image(for: imageURL) {
-                image = cached
-            } else {
-                image = loadLocalImage(from: imageURL)
-            }
-
-            guard let nsImage = image else {
+            guard let nsImage = ImageCache.shared.image(for: imageURL) else {
+                AsyncImageLoader.shared.load(imageURL)
                 fallbackToMarkdown(imageSpan, range: range, textStorage: textStorage, theme: theme, fontScale: fontScale, lineSpacing: lineSpacing)
                 continue
             }
@@ -551,16 +544,6 @@ struct MarkdownStyler {
             fontScale: fontScale,
             lineSpacing: lineSpacing
         )
-    }
-
-    /// Loads a local image file and caches it.
-    private func loadLocalImage(from url: URL) -> NSImage? {
-        guard FileManager.default.fileExists(atPath: url.path),
-              let image = NSImage(contentsOf: url) else {
-            return nil
-        }
-        ImageCache.shared.setImage(image, for: url)
-        return image
     }
 
     /// Derives font with added traits from existing font runs to handle nested markup.

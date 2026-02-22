@@ -632,6 +632,28 @@ struct SyntaxHidingTests {
 
 @Suite("Image Handling")
 struct ImageHandlingTests {
+    private func makeTempPNG() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hugora-image-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let imageURL = directory.appendingPathComponent("photo.png")
+        let image = NSImage(size: NSSize(width: 24, height: 24))
+        image.lockFocus()
+        NSColor.systemBlue.setFill()
+        NSBezierPath(rect: NSRect(x: 0, y: 0, width: 24, height: 24)).fill()
+        image.unlockFocus()
+
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+
+        try pngData.write(to: imageURL)
+        return imageURL
+    }
+
     @Test("Collects image spans with source and alt text")
     func testImageCollection() {
         let markdown = "![Alt text](image.png)"
@@ -684,6 +706,45 @@ struct ImageHandlingTests {
             return false
         }
         #expect(images.count == 2)
+    }
+
+    @Test("Image rendering defers decode to async loader")
+    func testAsyncImageLoadingPipeline() async throws {
+        ImageCache.shared.clear()
+        let imageURL = try makeTempPNG()
+        defer { try? FileManager.default.removeItem(at: imageURL.deletingLastPathComponent()) }
+
+        let postURL = imageURL.deletingLastPathComponent().appendingPathComponent("index.md")
+        try "---\ntitle: \"Test\"\n---\n".write(to: postURL, atomically: true, encoding: .utf8)
+
+        let markdown = "![Alt](photo.png)"
+        let textStorage = NSTextStorage(string: markdown)
+        let document = Document(parsing: markdown)
+        let context = ImageContext(postURL: postURL, siteURL: imageURL.deletingLastPathComponent())
+        let styler = MarkdownStyler(theme: .defaultLight)
+        let visibleRange = NSRange(location: 0, length: textStorage.length)
+
+        _ = styler.style(
+            text: markdown,
+            document: document,
+            textStorage: textStorage,
+            visibleRange: visibleRange,
+            cursorPosition: markdown.utf16.count + 1,
+            imageContext: context
+        )
+        #expect(textStorage.attribute(.renderedImage, at: 0, effectiveRange: nil) == nil)
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        _ = styler.style(
+            text: markdown,
+            document: document,
+            textStorage: textStorage,
+            visibleRange: visibleRange,
+            cursorPosition: markdown.utf16.count + 1,
+            imageContext: context
+        )
+        #expect(textStorage.attribute(.renderedImage, at: 0, effectiveRange: nil) != nil)
     }
     
     @Test("Image context resolves relative path")

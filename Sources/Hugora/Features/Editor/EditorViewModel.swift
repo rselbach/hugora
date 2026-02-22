@@ -30,6 +30,7 @@ final class EditorViewModel: ObservableObject {
         setupPipeline()
         observeThemeChanges()
         observeEditorPreferences()
+        observeImageLoads()
     }
 
     private func observeThemeChanges() {
@@ -56,6 +57,15 @@ final class EditorViewModel: ObservableObject {
                     cachedLineSpacing = currentLineSpacing
                     forceRestyle()
                 }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func observeImageLoads() {
+        NotificationCenter.default.publisher(for: .asyncImageLoaderDidLoad)
+            .debounce(for: .milliseconds(50), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.forceRestyle()
             }
             .store(in: &cancellables)
     }
