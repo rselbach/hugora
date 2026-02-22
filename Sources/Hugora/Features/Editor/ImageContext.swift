@@ -55,11 +55,10 @@ struct ImageContext {
 
     private func sanitizedLocalURL(_ url: URL) -> URL? {
         let standardized = url.standardizedFileURL
-        let sitePath = siteURL.standardizedFileURL.path
-        let postPath = postURL.deletingLastPathComponent().standardizedFileURL.path
-        let candidatePath = standardized.path
+        let postDirectory = postURL.deletingLastPathComponent()
 
-        guard candidatePath.hasPrefix(sitePath) || candidatePath.hasPrefix(postPath) else {
+        guard PathSafety.isSameOrDescendant(standardized, of: siteURL)
+                || PathSafety.isSameOrDescendant(standardized, of: postDirectory) else {
             return nil
         }
 

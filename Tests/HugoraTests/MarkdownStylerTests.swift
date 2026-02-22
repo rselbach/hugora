@@ -745,6 +745,18 @@ struct ImageHandlingTests {
         let resolved = context.resolveImagePath("assets/human-being.png")
         #expect(resolved?.path == "/tmp/greendale/site/assets/human-being.png")
     }
+
+    @Test("Image context rejects relative escape into prefix-like sibling path")
+    func testRelativeEscapeToPrefixSiblingRejected() {
+        let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/post.md")
+        let siteURL = URL(fileURLWithPath: "/tmp/greendale/site")
+        let context = ImageContext(postURL: postURL, siteURL: siteURL)
+
+        // Without boundary-safe checks this normalizes to /tmp/greendale/site2/secret.png
+        // and can be incorrectly accepted via plain string prefix checks.
+        let resolved = context.resolveImagePath("../../../site2/secret.png")
+        #expect(resolved == nil)
+    }
     
     @Test("Image syntax hidden when cursor outside")
     func testImageSyntaxHidden() {

@@ -16,10 +16,10 @@ Status legend: `TODO` | `IN_PROGRESS` | `BLOCKED` | `DONE`
 
 | ID | Pri | Area | Status | Task | Done When |
 |---|---|---|---|---|---|
-| HUG-AUD-004 | P1 | Security | IN_PROGRESS | Replace string `hasPrefix` path checks with boundary-safe path containment helper. | Paths like `/site2` no longer pass checks for `/site`. |
+| HUG-AUD-004 | P1 | Security | DONE | Replace string `hasPrefix` path checks with boundary-safe path containment helper. | Paths like `/site2` no longer pass checks for `/site`. |
 | HUG-AUD-005 | P1 | Security | DONE | Apply boundary-safe path helper in workspace content dir resolution. | Escaped `contentDir` values cannot break workspace boundaries. |
 | HUG-AUD-006 | P1 | Security | DONE | Apply boundary-safe path helper in archetype resolution. | Escaped `archetypeDir` values are rejected safely. |
-| HUG-AUD-007 | P1 | Security | TODO | Apply boundary-safe path helper in image path sanitization. | Malicious relative image paths cannot escape post/site roots. |
+| HUG-AUD-007 | P1 | Security | DONE | Apply boundary-safe path helper in image path sanitization. | Malicious relative image paths cannot escape post/site roots. |
 | HUG-AUD-008 | P1 | Security | TODO | Avoid symlink traversal escapes while scanning content tree. | Symlinks outside workspace are skipped and logged. |
 | HUG-AUD-009 | P2 | Security | TODO | Resolve `hugo` executable path safely (avoid blind PATH lookup in production flow). | Executed binary path is validated and deterministic. |
 | HUG-AUD-010 | P2 | Security | TODO | Harden CLI installer uninstall/install checks (only replace owned/safe target). | Installer refuses to remove unrelated `/usr/local/bin/hugora` targets. |
