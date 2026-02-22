@@ -413,6 +413,46 @@ struct WorkspaceStoreTests {
         #expect(blogSection?.items.contains(where: { $0.slug == "deep-dive" }) == true)
     }
 
+    @Test("Skips symlinked directories while scanning content")
+    func skipsSymlinkedDirectories() async throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let parent = FileManager.default.temporaryDirectory.appendingPathComponent("hugora-parent-\(UUID().uuidString)")
+        let siteDir = parent.appendingPathComponent("site")
+        let outsideDir = parent.appendingPathComponent("outside")
+        let fm = FileManager.default
+
+        try fm.createDirectory(at: siteDir, withIntermediateDirectories: true)
+        try fm.createDirectory(at: outsideDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: parent) }
+
+        try """
+        title = "Greendale"
+        """.write(to: siteDir.appendingPathComponent("hugo.toml"), atomically: true, encoding: .utf8)
+
+        let postsDir = siteDir.appendingPathComponent("content/posts")
+        try fm.createDirectory(at: postsDir, withIntermediateDirectories: true)
+
+        let outsideFile = outsideDir.appendingPathComponent("secret.md")
+        try """
+        ---
+        title: "Secret"
+        ---
+        Not in this workspace.
+        """.write(to: outsideFile, atomically: true, encoding: .utf8)
+
+        let symlinkURL = postsDir.appendingPathComponent("linked")
+        try fm.createSymbolicLink(at: symlinkURL, withDestinationURL: outsideDir)
+
+        store.openFolder(siteDir)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        let postsSection = store.sections.first { $0.name == "posts" }
+        #expect(postsSection != nil)
+        #expect(postsSection?.items.isEmpty == true)
+    }
+
     @Test("Recognizes .markdown files as content")
     func loadsMarkdownExtensionFiles() throws {
         let (store, cleanup) = makeStore()

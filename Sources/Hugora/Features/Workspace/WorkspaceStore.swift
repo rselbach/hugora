@@ -395,9 +395,12 @@ final class WorkspaceStore: ObservableObject {
         for itemURL in sectionDirs {
             let resourceValues: URLResourceValues
             do {
-                resourceValues = try itemURL.resourceValues(forKeys: [.isDirectoryKey])
+                resourceValues = try itemURL.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
             } catch {
                 logger.error("Failed to read resource values for \(itemURL.lastPathComponent): \(error.localizedDescription)")
+                continue
+            }
+            if resourceValues.isSymbolicLink == true {
                 continue
             }
             guard let isDir = resourceValues.isDirectory else {
@@ -406,7 +409,7 @@ final class WorkspaceStore: ObservableObject {
 
             if isDir {
                 let sectionName = itemURL.lastPathComponent
-                let items = collectItemsRecursively(in: itemURL, sectionName: sectionName).sorted()
+                let items = collectItemsRecursively(in: itemURL, sectionName: sectionName, contentRoot: contentDir).sorted()
                 let section = ContentSection(name: sectionName, url: itemURL, items: items)
                 loadedSections.append(section)
             } else if ContentFile.isSupportedContentFile(itemURL) {
@@ -557,10 +560,10 @@ final class WorkspaceStore: ObservableObject {
         return createdURL
     }
 
-    private static func collectItemsRecursively(in directoryURL: URL, sectionName: String) -> [ContentItem] {
+    private static func collectItemsRecursively(in directoryURL: URL, sectionName: String, contentRoot: URL) -> [ContentItem] {
         let entries = listDirectoryEntries(at: directoryURL)
 
-        if let leafIndex = preferredLeafBundleIndex(in: entries) {
+        if let leafIndex = preferredLeafBundleIndex(in: entries, contentRoot: contentRoot) {
             // Leaf bundle: index.* is the page, descendants are page resources.
             return [ContentItem(url: leafIndex, format: .bundle, section: sectionName)]
         }
@@ -569,19 +572,26 @@ final class WorkspaceStore: ObservableObject {
         for entry in entries {
             let values: URLResourceValues
             do {
-                values = try entry.resourceValues(forKeys: [.isDirectoryKey])
+                values = try entry.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
             } catch {
                 logger.error("Failed to read resource values for \(entry.lastPathComponent): \(error.localizedDescription)")
+                continue
+            }
+            if values.isSymbolicLink == true {
                 continue
             }
 
             guard let isDirectory = values.isDirectory else { continue }
 
             if isDirectory {
-                items.append(contentsOf: collectItemsRecursively(in: entry, sectionName: sectionName))
+                let resolved = entry.resolvingSymlinksInPath().standardizedFileURL
+                guard PathSafety.isSameOrDescendant(resolved, of: contentRoot) else { continue }
+                items.append(contentsOf: collectItemsRecursively(in: entry, sectionName: sectionName, contentRoot: contentRoot))
                 continue
             }
 
+            let resolved = entry.resolvingSymlinksInPath().standardizedFileURL
+            guard PathSafety.isSameOrDescendant(resolved, of: contentRoot) else { continue }
             guard ContentFile.isSupportedContentFile(entry) else { continue }
             items.append(ContentItem(url: entry, format: .file, section: sectionName))
         }
@@ -589,9 +599,17 @@ final class WorkspaceStore: ObservableObject {
         return items
     }
 
-    private static func preferredLeafBundleIndex(in entries: [URL]) -> URL? {
+    private static func preferredLeafBundleIndex(in entries: [URL], contentRoot: URL) -> URL? {
         entries.first { entry in
-            ContentFile.isSupportedContentFile(entry) && ContentFile.isLeafBundleIndex(entry)
+            guard ContentFile.isSupportedContentFile(entry) && ContentFile.isLeafBundleIndex(entry) else {
+                return false
+            }
+            guard let values = try? entry.resourceValues(forKeys: [.isSymbolicLinkKey]),
+                  values.isSymbolicLink != true else {
+                return false
+            }
+            let resolved = entry.resolvingSymlinksInPath().standardizedFileURL
+            return PathSafety.isSameOrDescendant(resolved, of: contentRoot)
         }
     }
 
