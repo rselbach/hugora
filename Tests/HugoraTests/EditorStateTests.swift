@@ -6,6 +6,7 @@ import Testing
 struct EditorStateTests {
     // All UserDefaults keys touched by EditorState tests.
     private static let touchedKeys = [
+        "autoSaveEnabled",
         "autoRenameOnSave",
         "hugora.session.currentPost",
         "hugora.workspace.bookmark",
@@ -155,6 +156,60 @@ struct EditorStateTests {
             try await Task.sleep(nanoseconds: 100_000_000)
 
             #expect(state.currentItem?.url.standardizedFileURL.path == fileURL.standardizedFileURL.path)
+        }
+    }
+
+    @Test("Auto-save writes changes when enabled")
+    @MainActor
+    func autoSavePersistsWhenEnabled() async throws {
+        try await withCleanDefaults {
+            let defaults = UserDefaults.standard
+            defaults.set(true, forKey: "autoSaveEnabled")
+            defaults.set(false, forKey: "autoRenameOnSave")
+
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempDir) }
+
+            let fileURL = tempDir.appendingPathComponent("post.md")
+            try "old".write(to: fileURL, atomically: true, encoding: .utf8)
+
+            let state = EditorState()
+            state.openItem(ContentItem(url: fileURL, format: .file, section: "blog"))
+            state.updateContent("new")
+
+            try await Task.sleep(nanoseconds: 1_200_000_000)
+            let stored = try String(contentsOf: fileURL, encoding: .utf8)
+
+            #expect(stored == "new")
+            #expect(state.isDirty == false)
+        }
+    }
+
+    @Test("Auto-save does not persist changes when disabled")
+    @MainActor
+    func autoSaveDoesNotPersistWhenDisabled() async throws {
+        try await withCleanDefaults {
+            let defaults = UserDefaults.standard
+            defaults.set(false, forKey: "autoSaveEnabled")
+            defaults.set(false, forKey: "autoRenameOnSave")
+
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempDir) }
+
+            let fileURL = tempDir.appendingPathComponent("post.md")
+            try "old".write(to: fileURL, atomically: true, encoding: .utf8)
+
+            let state = EditorState()
+            state.openItem(ContentItem(url: fileURL, format: .file, section: "blog"))
+            state.updateContent("new")
+
+            try await Task.sleep(nanoseconds: 1_200_000_000)
+            let stored = try String(contentsOf: fileURL, encoding: .utf8)
+
+            #expect(stored == "old")
+            #expect(state.isDirty == true)
         }
     }
 }

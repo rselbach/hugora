@@ -54,6 +54,7 @@ final class EditorState: ObservableObject {
     }()
     private var entityMappings: [HTMLEntityMapping] = []
     private var openRevision: UInt64 = 0
+    private var autoSaveTask: Task<Void, Never>?
 
     /// The display title of the current item, or placeholder if none selected.
     var title: String {
@@ -71,6 +72,8 @@ final class EditorState: ObservableObject {
     /// - Note: Saves the current item if dirty before opening the new one.
     func openItem(_ item: ContentItem) {
         saveCurrentIfDirty()
+        autoSaveTask?.cancel()
+        autoSaveTask = nil
         openRevision &+= 1
         let capturedRevision = openRevision
         isLoading = true
@@ -122,6 +125,7 @@ final class EditorState: ObservableObject {
         updateEntityMappings(oldText: content, newText: newContent)
         content = newContent
         isDirty = true
+        scheduleAutoSaveIfNeeded()
     }
 
     /// Saves the current content to disk.
@@ -133,6 +137,8 @@ final class EditorState: ObservableObject {
     /// - Note: No-op if no item is loaded or content is not dirty.
     func save() {
         guard let item = currentItem, isDirty else { return }
+        autoSaveTask?.cancel()
+        autoSaveTask = nil
         isLoading = true
         do {
             let encodedContent = HTMLEntityCodec.encode(content, mappings: entityMappings)
@@ -255,6 +261,25 @@ final class EditorState: ObservableObject {
         return Self.datePrefixFormatter.string(from: Date())
     }
 
+    private func scheduleAutoSaveIfNeeded() {
+        guard autoSaveEnabled else {
+            autoSaveTask?.cancel()
+            autoSaveTask = nil
+            return
+        }
+
+        autoSaveTask?.cancel()
+        autoSaveTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 1_000_000_000)
+            } catch {
+                return
+            }
+            guard let self, !Task.isCancelled, self.isDirty else { return }
+            self.save()
+        }
+    }
+
     /// Saves the current item if it has unsaved changes.
     ///
     /// Convenience method for saving before opening another file or closing.
@@ -346,6 +371,10 @@ final class EditorState: ObservableObject {
 }
 
 private extension EditorState {
+    var autoSaveEnabled: Bool {
+        UserDefaults.standard.object(forKey: DefaultsKey.autoSaveEnabled) as? Bool ?? true
+    }
+
     var autoRenameOnSave: Bool {
         UserDefaults.standard.object(forKey: DefaultsKey.autoRenameOnSave) as? Bool ?? false
     }
