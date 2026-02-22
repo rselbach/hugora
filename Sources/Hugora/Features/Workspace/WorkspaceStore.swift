@@ -82,7 +82,7 @@ final class WorkspaceStore: ObservableObject {
     var contentDirectoryURL: URL? {
         guard let folder = currentFolderURL, let config = hugoConfig else { return nil }
         let candidate = folder.appendingPathComponent(config.contentDir).standardizedFileURL
-        guard candidate.path.hasPrefix(folder.standardizedFileURL.path) else { return nil }
+        guard PathSafety.isSameOrDescendant(candidate, of: folder) else { return nil }
         return candidate
     }
 

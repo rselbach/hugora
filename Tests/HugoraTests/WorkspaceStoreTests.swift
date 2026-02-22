@@ -312,6 +312,32 @@ struct WorkspaceStoreTests {
         #expect(store.hugoConfig?.title == "Human Beings Unite")
     }
 
+    @Test("Rejects contentDir that escapes workspace using prefix-like sibling path")
+    func rejectsEscapedContentDirWithPrefixSibling() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let parentDir = FileManager.default.temporaryDirectory.appendingPathComponent("hugora-parent-\(UUID().uuidString)")
+        let siteDir = parentDir.appendingPathComponent("site")
+        let siblingDir = parentDir.appendingPathComponent("site2")
+        let siblingContentDir = siblingDir.appendingPathComponent("content")
+        let fm = FileManager.default
+
+        try fm.createDirectory(at: siteDir, withIntermediateDirectories: true)
+        try fm.createDirectory(at: siblingContentDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: parentDir) }
+
+        try """
+        title = "Greendale"
+        contentDir = "../site2/content"
+        """.write(to: siteDir.appendingPathComponent("hugo.toml"), atomically: true, encoding: .utf8)
+
+        store.openFolder(siteDir)
+
+        #expect(store.contentDirectoryURL == nil)
+        #expect(store.sections.isEmpty)
+    }
+
     @Test("Root-level markdown files appear in (root) section")
     func rootLevelMarkdownFiles() throws {
         let (store, cleanup) = makeStore()
