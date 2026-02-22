@@ -29,6 +29,7 @@ struct EditorStateTests {
     func autoRenameDisabledKeepsOriginalPath() async throws {
         try await withCleanDefaults {
             let defaults = UserDefaults.standard
+            defaults.set(false, forKey: "autoSaveEnabled")
             defaults.set(false, forKey: "autoRenameOnSave")
 
             let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -72,6 +73,7 @@ struct EditorStateTests {
     func autoRenameUsesSlugFrontmatterWhenEnabled() async throws {
         try await withCleanDefaults {
             let defaults = UserDefaults.standard
+            defaults.set(false, forKey: "autoSaveEnabled")
             defaults.set(true, forKey: "autoRenameOnSave")
 
             let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -106,6 +108,57 @@ struct EditorStateTests {
             let renamedURL = tempDir.appendingPathComponent("2024-06-20-human-being.md")
             #expect(FileManager.default.fileExists(atPath: renamedURL.path))
             #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+        }
+    }
+
+    @Test("Auto-rename fails when target path already exists")
+    @MainActor
+    func autoRenameCollisionLeavesOriginalFileUntouched() async throws {
+        try await withCleanDefaults {
+            let defaults = UserDefaults.standard
+            defaults.set(false, forKey: "autoSaveEnabled")
+            defaults.set(true, forKey: "autoRenameOnSave")
+
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempDir) }
+
+            let originalURL = tempDir.appendingPathComponent("2024-01-01-old-post.md")
+            try """
+            ---
+            title: "Old Post"
+            date: 2024-01-01
+            ---
+            Original
+            """.write(to: originalURL, atomically: true, encoding: .utf8)
+
+            let collisionURL = tempDir.appendingPathComponent("2024-06-20-human-being.md")
+            try """
+            ---
+            title: "Existing"
+            date: 2024-06-20
+            ---
+            Existing
+            """.write(to: collisionURL, atomically: true, encoding: .utf8)
+
+            let state = EditorState()
+            state.openItem(ContentItem(url: originalURL, format: .file, section: "blog"))
+            state.updateContent("""
+            ---
+            title: "Annie Edison"
+            slug: "human-being"
+            date: 2024-06-20
+            ---
+            Updated content
+            """)
+            state.save()
+
+            #expect(FileManager.default.fileExists(atPath: originalURL.path))
+            #expect(FileManager.default.fileExists(atPath: collisionURL.path))
+
+            let collisionContent = try String(contentsOf: collisionURL, encoding: .utf8)
+            #expect(collisionContent.contains("Existing"))
+            #expect(state.isDirty == true)
         }
     }
 

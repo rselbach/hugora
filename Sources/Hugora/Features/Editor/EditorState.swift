@@ -5,11 +5,14 @@ import os
 
 enum EditorStateError: LocalizedError {
     case utf8EncodingFailed
+    case renameTargetAlreadyExists(String)
 
     var errorDescription: String? {
         switch self {
         case .utf8EncodingFailed:
             "Failed to encode document content as UTF-8."
+        case .renameTargetAlreadyExists(let path):
+            "Cannot rename because a file already exists at \(path)."
         }
     }
 }
@@ -106,7 +109,7 @@ final class EditorState: ObservableObject {
                 guard self.openRevision == capturedRevision else { return }
                 Self.logger.error("Failed to open file \(item.url.lastPathComponent): \(error.localizedDescription)")
                 self.isLoading = false
-                NSApp.presentError(error)
+                Self.presentError(error)
             }
         }
     }
@@ -161,7 +164,7 @@ final class EditorState: ObservableObject {
         } catch {
             Self.logger.error("Failed to save file \(item.url.lastPathComponent): \(error.localizedDescription)")
             isLoading = false
-            NSApp.presentError(error)
+            Self.presentError(error)
         }
     }
 
@@ -195,10 +198,11 @@ final class EditorState: ObservableObject {
                 let parentDir = currentFolder.deletingLastPathComponent()
                 let newFolder = parentDir.appendingPathComponent(expectedName)
                 
-                if !fm.fileExists(atPath: newFolder.path) {
-                    try fm.moveItem(at: currentFolder, to: newFolder)
-                    finalURL = newFolder.appendingPathComponent("index.md")
+                if fm.fileExists(atPath: newFolder.path) {
+                    throw EditorStateError.renameTargetAlreadyExists(newFolder.path)
                 }
+                try fm.moveItem(at: currentFolder, to: newFolder)
+                finalURL = newFolder.appendingPathComponent("index.md")
             }
             
         case .file:
@@ -208,10 +212,11 @@ final class EditorState: ObservableObject {
                 let parentDir = item.url.deletingLastPathComponent()
                 let newFile = parentDir.appendingPathComponent("\(expectedName).md")
                 
-                if !fm.fileExists(atPath: newFile.path) {
-                    try fm.moveItem(at: item.url, to: newFile)
-                    finalURL = newFile
+                if fm.fileExists(atPath: newFile.path) {
+                    throw EditorStateError.renameTargetAlreadyExists(newFile.path)
                 }
+                try fm.moveItem(at: item.url, to: newFile)
+                finalURL = newFile
             }
         }
 
@@ -326,10 +331,18 @@ final class EditorState: ObservableObject {
             } catch {
                 Self.logger.error("Failed to restore session file \(url.lastPathComponent): \(error.localizedDescription)")
                 Task { @MainActor in
-                    NSApp.presentError(error)
+                    Self.presentError(error)
                 }
             }
         }
+    }
+
+    private static func presentError(_ error: Error) {
+        guard NSApp != nil else {
+            logger.error("Unable to present error (NSApp unavailable): \(error.localizedDescription)")
+            return
+        }
+        NSApp.presentError(error)
     }
 
     private func isSessionPathAllowed(_ fileURL: URL) -> Bool {
