@@ -18,6 +18,7 @@ struct EditorView: NSViewRepresentable {
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = false
+        scrollView.contentView.postsBoundsChangedNotifications = true
 
         let textView = EditorTextView()
         textView.delegate = context.coordinator
@@ -41,7 +42,7 @@ struct EditorView: NSViewRepresentable {
 
         scrollView.documentView = textView
 
-        context.coordinator.textView = textView
+        context.coordinator.attach(textView: textView)
         context.coordinator.onCursorChange = onCursorChange
         context.coordinator.onScrollChange = onScrollChange
         textView.imageContext = viewModel.imageContext
@@ -101,7 +102,6 @@ struct EditorView: NSViewRepresentable {
             self.text = text
             self.viewModel = viewModel
             super.init()
-            setupScrollObserver()
             setupStylingPipeline()
         }
 
@@ -111,10 +111,21 @@ struct EditorView: NSViewRepresentable {
             }
         }
 
-        private func setupScrollObserver() {
+        func attach(textView: EditorTextView) {
+            self.textView = textView
+            configureScrollObserver()
+        }
+
+        private func configureScrollObserver() {
+            if let observer = scrollObserver {
+                NotificationCenter.default.removeObserver(observer)
+                scrollObserver = nil
+            }
+
+            guard let clipView = textView?.enclosingScrollView?.contentView else { return }
             scrollObserver = NotificationCenter.default.addObserver(
                 forName: NSView.boundsDidChangeNotification,
-                object: nil,
+                object: clipView,
                 queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
