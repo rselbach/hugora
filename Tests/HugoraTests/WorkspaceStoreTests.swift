@@ -287,6 +287,26 @@ struct WorkspaceStoreTests {
         #expect(store.sections.isEmpty)
     }
 
+    @Test("Missing configured content directory clears loading state")
+    func missingConfiguredContentDirectoryClearsLoadingState() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(
+            configContent: """
+            title = "Greendale Community College Blog"
+            contentDir = "missing-content"
+            """
+        )
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        store.openFolder(siteURL)
+
+        #expect(store.sections.isEmpty)
+        #expect(store.isLoading == false)
+        #expect(store.lastError == nil)
+    }
+
     @Test("Site name is set from directory name")
     func siteNameFromDirectory() throws {
         let (store, cleanup) = makeStore()
