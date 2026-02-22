@@ -24,8 +24,8 @@ Status legend: `TODO` | `IN_PROGRESS` | `BLOCKED` | `DONE`
 | HUG-AUD-009 | P2 | Security | DONE | Resolve `hugo` executable path safely (avoid blind PATH lookup in production flow). | Executed binary path is validated and deterministic. |
 | HUG-AUD-010 | P2 | Security | DONE | Harden CLI installer uninstall/install checks (only replace owned/safe target). | Installer refuses to remove unrelated `/usr/local/bin/hugora` targets. |
 | HUG-AUD-011 | P2 | Security | DONE | Scope session file restore to current workspace/bookmark access. | App does not open arbitrary stale paths from `UserDefaults`. |
-| HUG-AUD-012 | P1 | Supply Chain | TODO | Pin GitHub Actions to commit SHAs. | Release workflow references immutable action revisions. |
-| HUG-AUD-013 | P1 | Supply Chain | TODO | Verify Sparkle archive integrity before extraction (checksum/signature). | Workflow fails fast on unexpected Sparkle artifact hash. |
+| HUG-AUD-012 | P1 | Supply Chain | DONE | Pin GitHub Actions to commit SHAs. | Release workflow references immutable action revisions. |
+| HUG-AUD-013 | P1 | Supply Chain | DONE | Verify Sparkle archive integrity before extraction (checksum/signature). | Workflow fails fast on unexpected Sparkle artifact hash. |
 
 ## Phase 2 - Maintenance and Reliability
 

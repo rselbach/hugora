@@ -21,7 +21,7 @@ jobs:
     
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
       - name: Select Xcode 16
         run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
@@ -165,7 +165,10 @@ jobs:
 
       - name: Download Sparkle tools
         run: |
-          curl -L -o /tmp/Sparkle.tar.xz "https://github.com/sparkle-project/Sparkle/releases/download/2.8.1/Sparkle-2.8.1.tar.xz"
+          SPARKLE_URL="https://github.com/sparkle-project/Sparkle/releases/download/2.8.1/Sparkle-2.8.1.tar.xz"
+          SPARKLE_SHA256="5cddb7695674ef7704268f38eccaee80e3accbf19e61c1689efff5b6116d85be"
+          curl -L -o /tmp/Sparkle.tar.xz "${SPARKLE_URL}"
+          echo "${SPARKLE_SHA256}  /tmp/Sparkle.tar.xz" | shasum -a 256 -c -
           mkdir -p /tmp/sparkle
           tar -xf /tmp/Sparkle.tar.xz -C /tmp/sparkle
 
@@ -212,19 +215,19 @@ jobs:
           printf '%s\n' '</rss>' >> _site/appcast.xml
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
         with:
           path: _site
 
       - name: Upload DMG artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: Hugora-${{ steps.version.outputs.version }}
           path: .build/dmg/Hugora-${{ steps.version.outputs.version }}.dmg
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
         with:
           files: .build/dmg/Hugora-${{ steps.version.outputs.version }}.dmg
           generate_release_notes: true
@@ -244,4 +247,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e
