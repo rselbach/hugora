@@ -678,6 +678,7 @@ struct WorkspaceStoreTests {
         try await waitForAsyncScan()
 
         store.createNewPost()
+        try await waitForAsyncScan()
         store.createNewPost()
         try await waitForAsyncScan()
 
@@ -691,7 +692,7 @@ struct WorkspaceStoreTests {
     }
 
     @Test("Selected file is set after creating new post")
-    func selectedFileSetAfterCreate() throws {
+    func selectedFileSetAfterCreate() async throws {
         let (store, cleanup) = makeStore()
         defer { cleanup() }
 
@@ -702,6 +703,7 @@ struct WorkspaceStoreTests {
 
         #expect(store.selectedFileURL == nil)
         store.createNewPost()
+        try await waitForAsyncScan()
         #expect(store.selectedFileURL != nil)
     }
 

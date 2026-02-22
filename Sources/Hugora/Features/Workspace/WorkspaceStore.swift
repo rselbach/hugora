@@ -32,6 +32,10 @@ enum WorkspaceError: LocalizedError {
 /// workspaces. Delegates Hugo CLI interaction via ``HugoContentCreator``.
 @MainActor
 final class WorkspaceStore: ObservableObject {
+    private struct UnsafeContentCreatorBox: @unchecked Sendable {
+        let value: any HugoContentCreator
+    }
+
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
         category: "WorkspaceStore"
@@ -246,6 +250,8 @@ final class WorkspaceStore: ObservableObject {
     ///
     /// - Note: The new post is automatically opened after creation.
     func createNewPost() {
+        guard !isLoading else { return }
+
         guard let siteURL = currentFolderURL else {
             presentNewPostError("No Hugo site is open.")
             return
@@ -264,6 +270,7 @@ final class WorkspaceStore: ObservableObject {
         let format = preferredNewPostFormat()
         let sectionDir = targetSection.url
         let config = hugoConfig ?? .default
+        let contentCreator = hugoContentCreator
 
         let date = Date()
         let datePrefix = Self.newPostDateFormatter.string(from: date)
@@ -295,26 +302,48 @@ final class WorkspaceStore: ObservableObject {
             expectedFileURL = sectionDir.appendingPathComponent("\(folderName).md")
         }
 
-        do {
-            let createdURL = try createNewPostFile(
-                siteURL: siteURL,
-                config: config,
-                sectionName: targetSection.name,
-                sectionDir: sectionDir,
-                format: format,
-                folderName: folderName,
-                expectedFileURL: expectedFileURL,
-                date: date,
-                slug: slug
-            )
-            loadContent(from: siteURL)
-            let finalURL = resolveCreatedURLAfterRefresh(createdURL: createdURL, fallbackURL: expectedFileURL)
-            selectedFileURL = finalURL
-            onOpenFile?(finalURL)
-            isLoading = false
-        } catch {
-            isLoading = false
-            NSApp.presentError(error)
+        let frontmatter = newPostContent(
+            sectionName: targetSection.name,
+            format: format,
+            slug: slug,
+            date: date,
+            siteURL: siteURL
+        )
+
+        Task(priority: .userInitiated) { [weak self] in
+            do {
+                let createdURL = try await Self.createNewPostFileInBackground(
+                    contentCreator: contentCreator,
+                    siteURL: siteURL,
+                    config: config,
+                    sectionName: targetSection.name,
+                    sectionDir: sectionDir,
+                    format: format,
+                    folderName: folderName,
+                    expectedFileURL: expectedFileURL,
+                    frontmatter: frontmatter
+                )
+
+                await MainActor.run {
+                    guard let self else { return }
+                    guard self.currentFolderURL?.standardizedFileURL == siteURL.standardizedFileURL else {
+                        self.isLoading = false
+                        return
+                    }
+
+                    self.loadContent(from: siteURL)
+                    let finalURL = self.resolveCreatedURLAfterRefresh(createdURL: createdURL, fallbackURL: expectedFileURL)
+                    self.selectedFileURL = finalURL
+                    self.onOpenFile?(finalURL)
+                    self.isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    guard let self else { return }
+                    self.isLoading = false
+                    NSApp.presentError(error)
+                }
+            }
         }
     }
 
@@ -522,7 +551,8 @@ final class WorkspaceStore: ObservableObject {
         alert.runModal()
     }
 
-    private func createNewPostFile(
+    private nonisolated static func createNewPostFileInBackground(
+        contentCreator: any HugoContentCreator,
         siteURL: URL,
         config: HugoConfig,
         sectionName: String,
@@ -530,31 +560,56 @@ final class WorkspaceStore: ObservableObject {
         format: ContentFormat,
         folderName: String,
         expectedFileURL: URL,
-        date: Date,
-        slug: String
+        frontmatter: String
+    ) async throws -> URL {
+        let contentCreatorBox = UnsafeContentCreatorBox(value: contentCreator)
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let createdURL = try createNewPostFileSync(
+                        contentCreator: contentCreatorBox.value,
+                        siteURL: siteURL,
+                        config: config,
+                        sectionName: sectionName,
+                        sectionDir: sectionDir,
+                        format: format,
+                        folderName: folderName,
+                        expectedFileURL: expectedFileURL,
+                        frontmatter: frontmatter
+                    )
+                    continuation.resume(returning: createdURL)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    private nonisolated static func createNewPostFileSync(
+        contentCreator: any HugoContentCreator,
+        siteURL: URL,
+        config: HugoConfig,
+        sectionName: String,
+        sectionDir: URL,
+        format: ContentFormat,
+        folderName: String,
+        expectedFileURL: URL,
+        frontmatter: String
     ) throws -> URL {
-        if hugoContentCreator.isAvailable(at: siteURL) {
-            let relativePath = newPostRelativePath(
+        if contentCreator.isAvailable(at: siteURL) {
+            let relativePath = Self.newPostRelativePath(
                 sectionName: sectionName,
                 format: format,
                 folderName: folderName
             )
             let kind = sectionName == "(root)" ? nil : sectionName
-            return try hugoContentCreator.createNewContent(
+            return try contentCreator.createNewContent(
                 siteURL: siteURL,
                 contentDir: config.contentDir,
                 relativePath: relativePath,
                 kind: kind
             )
         }
-
-        let frontmatter = newPostContent(
-            sectionName: sectionName,
-            format: format,
-            slug: slug,
-            date: date,
-            siteURL: siteURL
-        )
 
         if format == .bundle {
             let folderURL = sectionDir.appendingPathComponent(folderName)
@@ -565,7 +620,7 @@ final class WorkspaceStore: ObservableObject {
         return expectedFileURL
     }
 
-    private func newPostRelativePath(
+    private nonisolated static func newPostRelativePath(
         sectionName: String,
         format: ContentFormat,
         folderName: String
