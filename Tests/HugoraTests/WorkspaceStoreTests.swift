@@ -132,6 +132,10 @@ struct WorkspaceStoreTests {
         return base
     }
 
+    private func waitForAsyncScan() async throws {
+        try await Task.sleep(nanoseconds: 80_000_000)
+    }
+
     // MARK: - validateHugoSite (tested via openFolder)
 
     @Test("Accepts Hugo site with hugo.toml", arguments: [
@@ -509,7 +513,7 @@ struct WorkspaceStoreTests {
     // MARK: - createNewPost
 
     @Test("Creates a new post in the preferred section")
-    func createsNewPost() throws {
+    func createsNewPost() async throws {
         let (store, cleanup) = makeStore()
         defer { cleanup() }
 
@@ -517,6 +521,7 @@ struct WorkspaceStoreTests {
         defer { try? FileManager.default.removeItem(at: siteURL) }
 
         store.openFolder(siteURL)
+        try await waitForAsyncScan()
         #expect(store.lastError == nil)
 
         // posts is a preferred section name, so createNewPost should target it
@@ -524,6 +529,7 @@ struct WorkspaceStoreTests {
         let countBefore = sectionBefore?.items.count ?? 0
 
         store.createNewPost()
+        try await waitForAsyncScan()
 
         let sectionAfter = store.sections.first { $0.name == "posts" }
         #expect(sectionAfter != nil)
@@ -541,7 +547,7 @@ struct WorkspaceStoreTests {
     }
 
     @Test("createNewPost uses Hugo CLI creator when available")
-    func createNewPostUsesHugoCreator() throws {
+    func createNewPostUsesHugoCreator() async throws {
         let mockCreator = MockHugoContentCreator(available: true)
         let (store, cleanup) = makeStore(hugoContentCreator: mockCreator)
         defer { cleanup() }
@@ -550,7 +556,9 @@ struct WorkspaceStoreTests {
         defer { try? FileManager.default.removeItem(at: siteURL) }
 
         store.openFolder(siteURL)
+        try await waitForAsyncScan()
         store.createNewPost()
+        try await waitForAsyncScan()
 
         #expect(mockCreator.calls.count == 1)
         let call = mockCreator.calls[0]
@@ -563,7 +571,7 @@ struct WorkspaceStoreTests {
     }
 
     @Test("New post uses bundle format by default")
-    func newPostBundleFormatDefault() throws {
+    func newPostBundleFormatDefault() async throws {
         let (store, cleanup) = makeStore()
         defer { cleanup() }
 
@@ -574,7 +582,9 @@ struct WorkspaceStoreTests {
         defer { try? FileManager.default.removeItem(at: siteURL) }
 
         store.openFolder(siteURL)
+        try await waitForAsyncScan()
         store.createNewPost()
+        try await waitForAsyncScan()
 
         let blogSection = store.sections.first { $0.name == "blog" }
         let newItem = blogSection?.items.first
@@ -585,7 +595,7 @@ struct WorkspaceStoreTests {
     }
 
     @Test("New post uses file format when preference set")
-    func newPostFileFormat() throws {
+    func newPostFileFormat() async throws {
         let (store, cleanup) = makeStore()
         defer { cleanup() }
 
@@ -595,7 +605,9 @@ struct WorkspaceStoreTests {
         defer { try? FileManager.default.removeItem(at: siteURL) }
 
         store.openFolder(siteURL)
+        try await waitForAsyncScan()
         store.createNewPost()
+        try await waitForAsyncScan()
 
         let blogSection = store.sections.first { $0.name == "blog" }
         let newItem = blogSection?.items.first
@@ -607,7 +619,7 @@ struct WorkspaceStoreTests {
     }
 
     @Test("Creating multiple posts increments slug suffix")
-    func multiplePostsIncrementSlug() throws {
+    func multiplePostsIncrementSlug() async throws {
         let (store, cleanup) = makeStore()
         defer { cleanup() }
 
@@ -615,9 +627,11 @@ struct WorkspaceStoreTests {
         defer { try? FileManager.default.removeItem(at: siteURL) }
 
         store.openFolder(siteURL)
+        try await waitForAsyncScan()
 
         store.createNewPost()
         store.createNewPost()
+        try await waitForAsyncScan()
 
         let section = store.sections.first { $0.name == "posts" }
         #expect((section?.items.count ?? 0) == 2)

@@ -246,8 +246,12 @@ final class WorkspaceStore: ObservableObject {
             return
         }
 
-        guard let targetSection = resolveNewPostSection() else {
+        let sectionCandidates = newPostSectionCandidates()
+        guard !sectionCandidates.isEmpty else {
             presentNewPostError("No content section found. Add a section folder under your Hugo content directory.")
+            return
+        }
+        guard let targetSection = pickSectionForNewPost(from: sectionCandidates) else {
             return
         }
 
@@ -459,6 +463,73 @@ final class WorkspaceStore: ObservableObject {
         }
 
         return nil
+    }
+
+    private func newPostSectionCandidates() -> [ContentSection] {
+        var candidates = sections.filter { $0.name != "(root)" }
+        if let root = sections.first(where: { $0.name == "(root)" }) {
+            candidates.append(root)
+        }
+
+        if candidates.isEmpty, let contentDir = contentDirectoryURL {
+            if let entries = try? FileManager.default.contentsOfDirectory(
+                at: contentDir,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ) {
+                for entry in entries {
+                    guard let values = try? entry.resourceValues(forKeys: [.isDirectoryKey]),
+                          values.isDirectory == true else {
+                        continue
+                    }
+                    candidates.append(ContentSection(name: entry.lastPathComponent, url: entry, items: []))
+                }
+                candidates.sort()
+            }
+
+            if candidates.isEmpty {
+                candidates.append(ContentSection(name: "(root)", url: contentDir, items: []))
+            }
+        }
+
+        return candidates
+    }
+
+    private func pickSectionForNewPost(from candidates: [ContentSection]) -> ContentSection? {
+        guard !candidates.isEmpty else { return nil }
+        guard candidates.count > 1 else { return candidates[0] }
+
+        // In tests/headless mode, skip UI and pick the current preferred section.
+        guard NSApp != nil else {
+            return resolveNewPostSection() ?? candidates[0]
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Choose section for new post"
+        alert.informativeText = "Select where the new post should be created."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Create")
+        alert.addButton(withTitle: "Cancel")
+
+        let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 280, height: 26), pullsDown: false)
+        for section in candidates {
+            popup.addItem(withTitle: sectionOptionTitle(section))
+        }
+        if let preferred = resolveNewPostSection(),
+           let preferredIdx = candidates.firstIndex(where: { $0.name == preferred.name }) {
+            popup.selectItem(at: preferredIdx)
+        }
+        alert.accessoryView = popup
+
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            return nil
+        }
+        let selectedIdx = max(0, popup.indexOfSelectedItem)
+        return candidates[selectedIdx]
+    }
+
+    private func sectionOptionTitle(_ section: ContentSection) -> String {
+        section.name == "(root)" ? "Root" : section.displayName
     }
 
     private func newPostContent(
