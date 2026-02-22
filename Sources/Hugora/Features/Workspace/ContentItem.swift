@@ -36,6 +36,11 @@ enum ContentFile {
 }
 
 enum FrontmatterParser {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
+        category: "FrontmatterParser"
+    )
+
     static func value(forKey key: String, in content: String) -> String? {
         guard let value = rawValue(forKey: key, in: content) else { return nil }
 
@@ -127,6 +132,7 @@ enum FrontmatterParser {
         do {
             return try Yams.load(yaml: payload) as? [String: Any]
         } catch {
+            logger.error("Failed to parse YAML frontmatter: \(error.localizedDescription)")
             return nil
         }
     }
@@ -137,6 +143,7 @@ enum FrontmatterParser {
             let jsonString = table.convert(to: .json)
             return parseJSONFrontmatter(jsonString)
         } catch {
+            logger.error("Failed to parse TOML frontmatter: \(error.localizedDescription)")
             return nil
         }
     }
@@ -147,6 +154,7 @@ enum FrontmatterParser {
         do {
             return try JSONSerialization.jsonObject(with: data) as? [String: Any]
         } catch {
+            logger.error("Failed to parse JSON frontmatter: \(error.localizedDescription)")
             return nil
         }
     }
@@ -220,7 +228,13 @@ struct ContentItem: Identifiable, Equatable, Comparable {
             self.slug = url.deletingPathExtension().lastPathComponent
         }
 
-        let content = try? String(contentsOf: url, encoding: .utf8)
+        let content: String?
+        do {
+            content = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            Self.logger.error("Failed to read content item \(url.lastPathComponent): \(error.localizedDescription)")
+            content = nil
+        }
         self.title = content.flatMap { FrontmatterParser.value(forKey: "title", in: $0) } ?? slug
         self.date = content.flatMap { Self.parseDate(from: $0) }
     }
