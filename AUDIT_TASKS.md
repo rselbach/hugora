@@ -22,7 +22,7 @@ Status legend: `TODO` | `IN_PROGRESS` | `BLOCKED` | `DONE`
 | HUG-AUD-007 | P1 | Security | DONE | Apply boundary-safe path helper in image path sanitization. | Malicious relative image paths cannot escape post/site roots. |
 | HUG-AUD-008 | P1 | Security | DONE | Avoid symlink traversal escapes while scanning content tree. | Symlinks outside workspace are skipped and logged. |
 | HUG-AUD-009 | P2 | Security | DONE | Resolve `hugo` executable path safely (avoid blind PATH lookup in production flow). | Executed binary path is validated and deterministic. |
-| HUG-AUD-010 | P2 | Security | TODO | Harden CLI installer uninstall/install checks (only replace owned/safe target). | Installer refuses to remove unrelated `/usr/local/bin/hugora` targets. |
+| HUG-AUD-010 | P2 | Security | DONE | Harden CLI installer uninstall/install checks (only replace owned/safe target). | Installer refuses to remove unrelated `/usr/local/bin/hugora` targets. |
 | HUG-AUD-011 | P2 | Security | TODO | Scope session file restore to current workspace/bookmark access. | App does not open arbitrary stale paths from `UserDefaults`. |
 | HUG-AUD-012 | P1 | Supply Chain | TODO | Pin GitHub Actions to commit SHAs. | Release workflow references immutable action revisions. |
 | HUG-AUD-013 | P1 | Supply Chain | TODO | Verify Sparkle archive integrity before extraction (checksum/signature). | Workflow fails fast on unexpected Sparkle artifact hash. |

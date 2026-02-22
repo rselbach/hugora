@@ -8,6 +8,14 @@ enum CLIInstaller {
         category: "CLIInstaller"
     )
     static let installPath = "/usr/local/bin/hugora"
+    private static let managedCLISuffix = "/Hugora.app/Contents/MacOS/hugora-cli"
+
+    private enum InstallPathState {
+        case missing
+        case managedSymlink
+        case unmanagedSymlink(destination: String)
+        case occupied
+    }
 
     static var bundledCLIURL: URL? {
         Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("hugora-cli")
@@ -61,6 +69,14 @@ enum CLIInstaller {
             return
         }
 
+        switch installPathState(currentBundledPath: bundledURL.path) {
+        case .missing, .managedSymlink:
+            break
+        case .unmanagedSymlink, .occupied:
+            completion(.failure(CLIInstallerError.installPathInUse(installPath)))
+            return
+        }
+
         // Try without auth first
         if canInstallWithoutAuth {
             do {
@@ -77,12 +93,18 @@ enum CLIInstaller {
     }
 
     static func uninstall(completion: @escaping (Result<Void, Error>) -> Void) {
-        let fm = FileManager.default
-
-        guard fm.fileExists(atPath: installPath) else {
+        switch installPathState(currentBundledPath: bundledCLIURL?.path) {
+        case .missing:
             completion(.success(()))
             return
+        case .managedSymlink:
+            break
+        case .unmanagedSymlink, .occupied:
+            completion(.failure(CLIInstallerError.notManagedInstall(installPath)))
+            return
         }
+
+        let fm = FileManager.default
 
         // Try without auth first
         if fm.isDeletableFile(atPath: installPath) {
@@ -108,9 +130,13 @@ enum CLIInstaller {
             try fm.createDirectory(atPath: binDir, withIntermediateDirectories: true)
         }
 
-        // Remove existing file/symlink if present
-        if fm.fileExists(atPath: installPath) {
+        switch installPathState(currentBundledPath: source) {
+        case .missing:
+            break
+        case .managedSymlink:
             try fm.removeItem(atPath: installPath)
+        case .unmanagedSymlink, .occupied:
+            throw CLIInstallerError.installPathInUse(installPath)
         }
 
         // Create symlink
@@ -189,10 +215,36 @@ enum CLIInstaller {
     private static func escapeShellPath(_ path: String) -> String {
         path.replacingOccurrences(of: "'", with: "'\\''")
     }
+
+    private static func installPathState(currentBundledPath: String?) -> InstallPathState {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: installPath) else {
+            return .missing
+        }
+
+        do {
+            let destination = try fm.destinationOfSymbolicLink(atPath: installPath)
+            if isManagedDestination(destination, currentBundledPath: currentBundledPath) {
+                return .managedSymlink
+            }
+            return .unmanagedSymlink(destination: destination)
+        } catch {
+            return .occupied
+        }
+    }
+
+    private static func isManagedDestination(_ destination: String, currentBundledPath: String?) -> Bool {
+        if let currentBundledPath, destination == currentBundledPath {
+            return true
+        }
+        return destination.hasSuffix(managedCLISuffix)
+    }
 }
 
 enum CLIInstallerError: LocalizedError {
     case cliNotBundled
+    case installPathInUse(String)
+    case notManagedInstall(String)
     case userCancelled
     case scriptFailed(String)
 
@@ -200,6 +252,10 @@ enum CLIInstallerError: LocalizedError {
         switch self {
         case .cliNotBundled:
             "The command line tool is not bundled with this version of Hugora."
+        case .installPathInUse(let path):
+            "Cannot install because \(path) is already in use by another tool."
+        case .notManagedInstall(let path):
+            "Cannot uninstall because \(path) is not managed by Hugora."
         case .userCancelled:
             "Installation was cancelled."
         case .scriptFailed(let message):
