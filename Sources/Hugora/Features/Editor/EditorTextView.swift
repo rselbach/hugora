@@ -1,5 +1,4 @@
 import AppKit
-import os
 
 class EditorTextView: NSTextView {
     private var fontSize: Double = 16
@@ -12,11 +11,6 @@ class EditorTextView: NSTextView {
 
     /// Indicates an image paste operation is in progress.
     var isPastingImage = false
-
-    private static let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
-        category: "EditorTextView"
-    )
 
     private static let pairs: [Character: Character] = [
         "(": ")",
@@ -472,6 +466,8 @@ class EditorTextView: NSTextView {
     }
     
     private func handleImagePaste(_ image: NSImage) {
+        guard !isPastingImage else { return }
+
         guard let context = imageContext else {
             let alert = NSAlert()
             alert.messageText = "Cannot paste image"
@@ -487,37 +483,56 @@ class EditorTextView: NSTextView {
         let filename = generateImageFilename()
         let location = ImagePasteLocation.current()
         let destination = imagePasteDestination(context: context, location: location, filename: filename)
+        let insertionRange = selectedRange()
 
-        do {
-            try FileManager.default.createDirectory(
-                at: destination.saveURL.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-        } catch {
-            isPastingImage = false
-            needsDisplay = true
-            let alert = NSAlert()
-            alert.messageText = "Failed to prepare image folder"
-            alert.informativeText = error.localizedDescription
-            alert.alertStyle = .critical
-            alert.runModal()
-            return
-        }
-
-        guard saveImageAsPNG(image, to: destination.saveURL) else {
+        guard let tiffData = image.tiffRepresentation else {
             isPastingImage = false
             needsDisplay = true
             let alert = NSAlert()
             alert.messageText = "Failed to save image"
-            alert.informativeText = "Could not save the image to \(destination.saveURL.path)"
+            alert.informativeText = "Could not encode image data for save."
             alert.alertStyle = .critical
             alert.runModal()
             return
         }
 
-        isPastingImage = false
-        let markdown = "![](\(destination.markdownPath))"
-        insertText(markdown, replacementRange: selectedRange())
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            do {
+                try FileManager.default.createDirectory(
+                    at: destination.saveURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+
+                guard let bitmap = NSBitmapImageRep(data: tiffData),
+                      let pngData = bitmap.representation(using: .png, properties: [:]) else {
+                    throw CocoaError(.fileWriteUnknown)
+                }
+
+                try pngData.write(to: destination.saveURL)
+
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.isPastingImage = false
+                    self.needsDisplay = true
+
+                    let maxLocation = self.string.utf16.count
+                    let safeRange = NSRange(location: min(insertionRange.location, maxLocation), length: 0)
+                    let markdown = "![](\(destination.markdownPath))"
+                    self.insertText(markdown, replacementRange: safeRange)
+                }
+            } catch {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.isPastingImage = false
+                    self.needsDisplay = true
+                    let alert = NSAlert()
+                    alert.messageText = "Failed to save image"
+                    alert.informativeText = error.localizedDescription
+                    alert.alertStyle = .critical
+                    alert.runModal()
+                }
+            }
+        }
     }
 
     private func imagePasteDestination(
@@ -549,19 +564,4 @@ class EditorTextView: NSTextView {
         return "image-\(timestamp).png"
     }
     
-    private func saveImageAsPNG(_ image: NSImage, to url: URL) -> Bool {
-        guard let tiffData = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            return false
-        }
-        
-        do {
-            try pngData.write(to: url)
-            return true
-        } catch {
-            Self.logger.error("Failed to save image: \(error.localizedDescription)")
-            return false
-        }
-    }
 }
