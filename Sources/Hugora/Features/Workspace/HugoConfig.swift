@@ -1,5 +1,7 @@
 import Foundation
 import os
+import TOMLKit
+import Yams
 
 struct HugoConfig {
     private static let logger = Logger(
@@ -61,58 +63,31 @@ struct HugoConfig {
         }
     }
 
-    private static func parseTOML(_ content: String) -> HugoConfig {
-        // Match: key = "value" or key = 'value'
-        func extract(_ key: String) -> String? {
-            let pattern = #"^\s*"# + NSRegularExpression.escapedPattern(for: key) + #"\s*=\s*["']([^"']*)["']"#
-            let regex: NSRegularExpression
-            do {
-                regex = try NSRegularExpression(pattern: pattern, options: .anchorsMatchLines)
-            } catch {
-                logger.error("Failed to compile TOML regex for key '\(key)': \(error.localizedDescription)")
+    private static func parseTOML(_ content: String) -> HugoConfig? {
+        do {
+            let table = try TOMLTable(string: content)
+            let jsonString = table.convert(to: .json)
+            guard let data = jsonString.data(using: .utf8),
+                  let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return nil
             }
-            let range = NSRange(content.startIndex..., in: content)
-            guard let match = regex.firstMatch(in: content, range: range),
-                  let valueRange = Range(match.range(at: 1), in: content)
-            else {
-                return nil
-            }
-            return String(content[valueRange])
+            return config(from: object)
+        } catch {
+            logger.error("Failed to parse TOML config: \(error.localizedDescription)")
+            return nil
         }
-
-        return HugoConfig(
-            contentDir: extract("contentDir") ?? "content",
-            archetypeDir: extract("archetypeDir") ?? "archetypes",
-            title: extract("title")
-        )
     }
 
-    private static func parseYAML(_ content: String) -> HugoConfig {
-        // Match: key: "value" or key: 'value' or key: value (unquoted)
-        func extract(_ key: String) -> String? {
-            let pattern = #"^\s*"# + NSRegularExpression.escapedPattern(for: key) + #"\s*:\s*["']?([^"'\n]+?)["']?\s*$"#
-            let regex: NSRegularExpression
-            do {
-                regex = try NSRegularExpression(pattern: pattern, options: .anchorsMatchLines)
-            } catch {
-                logger.error("Failed to compile YAML regex for key '\(key)': \(error.localizedDescription)")
+    private static func parseYAML(_ content: String) -> HugoConfig? {
+        do {
+            guard let object = try Yams.load(yaml: content) as? [String: Any] else {
                 return nil
             }
-            let range = NSRange(content.startIndex..., in: content)
-            guard let match = regex.firstMatch(in: content, range: range),
-                  let valueRange = Range(match.range(at: 1), in: content)
-            else {
-                return nil
-            }
-            return String(content[valueRange]).trimmingCharacters(in: .whitespaces)
+            return config(from: object)
+        } catch {
+            logger.error("Failed to parse YAML config: \(error.localizedDescription)")
+            return nil
         }
-
-        return HugoConfig(
-            contentDir: extract("contentDir") ?? "content",
-            archetypeDir: extract("archetypeDir") ?? "archetypes",
-            title: extract("title")
-        )
     }
 
     private static func parseJSON(_ content: String) -> HugoConfig? {
@@ -131,10 +106,25 @@ struct HugoConfig {
             return nil
         }
 
+        return config(from: json)
+    }
+
+    private static func config(from object: [String: Any]) -> HugoConfig {
+        let title = extractString("title", from: object)
+        let contentDir = extractString("contentDir", from: object) ?? "content"
+        let archetypeDir = extractString("archetypeDir", from: object) ?? "archetypes"
+
         return HugoConfig(
-            contentDir: json["contentDir"] as? String ?? "content",
-            archetypeDir: json["archetypeDir"] as? String ?? "archetypes",
-            title: json["title"] as? String
+            contentDir: contentDir,
+            archetypeDir: archetypeDir,
+            title: title
         )
+    }
+
+    private static func extractString(_ key: String, from object: [String: Any]) -> String? {
+        guard let entry = object.first(where: { $0.key.caseInsensitiveCompare(key) == .orderedSame }) else {
+            return nil
+        }
+        return entry.value as? String
     }
 }

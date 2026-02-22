@@ -321,6 +321,46 @@ struct HugoConfigTests {
         #expect(config.archetypeDir == "myarchetypes")
     }
 
+    @Test("Loads TOML config with case-insensitive keys")
+    func loadsFromTomlCaseInsensitiveKeys() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let configFile = tempDir.appendingPathComponent("hugo.toml")
+        try """
+        Title = "Greendale Blog"
+        ContentDir = "mycontent"
+        ArchetypeDir = "myarchetypes"
+        """.write(to: configFile, atomically: true, encoding: .utf8)
+
+        let config = HugoConfig.load(from: tempDir)
+        #expect(config.title == "Greendale Blog")
+        #expect(config.contentDir == "mycontent")
+        #expect(config.archetypeDir == "myarchetypes")
+    }
+
+    @Test("Loads from YAML config")
+    func loadsFromYamlConfig() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let configFile = tempDir.appendingPathComponent("hugo.yaml")
+        try """
+        title: Greendale YAML
+        contentDir: yaml-content
+        archetypeDir: yaml-archetypes
+        params:
+          dean: pelton
+        """.write(to: configFile, atomically: true, encoding: .utf8)
+
+        let config = HugoConfig.load(from: tempDir)
+        #expect(config.title == "Greendale YAML")
+        #expect(config.contentDir == "yaml-content")
+        #expect(config.archetypeDir == "yaml-archetypes")
+    }
+
     @Test("Falls back to default when no config")
     func fallsBackToDefault() {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
