@@ -73,26 +73,8 @@ final class EditorViewModel: ObservableObject {
     private func forceRestyle() {
         styleCache = nil
         guard let textView = currentTextView else { return }
-        let visibleRange = computeVisibleRange(for: textView)
+        let visibleRange = computeRenderableRange(for: textView)
         applyStyles(to: textView, visibleRange: visibleRange)
-    }
-
-    private func computeVisibleRange(for textView: NSTextView) -> NSRange {
-        guard let layoutManager = textView.layoutManager,
-              let textContainer = textView.textContainer,
-              let scrollView = textView.enclosingScrollView else {
-            return NSRange(location: 0, length: textView.string.utf16.count)
-        }
-
-        let visibleRect = scrollView.documentVisibleRect
-        let glyphRange = layoutManager.glyphRange(forBoundingRect: visibleRect, in: textContainer)
-        var charRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
-
-        let padding = 2000
-        let start = max(0, charRange.location - padding)
-        let end = min(textView.string.utf16.count, charRange.location + charRange.length + padding)
-        charRange = NSRange(location: start, length: end - start)
-        return charRange
     }
 
     private func setupPipeline() {
