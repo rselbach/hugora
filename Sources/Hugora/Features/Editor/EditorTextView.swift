@@ -10,7 +10,16 @@ class EditorTextView: NSTextView {
     var imageContext: ImageContext?
 
     /// Indicates an image paste operation is in progress.
-    var isPastingImage = false
+    var isPastingImage = false {
+        didSet {
+            if isPastingImage {
+                startSpinnerTimer()
+            } else {
+                stopSpinnerTimer()
+            }
+        }
+    }
+    private var spinnerTimer: Timer?
 
     private static let pairs: [Character: Character] = [
         "(": ")",
@@ -46,6 +55,7 @@ class EditorTextView: NSTextView {
     }
 
     deinit {
+        spinnerTimer?.invalidate()
         if let observer = defaultsObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -231,6 +241,20 @@ class EditorTextView: NSTextView {
         drawBlockquoteBorders(in: dirtyRect)
         drawRenderedImages(in: dirtyRect)
         drawImagePasteIndicator(in: dirtyRect)
+    }
+
+    private func startSpinnerTimer() {
+        guard spinnerTimer == nil else { return }
+        // ~30 fps is smooth enough for a simple spinner and cheap on CPU
+        spinnerTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            self.needsDisplay = true
+        }
+    }
+
+    private func stopSpinnerTimer() {
+        spinnerTimer?.invalidate()
+        spinnerTimer = nil
     }
 
     private func drawImagePasteIndicator(in dirtyRect: NSRect) {
