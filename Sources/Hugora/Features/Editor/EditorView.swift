@@ -77,6 +77,8 @@ struct EditorView: NSViewRepresentable {
             let selectedRanges = textView.selectedRanges
             textView.string = text
             textView.selectedRanges = selectedRanges
+            // Keep parser state in sync for programmatic content loads (e.g. open file).
+            viewModel.setText(text)
         }
     }
 

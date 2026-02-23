@@ -52,7 +52,6 @@ struct ContentView: View {
                     .first { $0.url == url }
                 guard let item else { return }
                 editorState.openItem(item)
-                viewModel.setText(editorState.content)
                 if let siteURL = workspaceStore.currentFolderURL {
                     viewModel.imageContext = ImageContext(postURL: item.url, siteURL: siteURL)
                 }
