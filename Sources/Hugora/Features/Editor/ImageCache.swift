@@ -26,12 +26,15 @@ final class ImageCache {
 
     func image(for url: URL) -> NSImage? {
         var result: NSImage?
-        queue.sync {
+        queue.sync(flags: .barrier) {
             guard let entry = cache[url] else { return }
             result = entry.image
-        }
-        if result != nil {
-            markAsRecentlyUsed(url)
+            // Promote to MRU inside the same barrier to avoid a TOCTOU race
+            // where another thread evicts this entry between read and mark.
+            if let index = order.firstIndex(of: url) {
+                order.remove(at: index)
+                order.append(url)
+            }
         }
         return result
     }
@@ -56,14 +59,6 @@ final class ImageCache {
             cache.removeAll()
             order.removeAll()
             totalCost = 0
-        }
-    }
-
-    private func markAsRecentlyUsed(_ url: URL) {
-        queue.sync(flags: .barrier) {
-            guard let index = order.firstIndex(of: url) else { return }
-            order.remove(at: index)
-            order.append(url)
         }
     }
 
