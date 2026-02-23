@@ -215,6 +215,11 @@ struct ContentItem: Identifiable, Equatable, Comparable {
     let date: Date?
     let section: String
 
+    /// Pre-lowercased title for search filtering (avoids per-keystroke allocation).
+    let searchTitle: String
+    /// Pre-lowercased slug for search filtering.
+    let searchSlug: String
+
     init(url: URL, format: ContentFormat, section: String) {
         self.id = url
         self.url = url
@@ -237,6 +242,8 @@ struct ContentItem: Identifiable, Equatable, Comparable {
         }
         self.title = content.flatMap { FrontmatterParser.value(forKey: "title", in: $0) } ?? slug
         self.date = content.flatMap { Self.parseDate(from: $0) }
+        self.searchTitle = self.title.lowercased()
+        self.searchSlug = self.slug.lowercased()
     }
 
     /// Create a ContentItem with metadata extracted from already-loaded content.
@@ -256,6 +263,8 @@ struct ContentItem: Identifiable, Equatable, Comparable {
 
         self.title = FrontmatterParser.value(forKey: "title", in: content) ?? slug
         self.date = Self.parseDate(from: content)
+        self.searchTitle = self.title.lowercased()
+        self.searchSlug = self.slug.lowercased()
     }
 
     static func < (lhs: ContentItem, rhs: ContentItem) -> Bool {

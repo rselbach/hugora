@@ -93,7 +93,7 @@ struct ContentListView: View {
 
         return workspaceStore.sections.compactMap { section in
             let filteredItems = section.items.filter { item in
-                item.title.lowercased().contains(query) || item.slug.lowercased().contains(query)
+                item.searchTitle.contains(query) || item.searchSlug.contains(query)
             }
             guard !filteredItems.isEmpty else { return nil }
             return ContentSection(name: section.name, url: section.url, items: filteredItems)
