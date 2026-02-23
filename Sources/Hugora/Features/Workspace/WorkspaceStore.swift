@@ -2,7 +2,6 @@ import Foundation
 import AppKit
 import Combine
 import os
-import Darwin
 
 struct WorkspaceRef: Codable, Identifiable, Equatable {
     var id: String { path }
@@ -32,6 +31,13 @@ enum WorkspaceError: LocalizedError {
 /// workspaces. Delegates Hugo CLI interaction via ``HugoContentCreator``.
 @MainActor
 final class WorkspaceStore: ObservableObject {
+    private enum Timing {
+        /// Debounce before reloading all sections after a content directory change.
+        static let contentReloadDebounce: UInt64 = 250_000_000   // 250 ms
+        /// Debounce before refreshing a single section after its directory changes.
+        static let sectionRefreshDebounce: UInt64 = 150_000_000  // 150 ms
+    }
+
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
         category: "WorkspaceStore"
@@ -880,7 +886,8 @@ final class WorkspaceStore: ObservableObject {
     private func scheduleContentReload() {
         contentWatcherReloadTask?.cancel()
         contentWatcherReloadTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            do { try await Task.sleep(nanoseconds: Timing.contentReloadDebounce) }
+            catch { return } // task cancelled
             guard let self, let url = self.currentFolderURL else { return }
             self.loadContent(from: url)
         }
@@ -890,7 +897,8 @@ final class WorkspaceStore: ObservableObject {
         sectionRefreshTasks[sectionName]?.cancel()
         sectionRefreshTasks[sectionName] = Task { @MainActor [weak self] in
             defer { self?.sectionRefreshTasks.removeValue(forKey: sectionName) }
-            try? await Task.sleep(nanoseconds: 150_000_000)
+            do { try await Task.sleep(nanoseconds: Timing.sectionRefreshDebounce) }
+            catch { return } // task cancelled
             guard let self else { return }
             guard self.currentFolderURL != nil else { return }
             guard let currentContentDir = self.contentDirectoryURL else { return }

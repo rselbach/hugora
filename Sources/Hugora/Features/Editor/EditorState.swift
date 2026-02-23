@@ -24,6 +24,13 @@ enum EditorStateError: LocalizedError {
 /// file renaming based on frontmatter, and session persistence across app launches.
 @MainActor
 final class EditorState: ObservableObject {
+    private enum Timing {
+        /// How long the "Saved" indicator stays visible after a save.
+        static let justSavedDuration: UInt64 = 2_000_000_000   // 2 s
+        /// Delay before auto-saving after the user stops typing.
+        static let autoSaveDelay: UInt64 = 1_000_000_000       // 1 s
+    }
+
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
         category: "EditorState"
@@ -158,7 +165,8 @@ final class EditorState: ObservableObject {
             isLoading = false
             justSaved = true
             Task { @MainActor in
-                try await Task.sleep(nanoseconds: 2_000_000_000)
+                do { try await Task.sleep(nanoseconds: Timing.justSavedDuration) }
+                catch { return } // task cancelled
                 self.justSaved = false
             }
         } catch {
@@ -276,7 +284,7 @@ final class EditorState: ObservableObject {
         autoSaveTask?.cancel()
         autoSaveTask = Task { @MainActor [weak self] in
             do {
-                try await Task.sleep(nanoseconds: 1_000_000_000)
+                try await Task.sleep(nanoseconds: Timing.autoSaveDelay)
             } catch {
                 return
             }
