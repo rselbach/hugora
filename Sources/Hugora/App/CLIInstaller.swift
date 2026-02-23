@@ -179,8 +179,14 @@ enum CLIInstaller {
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
         let escapedArgs = args.map { escapeShellPath($0) }.map { "'\($0)'" }.joined(separator: " ")
+        let shellCommand = "\(command) \(escapedArgs)"
+        // Escape for AppleScript's double-quoted string context:
+        // backslashes and double quotes are special inside "..." in AppleScript.
+        let appleScriptSafe = shellCommand
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
         let script = """
-            do shell script "\(command) \(escapedArgs)" with administrator privileges
+            do shell script "\(appleScriptSafe)" with administrator privileges
             """
 
         runAppleScript(script, completion: completion)
