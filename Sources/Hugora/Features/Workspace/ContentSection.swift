@@ -14,15 +14,15 @@ struct ContentSection: Identifiable, Equatable, Comparable {
     var itemCount: Int { items.count }
     
     // Sort sections: blog/posts/pages first, (root) last, others alphabetically
+    private static let priorityMap: [String: Int] = ["blog": 0, "posts": 1, "pages": 2]
+
     static func < (lhs: ContentSection, rhs: ContentSection) -> Bool {
-        // (root) always comes last
         if lhs.name == "(root)" { return false }
         if rhs.name == "(root)" { return true }
 
-        let priority = ["blog", "posts", "pages"]
-        let lhsIdx = priority.firstIndex(of: lhs.name.lowercased()) ?? Int.max
-        let rhsIdx = priority.firstIndex(of: rhs.name.lowercased()) ?? Int.max
-        
+        let lhsIdx = priorityMap[lhs.name.lowercased()] ?? Int.max
+        let rhsIdx = priorityMap[rhs.name.lowercased()] ?? Int.max
+
         if lhsIdx != rhsIdx {
             return lhsIdx < rhsIdx
         }
