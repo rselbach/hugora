@@ -30,4 +30,20 @@ struct PathSafetyTests {
         let parent = URL(fileURLWithPath: "/tmp/greendale")
         #expect(!PathSafety.isSameOrDescendant(parent, of: root))
     }
+
+    @Test("Symlink escaping workspace is rejected")
+    func symlinkEscapeRejected() throws {
+        let fm = FileManager.default
+        let base = fm.temporaryDirectory.appendingPathComponent("pathsafety-\(UUID().uuidString)")
+        let workspace = base.appendingPathComponent("site")
+        let outsideDir = base.appendingPathComponent("secrets")
+        let symlinkInside = workspace.appendingPathComponent("content/evil")
+
+        try fm.createDirectory(at: workspace.appendingPathComponent("content"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: outsideDir, withIntermediateDirectories: true)
+        try fm.createSymbolicLink(at: symlinkInside, withDestinationURL: outsideDir)
+        defer { try? fm.removeItem(at: base) }
+
+        #expect(!PathSafety.isSameOrDescendant(symlinkInside, of: workspace))
+    }
 }
