@@ -15,7 +15,7 @@ import Testing
 @Suite("WorkspaceStore", .serialized)
 @MainActor
 struct WorkspaceStoreTests {
-    private final class MockHugoContentCreator: HugoContentCreator {
+    private final class MockHugoContentCreator: HugoContentCreator, @unchecked Sendable {
         struct Call {
             let siteURL: URL
             let contentDir: String

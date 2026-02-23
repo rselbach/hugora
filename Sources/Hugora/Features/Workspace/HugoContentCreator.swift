@@ -6,7 +6,7 @@ import os
 /// Allows decoupling the app from Hugo CLI by providing an interface that
 /// can be swapped for different implementations (e.g., direct file creation,
 /// alternate CLI tools, or test mocks).
-protocol HugoContentCreator {
+protocol HugoContentCreator: Sendable {
     /// Checks whether the Hugo CLI is available at the given site.
     ///
     /// - Parameter siteURL: The URL of the Hugo site directory.

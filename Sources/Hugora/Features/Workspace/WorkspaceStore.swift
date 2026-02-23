@@ -32,10 +32,6 @@ enum WorkspaceError: LocalizedError {
 /// workspaces. Delegates Hugo CLI interaction via ``HugoContentCreator``.
 @MainActor
 final class WorkspaceStore: ObservableObject {
-    private struct UnsafeContentCreatorBox: @unchecked Sendable {
-        let value: any HugoContentCreator
-    }
-
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
         category: "WorkspaceStore"
@@ -698,12 +694,11 @@ final class WorkspaceStore: ObservableObject {
         expectedFileURL: URL,
         frontmatter: String
     ) async throws -> URL {
-        let contentCreatorBox = UnsafeContentCreatorBox(value: contentCreator)
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
                     let createdURL = try createNewPostFileSync(
-                        contentCreator: contentCreatorBox.value,
+                        contentCreator: contentCreator,
                         siteURL: siteURL,
                         config: config,
                         sectionName: sectionName,
