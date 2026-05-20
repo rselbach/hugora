@@ -24,6 +24,10 @@ final class EditorViewModel: ObservableObject {
     private var cachedFontSize: Double?
     private var cachedLineSpacing: Double?
 
+    var editorTheme: Theme {
+        styler.theme
+    }
+
     init(text: String = "", themeManager: ThemeManager = .shared) {
         self.text = text
         self.themeManager = themeManager
@@ -111,6 +115,10 @@ final class EditorViewModel: ObservableObject {
     func applyStyles(to textView: NSTextView, visibleRange: NSRange) {
         currentTextView = textView
         cursorPosition = textView.selectedRange().location
+
+        if let editorTextView = textView as? EditorTextView {
+            editorTextView.applyTheme(styler.theme)
+        }
 
         guard let textStorage = textView.textStorage else { return }
         guard let doc = currentDocument else {

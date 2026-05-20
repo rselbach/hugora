@@ -9,6 +9,7 @@ struct Theme {
 
     let baseFont: NSFont
     let baseColor: NSColor
+    let backgroundColor: NSColor
     let headings: [HeadingStyle]  // Index 0 = h1, ... 5 = h6
     let boldColor: NSColor
     let italicColor: NSColor

@@ -35,6 +35,7 @@ extension Theme {
         return Theme(
             baseFont: .systemFont(ofSize: baseSize),
             baseColor: .textColor,
+            backgroundColor: .textBackgroundColor,
             headings: [
                 HeadingStyle(font: .systemFont(ofSize: baseSize * 2.0, weight: .bold), color: .textColor),
                 HeadingStyle(font: .systemFont(ofSize: baseSize * 1.5, weight: .bold), color: .textColor),
@@ -83,6 +84,7 @@ extension Theme {
         return Theme(
             baseFont: .systemFont(ofSize: baseSize),
             baseColor: textColor,
+            backgroundColor: .white,
             headings: [
                 HeadingStyle(font: .systemFont(ofSize: baseSize * 2.0, weight: .bold), color: headingColor),
                 HeadingStyle(font: .systemFont(ofSize: baseSize * 1.5, weight: .bold), color: headingColor),
@@ -125,6 +127,7 @@ extension Theme {
         return Theme(
             baseFont: .systemFont(ofSize: baseSize),
             baseColor: textColor,
+            backgroundColor: NSColor(hex: "#0d1117"),
             headings: [
                 HeadingStyle(font: .systemFont(ofSize: baseSize * 2.0, weight: .bold), color: headingColor),
                 HeadingStyle(font: .systemFont(ofSize: baseSize * 1.5, weight: .bold), color: headingColor),
@@ -170,6 +173,7 @@ extension Theme {
         return Theme(
             baseFont: .systemFont(ofSize: baseSize),
             baseColor: foreground,
+            backgroundColor: NSColor(hex: "#282a36"),
             headings: [
                 HeadingStyle(font: .systemFont(ofSize: baseSize * 2.0, weight: .bold), color: purple),
                 HeadingStyle(font: .systemFont(ofSize: baseSize * 1.5, weight: .bold), color: purple),
@@ -213,6 +217,7 @@ extension Theme {
         return Theme(
             baseFont: .monospacedSystemFont(ofSize: baseSize, weight: .regular),
             baseColor: text,
+            backgroundColor: NSColor(hex: "#121212"),
             headings: [
                 HeadingStyle(font: .monospacedSystemFont(ofSize: baseSize * 2.0, weight: .bold), color: amber),
                 HeadingStyle(font: .monospacedSystemFont(ofSize: baseSize * 1.5, weight: .bold), color: amber),
@@ -258,6 +263,7 @@ extension Theme {
         return Theme(
             baseFont: .systemFont(ofSize: baseSize),
             baseColor: base00,
+            backgroundColor: NSColor(hex: "#fdf6e3"),
             headings: [
                 HeadingStyle(font: .systemFont(ofSize: baseSize * 2.0, weight: .bold), color: orange),
                 HeadingStyle(font: .systemFont(ofSize: baseSize * 1.5, weight: .bold), color: orange),
@@ -301,6 +307,7 @@ extension Theme {
         return Theme(
             baseFont: .systemFont(ofSize: baseSize),
             baseColor: base0,
+            backgroundColor: NSColor(hex: "#002b36"),
             headings: [
                 HeadingStyle(font: .systemFont(ofSize: baseSize * 2.0, weight: .bold), color: orange),
                 HeadingStyle(font: .systemFont(ofSize: baseSize * 1.5, weight: .bold), color: orange),

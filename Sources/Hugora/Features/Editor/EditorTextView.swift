@@ -5,6 +5,7 @@ class EditorTextView: NSTextView {
     private var lineSpacing: Double = 1.4
     private var spellCheckEnabled = true
     private var autoPairEnabled = true
+    private var currentTheme = Theme.defaultLight
     
     /// Context for saving pasted images. Set by the coordinator.
     var imageContext: ImageContext?
@@ -95,13 +96,29 @@ class EditorTextView: NSTextView {
         updateTypingAttributes()
     }
 
+    func applyTheme(_ theme: Theme) {
+        currentTheme = theme
+        let backgroundColor = theme.backgroundColor
+
+        drawsBackground = true
+        self.backgroundColor = backgroundColor
+        insertionPointColor = theme.baseColor
+        updateTypingAttributes()
+
+        guard let scrollView = enclosingScrollView else { return }
+        scrollView.drawsBackground = true
+        scrollView.backgroundColor = backgroundColor
+        scrollView.contentView.drawsBackground = true
+        scrollView.contentView.backgroundColor = backgroundColor
+    }
+
     private func updateTypingAttributes() {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineHeightMultiple = lineSpacing
 
         typingAttributes = [
             .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular),
-            .foregroundColor: NSColor.textColor,
+            .foregroundColor: currentTheme.baseColor,
             .paragraphStyle: paragraphStyle
         ]
     }

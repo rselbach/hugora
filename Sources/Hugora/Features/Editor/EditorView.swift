@@ -16,7 +16,7 @@ struct EditorView: NSViewRepresentable {
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
-        scrollView.drawsBackground = false
+        scrollView.drawsBackground = true
         scrollView.contentView.postsBoundsChangedNotifications = true
 
         let textView = EditorTextView()
@@ -30,8 +30,6 @@ struct EditorView: NSViewRepresentable {
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
         textView.textContainerInset = NSSize(width: 50, height: 30)
-        textView.drawsBackground = false
-        textView.backgroundColor = .clear
 
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.containerSize = NSSize(
@@ -45,6 +43,7 @@ struct EditorView: NSViewRepresentable {
         context.coordinator.onCursorChange = onCursorChange
         context.coordinator.onScrollChange = onScrollChange
         textView.imageContext = viewModel.imageContext
+        textView.applyTheme(viewModel.editorTheme)
 
         DispatchQueue.main.async {
             self.restorePositions(textView: textView, scrollView: scrollView)
@@ -71,6 +70,7 @@ struct EditorView: NSViewRepresentable {
         
         // Skip if input method is composing (dead keys, IME) - touching the text view breaks composition
         guard !textView.hasMarkedText() else { return }
+        textView.applyTheme(viewModel.editorTheme)
         
         // Don't sync text back if the change came from the text view itself
         if !context.coordinator.isUpdatingFromTextView && textView.string != text {

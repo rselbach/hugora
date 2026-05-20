@@ -467,7 +467,7 @@ struct StyleApplicationTests {
 struct ThemeTests {
     @Test("Theme.named returns correct theme for each name")
     func testThemeNamed() {
-        let names = ["Default", "GitHub", "Dracula", "Solarized Light", "Solarized Dark"]
+        let names = ["Default", "GitHub", "Dracula", "Solarized Light", "Solarized Dark", "rselbach.com"]
         for name in names {
             let theme = Theme.named(name)
             #expect(theme.baseFont.pointSize > 0)
@@ -494,6 +494,14 @@ struct ThemeTests {
         let light = Theme.githubLight
         let dark = Theme.githubDark
         #expect(light.baseColor != dark.baseColor)
+    }
+
+    @Test("rselbach.com theme mirrors site palette")
+    func testRselbachThemePalette() {
+        let theme = Theme.rselbachCom
+        #expect(theme.backgroundColor == NSColor(hex: "#121212"))
+        #expect(theme.baseColor == NSColor(hex: "#e8e8e8"))
+        #expect(theme.linkColor == NSColor(hex: "#f59e0b"))
     }
 
     @Test("Theme applies custom colors to styled text")

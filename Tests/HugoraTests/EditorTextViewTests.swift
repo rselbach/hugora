@@ -59,4 +59,23 @@ struct EditorTextViewPreferencesTests {
             }
         }
     }
+
+    @Test("Theme paints editor and scroll backgrounds")
+    @MainActor
+    func applyThemePaintsEditorSurface() {
+        let theme = Theme.rselbachCom
+        let scrollView = NSScrollView()
+        let textView = EditorTextView(frame: .zero)
+        scrollView.documentView = textView
+
+        textView.applyTheme(theme)
+
+        #expect(textView.drawsBackground)
+        #expect(scrollView.drawsBackground)
+        #expect(scrollView.contentView.drawsBackground)
+        #expect(textView.backgroundColor == theme.backgroundColor)
+        #expect(scrollView.backgroundColor == theme.backgroundColor)
+        #expect(scrollView.contentView.backgroundColor == theme.backgroundColor)
+        #expect(textView.insertionPointColor == theme.baseColor)
+    }
 }
