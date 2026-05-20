@@ -45,6 +45,9 @@ final class WorkspaceStore: ObservableObject {
         subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
         category: "WorkspaceStore"
     )
+    private static let isRunningTests = ProcessInfo.processInfo.arguments.contains {
+        $0.contains(".xctest") || $0 == "--testing-library"
+    }
 
     /// Content sections detected in the Hugo site (e.g., blog, posts).
     @Published private(set) var sections: [ContentSection] = []
@@ -651,6 +654,10 @@ final class WorkspaceStore: ObservableObject {
     }
 
     private func presentNewPostError(_ message: String) {
+        guard !Self.isRunningTests else {
+            Self.logger.error("Cannot create new post: \(message)")
+            return
+        }
         let alert = NSAlert()
         alert.messageText = "Cannot create new post"
         alert.informativeText = message
@@ -663,7 +670,7 @@ final class WorkspaceStore: ObservableObject {
         guard fingerprint != lastSafetyWarning else { return }
         lastSafetyWarning = fingerprint
 
-        guard NSApp != nil else {
+        guard NSApp != nil, !Self.isRunningTests else {
             Self.logger.error("\(title): \(detail)")
             return
         }
@@ -681,7 +688,7 @@ final class WorkspaceStore: ObservableObject {
             return
         }
 
-        guard NSApp != nil else {
+        guard NSApp != nil, !Self.isRunningTests else {
             Self.logger.error("Hugo error: \(hugoError.debugDescription)")
             return
         }
