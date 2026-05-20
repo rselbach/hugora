@@ -559,7 +559,7 @@ final class WorkspaceStore: ObservableObject {
         guard candidates.count > 1 else { return candidates[0] }
 
         // In tests/headless mode, skip UI and pick the current preferred section.
-        guard NSApp != nil else {
+        guard NSApp != nil, !Self.isRunningTests else {
             return resolveNewPostSection() ?? candidates[0]
         }
 
@@ -630,7 +630,7 @@ final class WorkspaceStore: ObservableObject {
         sectionName: String,
         format: ContentFormat
     ) -> Bool {
-        guard NSApp != nil else { return true }
+        guard NSApp != nil, !Self.isRunningTests else { return true }
 
         let alert = NSAlert()
         alert.messageText = "Review front matter template"
