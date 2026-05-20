@@ -3,9 +3,10 @@ import Combine
 import AppKit
 import os
 
-enum EditorStateError: LocalizedError {
+enum EditorStateError: LocalizedError, Equatable {
     case utf8EncodingFailed
     case renameTargetAlreadyExists(String)
+    case unsafeFileOperation(String)
 
     var errorDescription: String? {
         switch self {
@@ -13,6 +14,8 @@ enum EditorStateError: LocalizedError {
             "Failed to encode document content as UTF-8."
         case .renameTargetAlreadyExists(let path):
             "Cannot rename because a file already exists at \(path)."
+        case .unsafeFileOperation(let path):
+            "Refusing to modify a file outside the workspace content directory: \(path)"
         }
     }
 }
@@ -68,6 +71,7 @@ final class EditorState: ObservableObject {
     private var entityMappings: [HTMLEntityMapping] = []
     private var openRevision: UInt64 = 0
     private var autoSaveTask: Task<Void, Never>?
+    var contentRootURL: URL?
 
     /// The display title of the current item, or placeholder if none selected.
     var title: String {
@@ -192,6 +196,7 @@ final class EditorState: ObservableObject {
         }
 
         guard autoRenameOnSave else {
+            try validateWritableURL(item.url)
             try saveData.write(to: item.url)
             return item.url
         }
@@ -206,11 +211,13 @@ final class EditorState: ObservableObject {
         switch item.format {
         case .bundle:
             let currentFolder = item.url.deletingLastPathComponent()
+            try validateWritableURL(currentFolder)
             let currentFolderName = currentFolder.lastPathComponent
             
             if currentFolderName != expectedName {
                 let parentDir = currentFolder.deletingLastPathComponent()
                 let newFolder = parentDir.appendingPathComponent(expectedName)
+                try validateWritableURL(newFolder)
                 
                 if fm.fileExists(atPath: newFolder.path) {
                     throw EditorStateError.renameTargetAlreadyExists(newFolder.path)
@@ -220,11 +227,13 @@ final class EditorState: ObservableObject {
             }
             
         case .file:
+            try validateWritableURL(item.url)
             let currentFileName = item.url.deletingPathExtension().lastPathComponent
             
             if currentFileName != expectedName {
                 let parentDir = item.url.deletingLastPathComponent()
                 let newFile = parentDir.appendingPathComponent("\(expectedName).md")
+                try validateWritableURL(newFile)
                 
                 if fm.fileExists(atPath: newFile.path) {
                     throw EditorStateError.renameTargetAlreadyExists(newFile.path)
@@ -236,6 +245,14 @@ final class EditorState: ObservableObject {
 
         try saveData.write(to: finalURL)
         return finalURL
+    }
+
+    private func validateWritableURL(_ url: URL) throws {
+        guard let contentRootURL else { return }
+        let standardizedURL = url.standardizedFileURL
+        guard PathSafety.isSameOrDescendant(standardizedURL, of: contentRootURL.standardizedFileURL) else {
+            throw EditorStateError.unsafeFileOperation(url.path)
+        }
     }
 
     private func deriveSlug(from content: String) -> String {

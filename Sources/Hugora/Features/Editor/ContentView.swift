@@ -64,6 +64,7 @@ struct ContentView: View {
                     .flatMap { $0.items }
                     .first { $0.url == url }
                 guard let item else { return }
+                editorState.contentRootURL = workspaceStore.contentDirectoryURL
                 editorState.openItem(item)
                 if let siteURL = workspaceStore.currentFolderURL {
                     viewModel.imageContext = ImageContext(postURL: item.url, siteURL: siteURL)
@@ -73,6 +74,7 @@ struct ContentView: View {
             // Set up image context for restored session
             if let item = editorState.currentItem,
                let siteURL = workspaceStore.currentFolderURL {
+                editorState.contentRootURL = workspaceStore.contentDirectoryURL
                 viewModel.imageContext = ImageContext(postURL: item.url, siteURL: siteURL)
                 viewModel.setText(editorState.content)
             }

@@ -164,6 +164,54 @@ struct EditorStateTests {
         }
     }
 
+    @Test("Auto-rename rejects targets outside content root")
+    @MainActor
+    func autoRenameRejectsTargetOutsideContentRoot() async throws {
+        try await withCleanDefaults {
+            let defaults = UserDefaults.standard
+            defaults.set(false, forKey: "autoSaveEnabled")
+            defaults.set(true, forKey: "autoRenameOnSave")
+
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            let contentDir = tempDir.appendingPathComponent("content/posts")
+            try FileManager.default.createDirectory(at: contentDir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempDir) }
+
+            let originalURL = contentDir.appendingPathComponent("2024-01-01-old-post.md")
+            try """
+            ---
+            title: "Old Post"
+            date: 2024-01-01
+            ---
+            Original
+            """.write(to: originalURL, atomically: true, encoding: .utf8)
+
+            let state = EditorState()
+            state.contentRootURL = tempDir.appendingPathComponent("content")
+            state.openItem(ContentItem(url: originalURL, format: .file, section: "posts"))
+            state.updateContent("""
+            ---
+            title: "Unsafe Rename"
+            slug: "human-being"
+            date: ../../oops
+            ---
+            Updated content
+            """)
+            state.save()
+
+            #expect(FileManager.default.fileExists(atPath: originalURL.path))
+            #expect(!FileManager.default.fileExists(atPath: tempDir.appendingPathComponent("oops-human-being.md").path))
+            #expect(state.isDirty == true)
+            let rejectedUnsafeOperation: Bool
+            if case .unsafeFileOperation = state.lastError as? EditorStateError {
+                rejectedUnsafeOperation = true
+            } else {
+                rejectedUnsafeOperation = false
+            }
+            #expect(rejectedUnsafeOperation)
+        }
+    }
+
     @Test("Session restore is skipped without workspace bookmark")
     @MainActor
     func restoreSkippedWithoutWorkspaceBookmark() async throws {
