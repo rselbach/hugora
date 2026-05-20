@@ -515,7 +515,11 @@ class EditorTextView: NSTextView {
             fileExtension: outputFormat.fileExtension
         )
         let location = ImagePasteLocation.current(siteURL: context.siteURL)
-        let destination = imagePasteDestination(context: context, location: location, filename: filename)
+        let destination = ImagePasteDestinationAllocator.destination(
+            context: context,
+            location: location,
+            filename: filename
+        )
         let insertionRange = selectedRange()
 
         guard let tiffData = image.tiffRepresentation else {
@@ -545,7 +549,9 @@ class EditorTextView: NSTextView {
                     throw CocoaError(.fileWriteUnknown)
                 }
 
-                try encodedData.write(to: destination.saveURL)
+                guard FileManager.default.createFile(atPath: destination.saveURL.path, contents: encodedData) else {
+                    throw CocoaError(.fileWriteFileExists)
+                }
 
                 DispatchQueue.main.async { [weak self] in
                     guard let self else { return }
@@ -572,24 +578,6 @@ class EditorTextView: NSTextView {
         }
     }
 
-    private func imagePasteDestination(
-        context: ImageContext,
-        location: ImagePasteLocation,
-        filename: String
-    ) -> (saveURL: URL, markdownPath: String) {
-        switch location {
-        case .pageFolder:
-            let postDirectory = context.postURL.deletingLastPathComponent()
-            return (postDirectory.appendingPathComponent(filename), filename)
-        case .siteStatic:
-            let staticDirectory = context.siteURL.appendingPathComponent("static")
-            return (staticDirectory.appendingPathComponent(filename), "/\(filename)")
-        case .siteAssets:
-            let assetsDirectory = context.siteURL.appendingPathComponent("assets")
-            return (assetsDirectory.appendingPathComponent(filename), "assets/\(filename)")
-        }
-    }
-    
     private static let imageTimestampFormatter: ISO8601DateFormatter = {
         ISO8601DateFormatter()
     }()

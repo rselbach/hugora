@@ -48,4 +48,45 @@ struct ImagePasteOptionsTests {
         #expect(ImagePasteFormat.current() == .jpeg)
         #expect(ImagePasteNamingStrategy.current() == .postSlugTimestamp)
     }
+
+    @Test("Image paste destination appends counter for existing filenames")
+    func imagePasteDestinationAvoidsExistingFilenames() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let postURL = tempDir.appendingPathComponent("content/posts/post.md")
+        try FileManager.default.createDirectory(
+            at: postURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let existingImage = postURL.deletingLastPathComponent().appendingPathComponent("image.png")
+        try Data([1]).write(to: existingImage)
+
+        let context = ImageContext(postURL: postURL, siteURL: tempDir)
+        let destination = ImagePasteDestinationAllocator.destination(
+            context: context,
+            location: .pageFolder,
+            filename: "image.png"
+        )
+
+        #expect(destination.saveURL.lastPathComponent == "image-1.png")
+        #expect(destination.markdownPath == "image-1.png")
+    }
+
+    @Test("Image paste destination preserves Hugo static markdown path")
+    func imagePasteDestinationUsesStaticMarkdownPath() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let postURL = tempDir.appendingPathComponent("content/posts/post.md")
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let context = ImageContext(postURL: postURL, siteURL: tempDir)
+        let destination = ImagePasteDestinationAllocator.destination(
+            context: context,
+            location: .siteStatic,
+            filename: "image.png"
+        )
+
+        #expect(destination.saveURL == tempDir.appendingPathComponent("static/image.png"))
+        #expect(destination.markdownPath == "/image.png")
+    }
 }
