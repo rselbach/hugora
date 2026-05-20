@@ -5,7 +5,43 @@ struct ImagePasteDestination: Equatable {
     let markdownPath: String
 }
 
+enum ImagePasteDestinationError: LocalizedError {
+    case unsafeDestination(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unsafeDestination(let path):
+            "Refusing to save pasted image outside the current Hugo site: \(path)"
+        }
+    }
+}
+
 enum ImagePasteDestinationAllocator {
+    static func validatedDestination(
+        context: ImageContext,
+        location: ImagePasteLocation,
+        filename: String,
+        fileManager: FileManager = .default
+    ) throws -> ImagePasteDestination {
+        let destination = destination(
+            context: context,
+            location: location,
+            filename: filename,
+            fileManager: fileManager
+        )
+        let root = destinationRoot(context: context, location: location)
+        let standardizedSaveURL = destination.saveURL.standardizedFileURL
+
+        guard PathSafety.isSameOrDescendant(standardizedSaveURL, of: root.standardizedFileURL) else {
+            throw ImagePasteDestinationError.unsafeDestination(destination.saveURL.path)
+        }
+
+        return ImagePasteDestination(
+            saveURL: standardizedSaveURL,
+            markdownPath: destination.markdownPath
+        )
+    }
+
     static func destination(
         context: ImageContext,
         location: ImagePasteLocation,
@@ -53,5 +89,16 @@ enum ImagePasteDestinationAllocator {
         }
 
         return "\(basename)-\(counter).\(ext)"
+    }
+
+    private static func destinationRoot(context: ImageContext, location: ImagePasteLocation) -> URL {
+        switch location {
+        case .pageFolder:
+            context.postURL.deletingLastPathComponent()
+        case .siteStatic:
+            context.siteURL.appendingPathComponent("static")
+        case .siteAssets:
+            context.siteURL.appendingPathComponent("assets")
+        }
     }
 }

@@ -89,4 +89,25 @@ struct ImagePasteOptionsTests {
         #expect(destination.saveURL == tempDir.appendingPathComponent("static/image.png"))
         #expect(destination.markdownPath == "/image.png")
     }
+
+    @Test("Image paste destination rejects paths outside destination root")
+    func imagePasteDestinationRejectsEscapingFilename() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let postURL = tempDir.appendingPathComponent("content/posts/post.md")
+        try FileManager.default.createDirectory(
+            at: postURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let context = ImageContext(postURL: postURL, siteURL: tempDir)
+
+        #expect(throws: ImagePasteDestinationError.self) {
+            try ImagePasteDestinationAllocator.validatedDestination(
+                context: context,
+                location: .pageFolder,
+                filename: "../escape.png"
+            )
+        }
+    }
 }

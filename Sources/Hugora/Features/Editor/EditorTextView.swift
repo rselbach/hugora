@@ -515,11 +515,23 @@ class EditorTextView: NSTextView {
             fileExtension: outputFormat.fileExtension
         )
         let location = ImagePasteLocation.current(siteURL: context.siteURL)
-        let destination = ImagePasteDestinationAllocator.destination(
-            context: context,
-            location: location,
-            filename: filename
-        )
+        let destination: ImagePasteDestination
+        do {
+            destination = try ImagePasteDestinationAllocator.validatedDestination(
+                context: context,
+                location: location,
+                filename: filename
+            )
+        } catch {
+            isPastingImage = false
+            needsDisplay = true
+            let alert = NSAlert()
+            alert.messageText = "Failed to save image"
+            alert.informativeText = error.localizedDescription
+            alert.alertStyle = .critical
+            alert.runModal()
+            return
+        }
         let insertionRange = selectedRange()
 
         guard let tiffData = image.tiffRepresentation else {
