@@ -51,6 +51,9 @@ final class EditorState: ObservableObject {
     /// Transient flag set to true for 2 seconds after a successful save.
     @Published var justSaved: Bool = false
 
+    /// Last file operation error for the view layer to present.
+    @Published var lastError: Error?
+
     /// Current cursor position in the text (character offset).
     @Published var cursorPosition: Int = 0
 
@@ -87,6 +90,7 @@ final class EditorState: ObservableObject {
         openRevision &+= 1
         let capturedRevision = openRevision
         isLoading = true
+        lastError = nil
         currentItem = item
         content = ""
         entityMappings = []
@@ -116,7 +120,7 @@ final class EditorState: ObservableObject {
                 guard self.openRevision == capturedRevision else { return }
                 Self.logger.error("Failed to open file \(item.url.lastPathComponent): \(error.localizedDescription)")
                 self.isLoading = false
-                Self.presentError(error)
+                self.lastError = error
             }
         }
     }
@@ -132,6 +136,7 @@ final class EditorState: ObservableObject {
         if isLoading {
             isLoading = false
         }
+        lastError = nil
         updateEntityMappings(oldText: content, newText: newContent)
         content = newContent
         isDirty = true
@@ -150,6 +155,7 @@ final class EditorState: ObservableObject {
         autoSaveTask?.cancel()
         autoSaveTask = nil
         isLoading = true
+        lastError = nil
         do {
             let encodedContent = HTMLEntityCodec.encode(content, mappings: entityMappings)
             let newURL = try saveWithRename(
@@ -172,7 +178,7 @@ final class EditorState: ObservableObject {
         } catch {
             Self.logger.error("Failed to save file \(item.url.lastPathComponent): \(error.localizedDescription)")
             isLoading = false
-            Self.presentError(error)
+            lastError = error
         }
     }
 
@@ -338,19 +344,9 @@ final class EditorState: ObservableObject {
                 self.isDirty = false
             } catch {
                 Self.logger.error("Failed to restore session file \(url.lastPathComponent): \(error.localizedDescription)")
-                Task { @MainActor in
-                    Self.presentError(error)
-                }
+                self.lastError = error
             }
         }
-    }
-
-    private static func presentError(_ error: Error) {
-        guard NSApp != nil else {
-            logger.error("Unable to present error (NSApp unavailable): \(error.localizedDescription)")
-            return
-        }
-        NSApp.presentError(error)
     }
 
     private func isSessionPathAllowed(_ fileURL: URL) -> Bool {

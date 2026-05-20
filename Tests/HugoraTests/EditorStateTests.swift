@@ -159,6 +159,8 @@ struct EditorStateTests {
             let collisionContent = try String(contentsOf: collisionURL, encoding: .utf8)
             #expect(collisionContent.contains("Existing"))
             #expect(state.isDirty == true)
+            #expect(state.lastError != nil)
+            #expect(state.lastError?.localizedDescription.contains("Cannot rename") == true)
         }
     }
 

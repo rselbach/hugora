@@ -43,6 +43,19 @@ struct ContentView: View {
                 .accessibilityLabel("Toggle sidebar")
             }
         }
+        .alert(
+            "Editor Error",
+            isPresented: Binding(
+                get: { editorState.lastError != nil },
+                set: { if !$0 { editorState.lastError = nil } }
+            )
+        ) {
+            Button("OK") {
+                editorState.lastError = nil
+            }
+        } message: {
+            Text(editorState.lastError?.localizedDescription ?? "An unknown editor error occurred.")
+        }
         .navigationTitle(editorState.title)
         .onAppear {
             workspaceStore.onOpenFile = { [weak editorState, weak viewModel, weak workspaceStore] url in
