@@ -10,7 +10,8 @@ final class EditorViewModel: ObservableObject {
     private var styler: MarkdownStyler
     private let themeManager: ThemeManager
     private var cancellables = Set<AnyCancellable>()
-    private var revision: UInt64 = 0
+    private var textRevision: UInt64 = 0
+    private var parsedRevision: UInt64?
     private var currentDocument: Document?
     private let parseQueue = DispatchQueue(label: "com.hugora.parse", qos: .userInitiated)
     private weak var currentTextView: NSTextView?
@@ -86,13 +87,12 @@ final class EditorViewModel: ObservableObject {
                     self.skipNextAsyncParse = false
                     return
                 }
-                self.parseAsync(newText)
+                self.parseAsync(newText, revision: self.textRevision)
             }
             .store(in: &cancellables)
     }
 
-    private func parseAsync(_ text: String) {
-        revision &+= 1
+    private func parseAsync(_ text: String, revision: UInt64) {
         let capturedRevision = revision
         let textCopy = text
 
@@ -100,8 +100,10 @@ final class EditorViewModel: ObservableObject {
             let doc = Document(parsing: textCopy, options: [.parseBlockDirectives, .parseSymbolLinks])
 
             DispatchQueue.main.async { [weak self] in
-                guard let self, self.revision == capturedRevision else { return }
+                guard let self, self.textRevision == capturedRevision else { return }
                 self.currentDocument = doc
+                self.parsedRevision = capturedRevision
+                self.forceRestyle()
             }
         }
     }
@@ -118,6 +120,7 @@ final class EditorViewModel: ObservableObject {
             return
         }
 
+        guard parsedRevision == textRevision else { return }
         styleCache = styler.applyStyles(to: textStorage, in: visibleRange, document: doc, cursorPosition: cursorPosition, imageContext: imageContext)
     }
     
@@ -146,9 +149,11 @@ final class EditorViewModel: ObservableObject {
 
     private func parseSync() {
         currentDocument = Document(parsing: text, options: [.parseBlockDirectives, .parseSymbolLinks])
+        parsedRevision = textRevision
     }
 
     func setText(_ newText: String) {
+        textRevision &+= 1
         skipNextAsyncParse = true
         text = newText
         parseSync()
@@ -156,6 +161,7 @@ final class EditorViewModel: ObservableObject {
     }
 
     func updateTextFromEditor(_ newText: String) {
+        textRevision &+= 1
         text = newText
         styleCache = nil
     }
