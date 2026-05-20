@@ -156,9 +156,7 @@ final class EditorViewModel: ObservableObject {
     }
 
     func updateTextFromEditor(_ newText: String) {
-        skipNextAsyncParse = true
         text = newText
         styleCache = nil
-        parseSync()
     }
 }
