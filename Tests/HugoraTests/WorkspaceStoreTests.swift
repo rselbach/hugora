@@ -883,6 +883,26 @@ struct WorkspaceStoreTests {
         #expect(!FileManager.default.fileExists(atPath: bundleDir.path))
     }
 
+    @Test("Deleting an item outside content directory is rejected")
+    func deleteRejectsItemOutsideContentDirectory() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(sections: ["posts"])
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        let outsideFile = siteURL.appendingPathComponent("outside.md")
+        try "outside".write(to: outsideFile, atomically: true, encoding: .utf8)
+
+        store.openFolder(siteURL)
+        let item = ContentItem(url: outsideFile, format: .file, section: "posts")
+
+        store.deleteContent(item)
+
+        #expect(FileManager.default.fileExists(atPath: outsideFile.path))
+        #expect(store.lastError == .unsafeFileOperation(outsideFile.path))
+    }
+
     // MARK: - closeWorkspace
 
     @Test("Close workspace resets all state")

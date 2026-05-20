@@ -13,13 +13,16 @@ struct WorkspaceRef: Codable, Identifiable, Equatable {
     }
 }
 
-enum WorkspaceError: LocalizedError {
+enum WorkspaceError: LocalizedError, Equatable {
     case notHugoSite
+    case unsafeFileOperation(String)
 
     var errorDescription: String? {
         switch self {
         case .notHugoSite:
             "This folder doesn't appear to be a Hugo site. Expected hugo.toml, config.toml, or a config/ directory."
+        case .unsafeFileOperation(let path):
+            "Refusing to modify a file outside the workspace content directory: \(path)"
         }
     }
 }
@@ -382,15 +385,27 @@ final class WorkspaceStore: ObservableObject {
     /// - Parameter item: The content item to delete.
     func deleteContent(_ item: ContentItem) {
         let fm = FileManager.default
+        guard let contentDir = contentDirectoryURL else {
+            lastError = .unsafeFileOperation(item.url.path)
+            return
+        }
+
+        let targetURL: URL
+        switch item.format {
+        case .bundle:
+            targetURL = item.url.deletingLastPathComponent()
+        case .file:
+            targetURL = item.url
+        }
+
+        let standardizedTarget = targetURL.standardizedFileURL
+        guard PathSafety.isSameOrDescendant(standardizedTarget, of: contentDir.standardizedFileURL) else {
+            lastError = .unsafeFileOperation(targetURL.path)
+            return
+        }
 
         do {
-            switch item.format {
-            case .bundle:
-                let folderURL = item.url.deletingLastPathComponent()
-                try fm.trashItem(at: folderURL, resultingItemURL: nil)
-            case .file:
-                try fm.trashItem(at: item.url, resultingItemURL: nil)
-            }
+            try fm.trashItem(at: standardizedTarget, resultingItemURL: nil)
 
             let sectionName = item.section.isEmpty ? "(root)" : item.section
             if let sectionIdx = sections.firstIndex(where: { $0.name == sectionName }) {
