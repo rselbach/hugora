@@ -283,6 +283,7 @@ final class WorkspaceStore: ObservableObject {
         let sectionDir = targetSection.url
         let config = hugoConfig ?? .default
         let contentCreator = hugoContentCreator
+        let shouldUseHugoCLI = contentCreator.isAvailable(at: siteURL)
         WorkspacePreferenceStore.setNewPostFormat(format, for: siteURL)
         let preferredSectionName = targetSection.name == "(root)" ? nil : targetSection.name
         WorkspacePreferenceStore.setPreferredSection(preferredSectionName, for: siteURL)
@@ -325,13 +326,13 @@ final class WorkspaceStore: ObservableObject {
             siteURL: siteURL
         )
 
-        if let validationError = validateFrontmatterTemplate(frontmatter) {
+        if !shouldUseHugoCLI, let validationError = validateFrontmatterTemplate(frontmatter) {
             isLoading = false
             presentNewPostError(validationError)
             return
         }
 
-        guard confirmFrontmatterPreview(
+        guard shouldUseHugoCLI || confirmFrontmatterPreview(
             frontmatter: frontmatter,
             sectionName: targetSection.name,
             format: format
@@ -351,6 +352,7 @@ final class WorkspaceStore: ObservableObject {
                     format: format,
                     folderName: folderName,
                     expectedFileURL: expectedFileURL,
+                    useHugoCLI: shouldUseHugoCLI,
                     frontmatter: frontmatter
                 )
 
@@ -720,6 +722,7 @@ final class WorkspaceStore: ObservableObject {
         format: ContentFormat,
         folderName: String,
         expectedFileURL: URL,
+        useHugoCLI: Bool,
         frontmatter: String
     ) async throws -> URL {
         return try await withCheckedThrowingContinuation { continuation in
@@ -734,6 +737,7 @@ final class WorkspaceStore: ObservableObject {
                         format: format,
                         folderName: folderName,
                         expectedFileURL: expectedFileURL,
+                        useHugoCLI: useHugoCLI,
                         frontmatter: frontmatter
                     )
                     continuation.resume(returning: createdURL)
@@ -753,9 +757,10 @@ final class WorkspaceStore: ObservableObject {
         format: ContentFormat,
         folderName: String,
         expectedFileURL: URL,
+        useHugoCLI: Bool,
         frontmatter: String
     ) throws -> URL {
-        if contentCreator.isAvailable(at: siteURL) {
+        if useHugoCLI {
             let relativePath = Self.newPostRelativePath(
                 sectionName: sectionName,
                 format: format,

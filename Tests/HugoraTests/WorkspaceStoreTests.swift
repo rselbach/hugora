@@ -619,6 +619,34 @@ struct WorkspaceStoreTests {
         #expect(postsSection?.items.contains(where: { $0.title == "From Hugo CLI" }) == true)
     }
 
+    @Test("createNewPost lets Hugo render complex archetypes")
+    func createNewPostSkipsLocalValidationWhenUsingHugo() async throws {
+        let mockCreator = MockHugoContentCreator(available: true)
+        let (store, cleanup) = makeStore(hugoContentCreator: mockCreator)
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(sections: ["posts"])
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        let archetypesDir = siteURL.appendingPathComponent("archetypes")
+        try FileManager.default.createDirectory(at: archetypesDir, withIntermediateDirectories: true)
+        try """
+        ---
+        title: "{{ replace .File.ContentBaseName "-" " " | title }}"
+        date: "{{ .Date }}"
+        ---
+        """.write(to: archetypesDir.appendingPathComponent("posts.md"), atomically: true, encoding: .utf8)
+
+        store.openFolder(siteURL)
+        try await waitForAsyncScan()
+        store.createNewPost()
+        try await waitForAsyncScan()
+
+        #expect(mockCreator.calls.count == 1)
+        let postsSection = store.sections.first { $0.name == "posts" }
+        #expect(postsSection?.items.contains(where: { $0.title == "From Hugo CLI" }) == true)
+    }
+
     @Test("New post uses bundle format by default")
     func newPostBundleFormatDefault() async throws {
         let (store, cleanup) = makeStore()
