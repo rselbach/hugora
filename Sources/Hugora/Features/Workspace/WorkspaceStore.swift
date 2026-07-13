@@ -284,9 +284,6 @@ final class WorkspaceStore: ObservableObject {
         let config = hugoConfig ?? .default
         let contentCreator = hugoContentCreator
         let shouldUseHugoCLI = contentCreator.isAvailable(at: siteURL)
-        WorkspacePreferenceStore.setNewPostFormat(format, for: siteURL)
-        let preferredSectionName = targetSection.name == "(root)" ? nil : targetSection.name
-        WorkspacePreferenceStore.setPreferredSection(preferredSectionName, for: siteURL)
 
         let date = Date()
         let datePrefix = Self.newPostDateFormatter.string(from: date)
@@ -340,6 +337,10 @@ final class WorkspaceStore: ObservableObject {
             isLoading = false
             return
         }
+
+        WorkspacePreferenceStore.setNewPostFormat(format, for: siteURL)
+        let preferredSectionName = targetSection.name == "(root)" ? nil : targetSection.name
+        WorkspacePreferenceStore.setPreferredSection(preferredSectionName, for: siteURL)
 
         Task(priority: .userInitiated) { [weak self] in
             do {
