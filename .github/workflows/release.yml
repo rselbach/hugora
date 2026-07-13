@@ -117,9 +117,10 @@ jobs:
             --sign "Developer ID Application" \
             .build/release-bundle/Hugora.app/Contents/Frameworks/Sparkle.framework
           
-          # Sign the CLI tool
+          # Sign the CLI tool with hardened runtime only: a bare command-line
+          # binary carrying the app-sandbox entitlement (and no bundle) is
+          # killed by the sandbox at launch.
           codesign --force --options runtime \
-            --entitlements Hugora.entitlements \
             --sign "Developer ID Application" \
             .build/release-bundle/Hugora.app/Contents/MacOS/hugora-cli
           
