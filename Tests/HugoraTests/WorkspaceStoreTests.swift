@@ -559,6 +559,63 @@ struct WorkspaceStoreTests {
         #expect(item?.format == .bundle)
     }
 
+    @Test("Multilingual leaf bundle (index.<lang>.md) is loaded as one bundle")
+    func loadsMultilingualLeafBundle() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(sections: ["posts"])
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        let bundleDir = siteURL.appendingPathComponent("content/posts/chang-dynasty")
+        try FileManager.default.createDirectory(at: bundleDir, withIntermediateDirectories: true)
+        for lang in ["en", "pt"] {
+            try """
+            ---
+            title: "Chang Dynasty (\(lang))"
+            date: 2025-01-01
+            ---
+            Multilingual bundle.
+            """.write(to: bundleDir.appendingPathComponent("index.\(lang).md"), atomically: true, encoding: .utf8)
+        }
+
+        store.openFolder(siteURL)
+
+        let postsSection = store.sections.first { $0.name == "posts" }
+        let items = postsSection?.items.filter { $0.slug == "chang-dynasty" } ?? []
+        #expect(items.count == 1)
+        #expect(items.first?.format == .bundle)
+        // Deterministic pick: alphabetically first language variant.
+        #expect(items.first?.url.lastPathComponent == "index.en.md")
+    }
+
+    @Test("Plain index.md wins over language-qualified variants")
+    func plainIndexPreferredOverLanguageVariants() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(sections: ["posts"])
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        let bundleDir = siteURL.appendingPathComponent("content/posts/greendale-babies")
+        try FileManager.default.createDirectory(at: bundleDir, withIntermediateDirectories: true)
+        for name in ["index.md", "index.en.md"] {
+            try """
+            ---
+            title: "Greendale Babies"
+            date: 2025-01-01
+            ---
+            """.write(to: bundleDir.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        }
+
+        store.openFolder(siteURL)
+
+        let postsSection = store.sections.first { $0.name == "posts" }
+        let items = postsSection?.items.filter { $0.slug == "greendale-babies" } ?? []
+        #expect(items.count == 1)
+        #expect(items.first?.url.lastPathComponent == "index.md")
+    }
+
     // MARK: - createNewPost
 
     @Test("Creates a new post in the preferred section")

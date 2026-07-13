@@ -178,17 +178,27 @@ enum WorkspaceContentScanner {
     }
 
     private static func preferredLeafBundleIndex(in entries: [URL], contentRoot: URL) -> URL? {
-        entries.first { entry in
-            guard ContentFile.isSupportedContentFile(entry) && ContentFile.isLeafBundleIndex(entry) else {
-                return false
+        entries
+            .filter { entry in
+                guard ContentFile.isSupportedContentFile(entry) && ContentFile.isLeafBundleIndex(entry) else {
+                    return false
+                }
+                guard let values = try? entry.resourceValues(forKeys: [.isSymbolicLinkKey]),
+                      values.isSymbolicLink != true else {
+                    return false
+                }
+                let resolved = entry.resolvingSymlinksInPath().standardizedFileURL
+                return PathSafety.isSameOrDescendant(resolved, of: contentRoot)
             }
-            guard let values = try? entry.resourceValues(forKeys: [.isSymbolicLinkKey]),
-                  values.isSymbolicLink != true else {
-                return false
+            // Prefer the unqualified index over language-qualified variants,
+            // then pick deterministically instead of by directory order.
+            .sorted { lhs, rhs in
+                let lhsPlain = ContentFile.basenameWithoutExtension(lhs).lowercased() == "index"
+                let rhsPlain = ContentFile.basenameWithoutExtension(rhs).lowercased() == "index"
+                if lhsPlain != rhsPlain { return lhsPlain }
+                return lhs.lastPathComponent < rhs.lastPathComponent
             }
-            let resolved = entry.resolvingSymlinksInPath().standardizedFileURL
-            return PathSafety.isSameOrDescendant(resolved, of: contentRoot)
-        }
+            .first
     }
 
     private static func listDirectoryEntries(at url: URL) -> [URL] {

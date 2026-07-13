@@ -27,11 +27,19 @@ enum ContentFile {
     }
 
     static func isLeafBundleIndex(_ url: URL) -> Bool {
-        basenameWithoutExtension(url).lowercased() == "index"
+        isBundleIndex(url, stem: "index")
     }
 
     static func isBranchBundleIndex(_ url: URL) -> Bool {
-        basenameWithoutExtension(url).lowercased() == "_index"
+        isBundleIndex(url, stem: "_index")
+    }
+
+    /// Hugo accepts both index.md and language-qualified index.<lang>.md
+    /// (multilingual sites) as bundle index files; same for _index.
+    private static func isBundleIndex(_ url: URL, stem: String) -> Bool {
+        let parts = basenameWithoutExtension(url).lowercased().components(separatedBy: ".")
+        guard parts.count <= 2, parts.first == stem else { return false }
+        return parts.count == 1 || !parts[1].isEmpty
     }
 }
 
