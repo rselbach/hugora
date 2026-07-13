@@ -58,26 +58,38 @@ struct ContentView: View {
         }
         .navigationTitle(editorState.title)
         .onAppear {
-            workspaceStore.onOpenFile = { [weak editorState, weak viewModel, weak workspaceStore] url in
-                guard let editorState, let viewModel, let workspaceStore else { return }
+            workspaceStore.onOpenFile = { [weak editorState, weak workspaceStore] url in
+                guard let editorState, let workspaceStore else { return }
                 let item = workspaceStore.sections
                     .flatMap { $0.items }
                     .first { $0.url == url }
                 guard let item else { return }
-                editorState.contentRootURL = workspaceStore.contentDirectoryURL
                 editorState.openItem(item)
-                if let siteURL = workspaceStore.currentFolderURL {
-                    viewModel.imageContext = ImageContext(postURL: item.url, siteURL: siteURL)
-                }
             }
 
-            // Set up image context for restored session
-            if let item = editorState.currentItem,
-               let siteURL = workspaceStore.currentFolderURL {
-                editorState.contentRootURL = workspaceStore.contentDirectoryURL
-                viewModel.imageContext = ImageContext(postURL: item.url, siteURL: siteURL)
-                viewModel.setText(editorState.content)
-            }
+            // Cover a session restore that completed before this view appeared.
+            syncEditorContext()
+            viewModel.setText(editorState.content)
+        }
+        // Follow the current item wherever it changes — open, session
+        // restore finishing after onAppear, or auto-rename-on-save moving
+        // the bundle folder — so the image context never goes stale.
+        .onReceive(editorState.$currentItem) { _ in
+            DispatchQueue.main.async { syncEditorContext() }
+        }
+        .onReceive(workspaceStore.$currentFolderURL) { _ in
+            DispatchQueue.main.async { syncEditorContext() }
+        }
+    }
+
+    /// Re-derives the editor's workspace-dependent context from settled
+    /// state. Called via an async hop because @Published emits on willSet.
+    private func syncEditorContext() {
+        editorState.contentRootURL = workspaceStore.contentDirectoryURL
+        if let item = editorState.currentItem, let siteURL = workspaceStore.currentFolderURL {
+            viewModel.imageContext = ImageContext(postURL: item.url, siteURL: siteURL)
+        } else {
+            viewModel.imageContext = nil
         }
     }
 
