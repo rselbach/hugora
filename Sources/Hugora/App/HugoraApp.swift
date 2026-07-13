@@ -51,8 +51,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         false
     }
 
-    func applicationWillTerminate(_ notification: Notification) {
-        editorState?.saveCurrentIfDirty()
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let editorState, editorState.isDirty else { return .terminateNow }
+
+        // With auto-save on, quitting mid-debounce just flushes the pending
+        // save. With auto-save off, the user chose manual control — never
+        // overwrite their file without asking.
+        if !editorState.autoSaveEnabled {
+            let alert = NSAlert()
+            alert.messageText = "You have unsaved changes"
+            alert.informativeText = "Do you want to save the changes to \u{201C}\(editorState.title)\u{201D} before quitting?"
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Save and Quit")
+            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: "Discard Changes")
+
+            switch alert.runModal() {
+            case .alertFirstButtonReturn:
+                break
+            case .alertThirdButtonReturn:
+                return .terminateNow
+            default:
+                return .terminateCancel
+            }
+        }
+
+        editorState.saveCurrentIfDirty()
+        // A failed save leaves the document dirty; stay open so the error
+        // alert is visible instead of quitting past it.
+        return editorState.isDirty ? .terminateCancel : .terminateNow
     }
 
     func handleLaunchArguments() {

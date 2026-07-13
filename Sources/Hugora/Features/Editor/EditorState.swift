@@ -446,12 +446,12 @@ final class EditorState: ObservableObject {
     }
 }
 
-private extension EditorState {
+extension EditorState {
     var autoSaveEnabled: Bool {
         UserDefaults.standard.object(forKey: DefaultsKey.autoSaveEnabled) as? Bool ?? true
     }
 
-    var autoRenameOnSave: Bool {
+    fileprivate var autoRenameOnSave: Bool {
         UserDefaults.standard.object(forKey: DefaultsKey.autoRenameOnSave) as? Bool ?? false
     }
 }
