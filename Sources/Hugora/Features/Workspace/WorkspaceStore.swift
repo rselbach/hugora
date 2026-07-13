@@ -80,6 +80,16 @@ final class WorkspaceStore: ObservableObject {
     /// themes), for the Insert Shortcode menu.
     @Published private(set) var siteShortcodes: [String] = []
 
+    /// Every tag used across the site, for autocomplete.
+    var allTags: [String] {
+        Set(sections.flatMap(\.items).flatMap(\.tags)).sorted()
+    }
+
+    /// Every category used across the site, for autocomplete.
+    var allCategories: [String] {
+        Set(sections.flatMap(\.items).flatMap(\.categories)).sorted()
+    }
+
     /// Callback invoked when a file should be opened in the editor.
     /// Wired up by ContentView so WorkspaceStore doesn't depend on EditorState.
     var onOpenFile: ((URL) -> Void)?

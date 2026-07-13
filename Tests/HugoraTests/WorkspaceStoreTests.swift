@@ -1228,6 +1228,42 @@ struct WorkspaceStoreTests {
         #expect(section?.items.contains(where: { $0.slug == "nicolas-cage" }) == true)
     }
 
+    @Test("Taxonomy terms aggregate across the workspace")
+    func aggregatesTaxonomyTerms() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(
+            posts: [
+                (
+                    section: "posts", slug: "one",
+                    content: """
+                    ---
+                    title: One
+                    tags: [go, hugo]
+                    categories: [dev]
+                    ---
+                    """
+                ),
+                (
+                    section: "posts", slug: "two",
+                    content: """
+                    ---
+                    title: Two
+                    tags: [hugo, swift]
+                    ---
+                    """
+                ),
+            ]
+        )
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        store.openFolder(siteURL)
+
+        #expect(store.allTags == ["go", "hugo", "swift"])
+        #expect(store.allCategories == ["dev"])
+    }
+
     @Test("Site and theme shortcodes are discovered")
     func discoversSiteShortcodes() throws {
         let (store, cleanup) = makeStore()

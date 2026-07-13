@@ -66,6 +66,27 @@ enum FrontmatterParser {
         }
     }
 
+    /// Reads a list value (tags, categories, aliases). A scalar string is
+    /// treated as a one-element list, matching Hugo's leniency.
+    static func stringArray(forKey key: String, in content: String) -> [String] {
+        guard let value = rawValue(forKey: key, in: content) else { return [] }
+
+        switch value {
+        case let list as [Any]:
+            return list.compactMap { element in
+                switch element {
+                case let string as String: string
+                case let number as NSNumber: number.stringValue
+                default: nil
+                }
+            }
+        case let string as String:
+            return [string]
+        default:
+            return []
+        }
+    }
+
     static func bool(forKey key: String, in content: String) -> Bool? {
         guard let value = rawValue(forKey: key, in: content) else { return nil }
 
@@ -245,6 +266,8 @@ struct ContentItem: Identifiable, Equatable, Comparable {
     let section: String
     let isDraft: Bool
     let publishDate: Date?
+    let tags: [String]
+    let categories: [String]
 
     /// Pre-lowercased title for search filtering (avoids per-keystroke allocation).
     let searchTitle: String
@@ -275,6 +298,8 @@ struct ContentItem: Identifiable, Equatable, Comparable {
         self.date = content.flatMap { Self.parseDate(from: $0) }
         self.isDraft = content.flatMap { FrontmatterParser.bool(forKey: "draft", in: $0) } ?? false
         self.publishDate = content.flatMap { FrontmatterParser.date(forKey: "publishDate", in: $0) }
+        self.tags = content.map { FrontmatterParser.stringArray(forKey: "tags", in: $0) } ?? []
+        self.categories = content.map { FrontmatterParser.stringArray(forKey: "categories", in: $0) } ?? []
         self.searchTitle = self.title.lowercased()
         self.searchSlug = self.slug.lowercased()
     }
@@ -298,6 +323,8 @@ struct ContentItem: Identifiable, Equatable, Comparable {
         self.date = Self.parseDate(from: content)
         self.isDraft = FrontmatterParser.bool(forKey: "draft", in: content) ?? false
         self.publishDate = FrontmatterParser.date(forKey: "publishDate", in: content)
+        self.tags = FrontmatterParser.stringArray(forKey: "tags", in: content)
+        self.categories = FrontmatterParser.stringArray(forKey: "categories", in: content)
         self.searchTitle = self.title.lowercased()
         self.searchSlug = self.slug.lowercased()
     }

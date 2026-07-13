@@ -209,6 +209,48 @@ struct ContentItemTests {
         #expect(published.publishStatus == .published)
     }
 
+    @Test("Tags and categories are parsed from frontmatter")
+    func taxonomyParsed() {
+        let url = URL(fileURLWithPath: "/tmp/post.md")
+
+        let yamlList = ContentItem(
+            url: url, format: .file, section: "blog",
+            content: """
+                ---
+                title: Post
+                tags:
+                  - go
+                  - hugo
+                categories: ["dev"]
+                ---
+                """
+        )
+        #expect(yamlList.tags == ["go", "hugo"])
+        #expect(yamlList.categories == ["dev"])
+
+        let scalarTag = ContentItem(
+            url: url, format: .file, section: "blog",
+            content: """
+                ---
+                title: Post
+                tags: solo
+                ---
+                """
+        )
+        #expect(scalarTag.tags == ["solo"])
+
+        let toml = ContentItem(
+            url: url, format: .file, section: "blog",
+            content: """
+                +++
+                title = "Post"
+                tags = ["a", "b"]
+                +++
+                """
+        )
+        #expect(toml.tags == ["a", "b"])
+    }
+
     @Test("TOML draft flag is parsed")
     func tomlDraftParsed() {
         let item = ContentItem(
