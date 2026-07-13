@@ -72,5 +72,8 @@
     <string>ePrj/6ZMfGvkCXTYRq+X0H9Ukshi3Wx3+swNSi75Tio=</string>
     <key>SUFeedURL</key>
     <string>https://rselbach.github.io/hugora/appcast.xml</string>
+    <!-- Required for Sparkle to install updates from inside the sandbox. -->
+    <key>SUEnableInstallerLauncherService</key>
+    <true/>
 </dict>
 </plist>

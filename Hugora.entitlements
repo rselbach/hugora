@@ -14,5 +14,12 @@
     <array>
         <string>/usr/local/bin/hugora</string>
     </array>
+    <!-- Sparkle sandbox support: status (spks) and installer progress
+         (spki) mach services, named after the bundle identifier. -->
+    <key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+    <array>
+        <string>com.selbach.hugora-spks</string>
+        <string>com.selbach.hugora-spki</string>
+    </array>
 </dict>
 </plist>
