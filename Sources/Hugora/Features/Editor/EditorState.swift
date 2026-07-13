@@ -381,18 +381,23 @@ final class EditorState: ObservableObject {
         }
         let format: ContentFormat = ContentFile.isLeafBundleIndex(url) ? .bundle : .file
         let section = extractSectionFromPath(url)
+        let capturedRevision = openRevision
 
         Task(priority: .utility) {
             do {
                 let rawContent = try await Task.detached {
                     try String(contentsOf: url, encoding: .utf8)
                 }.value
+                // Bail if the user opened a document or started typing while
+                // the restore read was in flight.
+                guard self.openRevision == capturedRevision else { return }
                 let decoded = HTMLEntityCodec.decode(rawContent)
                 self.currentItem = ContentItem(url: url, format: format, section: section, content: rawContent)
                 self.content = decoded.decoded
                 self.entityMappings = decoded.mappings
                 self.isDirty = false
             } catch {
+                guard self.openRevision == capturedRevision else { return }
                 Self.logger.error("Failed to restore session file \(url.lastPathComponent): \(error.localizedDescription)")
                 self.lastError = error
             }
