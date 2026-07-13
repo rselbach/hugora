@@ -154,6 +154,75 @@ struct ContentItemTests {
         #expect(components.day == 15)
     }
 
+    @Test("Draft and future dates map to publish status")
+    func publishStatusFromFrontmatter() {
+        let url = URL(fileURLWithPath: "/tmp/post.md")
+
+        let draft = ContentItem(
+            url: url, format: .file, section: "blog",
+            content: """
+                ---
+                title: Draft Post
+                date: 2024-01-01
+                draft: true
+                ---
+                """
+        )
+        #expect(draft.isDraft)
+        #expect(draft.publishStatus == .draft)
+
+        let scheduled = ContentItem(
+            url: url, format: .file, section: "blog",
+            content: """
+                ---
+                title: Scheduled Post
+                date: 2999-01-01
+                ---
+                """
+        )
+        #expect(!scheduled.isDraft)
+        #expect(scheduled.publishStatus == .scheduled)
+
+        let scheduledViaPublishDate = ContentItem(
+            url: url, format: .file, section: "blog",
+            content: """
+                ---
+                title: Publish Later
+                date: 2020-01-01
+                publishDate: 2999-01-01
+                ---
+                """
+        )
+        #expect(scheduledViaPublishDate.publishStatus == .scheduled)
+        #expect(scheduledViaPublishDate.publishDate != nil)
+
+        let published = ContentItem(
+            url: url, format: .file, section: "blog",
+            content: """
+                ---
+                title: Live Post
+                date: 2020-01-01
+                draft: false
+                ---
+                """
+        )
+        #expect(published.publishStatus == .published)
+    }
+
+    @Test("TOML draft flag is parsed")
+    func tomlDraftParsed() {
+        let item = ContentItem(
+            url: URL(fileURLWithPath: "/tmp/post.md"), format: .file, section: "blog",
+            content: """
+                +++
+                title = "Chang"
+                draft = true
+                +++
+                """
+        )
+        #expect(item.isDraft)
+    }
+
     @Test("Date extracted from TOML frontmatter")
     func dateExtractedFromTomlFrontmatter() throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

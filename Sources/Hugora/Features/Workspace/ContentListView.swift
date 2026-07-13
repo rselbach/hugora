@@ -3,17 +3,49 @@ import SwiftUI
 struct ContentListView: View {
     @EnvironmentObject private var workspaceStore: WorkspaceStore
     @State private var searchText = ""
+    @State private var statusFilter: PostStatusFilter = .all
+
+    enum PostStatusFilter: String, CaseIterable, Identifiable {
+        case all = "All"
+        case drafts = "Drafts"
+        case published = "Published"
+
+        var id: String { rawValue }
+
+        func matches(_ item: ContentItem) -> Bool {
+            switch self {
+            case .all: true
+            case .drafts: item.isDraft
+            case .published: !item.isDraft
+            }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             if workspaceStore.currentFolderURL != nil {
                 searchField
+                statusFilterPicker
             }
             Divider()
             content
         }
         .background(.background)
+    }
+
+    private var statusFilterPicker: some View {
+        Picker("Filter posts", selection: $statusFilter) {
+            ForEach(PostStatusFilter.allCases) { filter in
+                Text(filter.rawValue).tag(filter)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+        .padding(.horizontal, 10)
+        .padding(.bottom, 8)
+        .accessibilityLabel("Filter posts by publish status")
     }
 
     private var header: some View {
@@ -89,11 +121,13 @@ struct ContentListView: View {
 
     private var filteredSections: [ContentSection] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return workspaceStore.sections }
+        guard !query.isEmpty || statusFilter != .all else { return workspaceStore.sections }
 
         return workspaceStore.sections.compactMap { section in
             let filteredItems = section.items.filter { item in
-                item.searchTitle.contains(query) || item.searchSlug.contains(query)
+                guard statusFilter.matches(item) else { return false }
+                guard !query.isEmpty else { return true }
+                return item.searchTitle.contains(query) || item.searchSlug.contains(query)
             }
             guard !filteredItems.isEmpty else { return nil }
             return ContentSection(name: section.name, url: section.url, items: filteredItems)
@@ -103,9 +137,10 @@ struct ContentListView: View {
     private var viewState: ViewState {
         if let error = workspaceStore.lastError { return .error(error) }
         if !filteredSections.isEmpty { return .sections }
-        if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-            !workspaceStore.sections.isEmpty
-        {
+        let isFiltering =
+            !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || statusFilter != .all
+        if isFiltering, !workspaceStore.sections.isEmpty {
             return .noResults
         }
         if workspaceStore.currentFolderURL != nil { return .emptyContent }
@@ -270,7 +305,25 @@ struct ContentRow: View {
 
     private func accessibilityDescription(for item: ContentItem) -> String {
         let dateString = item.date.map { Self.dateFormatter.string(from: $0) } ?? "no date"
-        return "\(item.title), \(dateString)"
+        switch item.publishStatus {
+        case .draft:
+            return "\(item.title), \(dateString), draft"
+        case .scheduled:
+            return "\(item.title), \(dateString), scheduled"
+        case .published:
+            return "\(item.title), \(dateString)"
+        }
+    }
+
+    @ViewBuilder
+    private func pill(_ label: String, tint: Color?) -> some View {
+        Text(label)
+            .font(.system(size: 9))
+            .foregroundStyle(tint ?? Color.secondary)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background((tint ?? Color.secondary).opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 3))
     }
 
     var body: some View {
@@ -292,14 +345,17 @@ struct ContentRow: View {
                             .foregroundStyle(.tertiary)
                     }
 
+                    switch item.publishStatus {
+                    case .draft:
+                        pill("draft", tint: .orange)
+                    case .scheduled:
+                        pill("scheduled", tint: .blue)
+                    case .published:
+                        EmptyView()
+                    }
+
                     if item.format == .bundle {
-                        Text("bundle")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 4)
-                            .padding(.vertical, 1)
-                            .background(.quaternary)
-                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                        pill("bundle", tint: nil)
                     }
                 }
             }

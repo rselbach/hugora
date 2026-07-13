@@ -66,6 +66,23 @@ enum FrontmatterParser {
         }
     }
 
+    static func bool(forKey key: String, in content: String) -> Bool? {
+        guard let value = rawValue(forKey: key, in: content) else { return nil }
+
+        switch value {
+        case let bool as Bool:
+            return bool
+        case let string as String:
+            switch string.lowercased() {
+            case "true", "yes": return true
+            case "false", "no": return false
+            default: return nil
+            }
+        default:
+            return nil
+        }
+    }
+
     static func date(forKey key: String, in content: String) -> Date? {
         guard let value = rawValue(forKey: key, in: content) else { return nil }
 
@@ -226,6 +243,8 @@ struct ContentItem: Identifiable, Equatable, Comparable {
     let format: ContentFormat
     let date: Date?
     let section: String
+    let isDraft: Bool
+    let publishDate: Date?
 
     /// Pre-lowercased title for search filtering (avoids per-keystroke allocation).
     let searchTitle: String
@@ -254,6 +273,8 @@ struct ContentItem: Identifiable, Equatable, Comparable {
         }
         self.title = content.flatMap { FrontmatterParser.value(forKey: "title", in: $0) } ?? slug
         self.date = content.flatMap { Self.parseDate(from: $0) }
+        self.isDraft = content.flatMap { FrontmatterParser.bool(forKey: "draft", in: $0) } ?? false
+        self.publishDate = content.flatMap { FrontmatterParser.date(forKey: "publishDate", in: $0) }
         self.searchTitle = self.title.lowercased()
         self.searchSlug = self.slug.lowercased()
     }
@@ -275,8 +296,26 @@ struct ContentItem: Identifiable, Equatable, Comparable {
 
         self.title = FrontmatterParser.value(forKey: "title", in: content) ?? slug
         self.date = Self.parseDate(from: content)
+        self.isDraft = FrontmatterParser.bool(forKey: "draft", in: content) ?? false
+        self.publishDate = FrontmatterParser.date(forKey: "publishDate", in: content)
         self.searchTitle = self.title.lowercased()
         self.searchSlug = self.slug.lowercased()
+    }
+
+    enum PublishStatus {
+        case draft
+        case scheduled
+        case published
+    }
+
+    /// Hugo's view of this post: drafts and future-dated posts don't render
+    /// in a default build (mirrors `hugo list drafts` / `hugo list future`).
+    var publishStatus: PublishStatus {
+        if isDraft { return .draft }
+        if let effectiveDate = publishDate ?? date, effectiveDate > Date() {
+            return .scheduled
+        }
+        return .published
     }
 
     static func < (lhs: ContentItem, rhs: ContentItem) -> Bool {
