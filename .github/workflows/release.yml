@@ -57,7 +57,9 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ github.run_number }}" Info.plist
 
       - name: Build release
-        run: swift build -c release
+        # Universal build: the appcast offers one DMG to every Mac on
+        # macOS 14+, which includes Intel machines.
+        run: swift build -c release --arch arm64 --arch x86_64
 
       - name: Import signing certificate
         env:
@@ -88,16 +90,23 @@ jobs:
         run: |
           APP_BUNDLE=".build/release-bundle/Hugora.app"
           CONTENTS="${APP_BUNDLE}/Contents"
+          # Multi-arch builds land in .build/apple/Products/Release.
+          RELEASE_DIR=".build/apple/Products/Release"
           mkdir -p "${CONTENTS}/MacOS" "${CONTENTS}/Resources" "${CONTENTS}/Frameworks"
-          
+
           # Copy executables
-          cp .build/release/Hugora "${CONTENTS}/MacOS/Hugora"
-          cp .build/release/hugora-cli "${CONTENTS}/MacOS/hugora-cli"
+          cp "${RELEASE_DIR}/Hugora" "${CONTENTS}/MacOS/Hugora"
+          cp "${RELEASE_DIR}/hugora-cli" "${CONTENTS}/MacOS/hugora-cli"
           cp Info.plist "${CONTENTS}/Info.plist"
-          
-          # Copy Sparkle.framework into the bundle
-          SPARKLE_PATH=$(find .build -name "Sparkle.framework" -type d | head -1)
+
+          # Copy Sparkle.framework into the bundle (the SwiftPM artifact
+          # ships a universal framework).
+          SPARKLE_PATH=$(find "${RELEASE_DIR}" .build -name "Sparkle.framework" -type d | head -1)
           cp -R "${SPARKLE_PATH}" "${CONTENTS}/Frameworks/"
+
+          # Fail loudly if either slice is missing.
+          lipo -verify_arch arm64 x86_64 "${CONTENTS}/MacOS/Hugora"
+          lipo -verify_arch arm64 x86_64 "${CONTENTS}/MacOS/hugora-cli"
           
           # Add rpath for Frameworks directory
           install_name_tool -add_rpath @executable_path/../Frameworks "${CONTENTS}/MacOS/Hugora"
