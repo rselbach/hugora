@@ -280,11 +280,41 @@ final class WorkspaceStore: ObservableObject {
 
         isLoading = true
         let format = preferredNewPostFormat()
-        let sectionDir = targetSection.url
         let config = hugoConfig ?? .default
         let contentCreator = hugoContentCreator
-        let shouldUseHugoCLI = contentCreator.isAvailable(at: siteURL)
 
+        // The availability probe spawns `hugo version`; keep it off the main
+        // actor so the UI doesn't stall on process launch.
+        Task(priority: .userInitiated) { [weak self] in
+            let shouldUseHugoCLI = await Task.detached(priority: .userInitiated) {
+                contentCreator.isAvailable(at: siteURL)
+            }.value
+
+            guard let self else { return }
+            guard self.currentFolderURL?.standardizedFileURL == siteURL.standardizedFileURL else {
+                self.isLoading = false
+                return
+            }
+            self.finishCreateNewPost(
+                siteURL: siteURL,
+                targetSection: targetSection,
+                format: format,
+                config: config,
+                contentCreator: contentCreator,
+                shouldUseHugoCLI: shouldUseHugoCLI
+            )
+        }
+    }
+
+    private func finishCreateNewPost(
+        siteURL: URL,
+        targetSection: ContentSection,
+        format: ContentFormat,
+        config: HugoConfig,
+        contentCreator: any HugoContentCreator,
+        shouldUseHugoCLI: Bool
+    ) {
+        let sectionDir = targetSection.url
         let date = Date()
         let datePrefix = Self.newPostDateFormatter.string(from: date)
 
