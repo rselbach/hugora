@@ -326,3 +326,22 @@ struct PostLinkInsertionTests {
         #expect((editor.string as NSString).substring(with: selection) == "Older Post")
     }
 }
+
+@Suite("Image Paste Markdown")
+struct ImagePasteMarkdownTests {
+    @Test("Alt text derives from the file name")
+    @MainActor
+    func altTextFromFilename() {
+        let (markdown, altRange) = EditorTextView.imageMarkdown(forPath: "cover-photo_final.png")
+        #expect(markdown == "![cover photo final](cover-photo_final.png)")
+        #expect((markdown as NSString).substring(with: altRange) == "cover photo final")
+    }
+
+    @Test("Paths keep directories out of the alt text")
+    @MainActor
+    func altTextIgnoresDirectories() {
+        let (markdown, altRange) = EditorTextView.imageMarkdown(forPath: "/images/2024/troy-barnes.jpg")
+        #expect(markdown == "![troy barnes](/images/2024/troy-barnes.jpg)")
+        #expect((markdown as NSString).substring(with: altRange) == "troy barnes")
+    }
+}

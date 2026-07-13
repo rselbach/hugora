@@ -812,8 +812,13 @@ class EditorTextView: NSTextView {
 
                     let maxLocation = self.string.utf16.count
                     let safeRange = NSRange(location: min(insertionRange.location, maxLocation), length: 0)
-                    let markdown = "![](\(destination.markdownPath))"
+                    let (markdown, altRange) = Self.imageMarkdown(forPath: destination.markdownPath)
                     self.insertText(markdown, replacementRange: safeRange)
+                    // Leave the alt text selected so typing replaces it —
+                    // an empty alt hurts accessibility and is easy to forget.
+                    self.setSelectedRange(
+                        NSRange(location: safeRange.location + altRange.location, length: altRange.length)
+                    )
                 }
             } catch {
                 DispatchQueue.main.async { [weak self] in
@@ -828,6 +833,20 @@ class EditorTextView: NSTextView {
                 }
             }
         }
+    }
+
+    /// Builds the markdown for a pasted image with a default alt text
+    /// derived from the file name, returning the alt's range within the
+    /// markdown so callers can preselect it.
+    static func imageMarkdown(forPath path: String) -> (markdown: String, altRange: NSRange) {
+        let stem = ((path as NSString).lastPathComponent as NSString).deletingPathExtension
+        let alt =
+            stem
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+        let markdown = "![\(alt)](\(path))"
+        return (markdown, NSRange(location: 2, length: (alt as NSString).length))
     }
 
     private static let imageTimestampFormatter: ISO8601DateFormatter = {
