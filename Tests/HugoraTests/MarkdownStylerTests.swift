@@ -153,6 +153,43 @@ struct StyleCollectorTests {
         }
     }
 
+    @Test("Setext heading markers hide the underline, not the text")
+    func testSetextHeadingMarkers() throws {
+        let markdown = "Title\n====="
+        let document = Document(parsing: markdown)
+        var collector = StyleCollector()
+        collector.visit(document)
+
+        let heading = try #require(collector.spans.first {
+            if case .heading = $0.kind { return true }
+            return false
+        })
+
+        let markers = SyntaxMarkerCalculator.markers(for: heading, in: markdown)
+        #expect(markers.count == 1)
+        let marker = try #require(markers.first)
+        // The hidden range must cover "\n=====", never the heading text.
+        #expect(marker.range.location == 5)
+        #expect(NSMaxRange(marker.range) == (markdown as NSString).length)
+    }
+
+    @Test("ATX heading markers hide the hash prefix")
+    func testATXHeadingMarkers() throws {
+        let markdown = "## Heading"
+        let document = Document(parsing: markdown)
+        var collector = StyleCollector()
+        collector.visit(document)
+
+        let heading = try #require(collector.spans.first {
+            if case .heading = $0.kind { return true }
+            return false
+        })
+
+        let markers = SyntaxMarkerCalculator.markers(for: heading, in: markdown)
+        let marker = try #require(markers.first)
+        #expect(marker.range == NSRange(location: 0, length: 3))
+    }
+
     @Test("Collects bold spans")
     func testBoldCollection() {
         let markdown = "Some **bold** text"

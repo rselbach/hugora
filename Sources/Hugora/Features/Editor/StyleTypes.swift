@@ -67,10 +67,25 @@ enum SyntaxMarkerCalculator {
 
         switch kind {
         case .heading(let level):
-            // # to ###### plus space = level + 1 characters prefix
-            let prefixLen = min(level + 1, nsRange.length)
-            let prefixRange = NSRange(location: nsRange.location, length: prefixLen)
-            return [SyntaxMarker(range: prefixRange, parentRange: nsRange, parentKind: kind)]
+            let nsString = text as NSString
+            let content = nsString.substring(with: nsRange)
+
+            if content.hasPrefix("#") {
+                // ATX: # to ###### plus space = level + 1 characters prefix
+                let prefixLen = min(level + 1, nsRange.length)
+                let prefixRange = NSRange(location: nsRange.location, length: prefixLen)
+                return [SyntaxMarker(range: prefixRange, parentRange: nsRange, parentKind: kind)]
+            }
+
+            // Setext ("Title\n====="): hide the underline line, not heading text.
+            let contentNS = content as NSString
+            let newline = contentNS.range(of: "\n", options: .backwards)
+            guard newline.location != NSNotFound else { return [] }
+            let underlineRange = NSRange(
+                location: nsRange.location + newline.location,
+                length: nsRange.length - newline.location
+            )
+            return [SyntaxMarker(range: underlineRange, parentRange: nsRange, parentKind: kind)]
 
         case .bold:
             // ** or __ prefix and suffix (2 chars each)
