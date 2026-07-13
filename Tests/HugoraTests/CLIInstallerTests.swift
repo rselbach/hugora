@@ -14,4 +14,12 @@ struct CLIInstallerErrorTests {
         let error = CLIInstallerError.notManagedInstall("/usr/local/bin/hugora")
         #expect(error.localizedDescription.contains("not managed by Hugora"))
     }
+
+    @Test("Manual command error carries the exact command")
+    func manualCommandMessage() {
+        let command = "sudo ln -sf '/Applications/Hugora.app/Contents/MacOS/hugora-cli' '/usr/local/bin/hugora'"
+        let error = CLIInstallerError.requiresManualCommand(command: command)
+        #expect(error.localizedDescription.contains(command))
+        #expect(error.localizedDescription.contains("administrator privileges"))
+    }
 }

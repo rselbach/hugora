@@ -82,6 +82,10 @@ struct AppCommands: Commands {
                 if case CLIInstallerError.userCancelled = error {
                     return
                 }
+                if case CLIInstallerError.requiresManualCommand(let command) = error {
+                    showManualCommandAlert(command: command)
+                    return
+                }
                 showAlert(title: "Installation Failed", message: error.localizedDescription)
             }
         }
@@ -100,8 +104,31 @@ struct AppCommands: Commands {
                 if case CLIInstallerError.userCancelled = error {
                     return
                 }
+                if case CLIInstallerError.requiresManualCommand(let command) = error {
+                    showManualCommandAlert(command: command)
+                    return
+                }
                 showAlert(title: "Uninstall Failed", message: error.localizedDescription)
             }
+        }
+    }
+
+    private func showManualCommandAlert(command: String) {
+        let alert = NSAlert()
+        alert.messageText = "Administrator Privileges Required"
+        alert.informativeText = """
+            Hugora can't modify /usr/local/bin from inside the sandbox. \
+            Run this command in Terminal:
+
+            \(command)
+            """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Copy Command")
+        alert.addButton(withTitle: "Cancel")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(command, forType: .string)
         }
     }
 

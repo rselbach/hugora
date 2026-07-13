@@ -88,7 +88,16 @@ enum CLIInstaller {
             return
         }
 
-        // Need admin privileges - use AppleScript
+        // Need admin privileges. The sandbox blocks AppleScript's
+        // "with administrator privileges", so hand the user the exact
+        // command instead of failing cryptically.
+        if isSandboxed {
+            completion(.failure(CLIInstallerError.requiresManualCommand(
+                command: "sudo ln -sf '\(bundledURL.path)' '\(installPath)'"
+            )))
+            return
+        }
+
         installWithAdminPrivileges(bundledURL: bundledURL, completion: completion)
     }
 
@@ -118,7 +127,18 @@ enum CLIInstaller {
         }
 
         // Need admin privileges
+        if isSandboxed {
+            completion(.failure(CLIInstallerError.requiresManualCommand(
+                command: "sudo rm '\(installPath)'"
+            )))
+            return
+        }
+
         uninstallWithAdminPrivileges(completion: completion)
+    }
+
+    private static var isSandboxed: Bool {
+        ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
     }
 
     private static func installSymlink(from source: String) throws {
@@ -253,6 +273,7 @@ enum CLIInstallerError: LocalizedError {
     case notManagedInstall(String)
     case userCancelled
     case scriptFailed(String)
+    case requiresManualCommand(command: String)
 
     var errorDescription: String? {
         switch self {
@@ -266,6 +287,8 @@ enum CLIInstallerError: LocalizedError {
             "Installation was cancelled."
         case .scriptFailed(let message):
             "Installation failed: \(message)"
+        case .requiresManualCommand(let command):
+            "This step needs administrator privileges, which the sandboxed app can't request. Run this in Terminal:\n\n\(command)"
         }
     }
 }
