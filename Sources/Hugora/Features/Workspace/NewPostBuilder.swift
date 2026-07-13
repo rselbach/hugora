@@ -73,19 +73,37 @@ struct NewPostBuilder {
     }
 
     private func loadArchetype(sectionName: String?, format: ContentFormat) -> String? {
-        let baseURL = archetypeBaseURL()
-        let candidates = archetypeCandidates(baseURL: baseURL, sectionName: sectionName, format: format)
-
-        for url in candidates {
-            guard fileManager.fileExists(atPath: url.path) else { continue }
-            do {
-                return try String(contentsOf: url, encoding: .utf8)
-            } catch {
-                Self.logger.error("Failed to read archetype \(url.lastPathComponent): \(error.localizedDescription)")
+        // Hugo's union filesystem overlays the project onto its themes: each
+        // relative candidate is looked up in the project archetypes dir
+        // first, then in every theme's, before trying the next candidate.
+        let baseURLs = archetypeBaseURLs()
+        for relativePath in archetypeRelativePaths(sectionName: sectionName, format: format) {
+            for baseURL in baseURLs {
+                let url = baseURL.appendingPathComponent(relativePath)
+                guard fileManager.fileExists(atPath: url.path) else { continue }
+                do {
+                    return try String(contentsOf: url, encoding: .utf8)
+                } catch {
+                    Self.logger.error("Failed to read archetype \(url.lastPathComponent): \(error.localizedDescription)")
+                }
             }
         }
 
         return nil
+    }
+
+    private func archetypeBaseURLs() -> [URL] {
+        var bases = [archetypeBaseURL()]
+        for theme in config.themes {
+            let candidate = siteURL
+                .appendingPathComponent("themes")
+                .appendingPathComponent(theme)
+                .appendingPathComponent("archetypes")
+                .standardizedFileURL
+            guard PathSafety.isSameOrDescendant(candidate, of: siteURL) else { continue }
+            bases.append(candidate)
+        }
+        return bases
     }
 
     private func archetypeBaseURL() -> URL {
@@ -97,25 +115,21 @@ struct NewPostBuilder {
         return candidate
     }
 
-    private func archetypeCandidates(
-        baseURL: URL,
-        sectionName: String?,
-        format: ContentFormat
-    ) -> [URL] {
-        var candidates: [URL] = []
+    private func archetypeRelativePaths(sectionName: String?, format: ContentFormat) -> [String] {
+        var paths: [String] = []
 
         if let sectionName {
             if format == .bundle {
-                candidates.append(baseURL.appendingPathComponent(sectionName).appendingPathComponent("index.md"))
+                paths.append("\(sectionName)/index.md")
             }
-            candidates.append(baseURL.appendingPathComponent("\(sectionName).md"))
+            paths.append("\(sectionName).md")
             if format == .file {
-                candidates.append(baseURL.appendingPathComponent(sectionName).appendingPathComponent("index.md"))
+                paths.append("\(sectionName)/index.md")
             }
         }
 
-        candidates.append(baseURL.appendingPathComponent("default.md"))
-        return candidates
+        paths.append("default.md")
+        return paths
     }
 
     // Local time with offset, like `hugo new` writes. Keeping this in the

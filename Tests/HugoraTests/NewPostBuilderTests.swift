@@ -184,6 +184,76 @@ struct NewPostBuilderTests {
         #expect(content.contains("{{< figure"))
     }
 
+    @Test("Theme archetypes are used when the site has none")
+    func themeArchetypeUsedAsFallback() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let themeArchetypes = tempDir.appendingPathComponent("themes/greendale/archetypes")
+        try FileManager.default.createDirectory(at: themeArchetypes, withIntermediateDirectories: true)
+        try """
+        ---
+        source: "theme"
+        title: "{{ .Title }}"
+        date: "{{ .Date }}"
+        ---
+        """.write(to: themeArchetypes.appendingPathComponent("default.md"), atomically: true, encoding: .utf8)
+
+        let config = HugoConfig(contentDir: "content", archetypeDir: "archetypes", title: nil, themes: ["greendale"])
+        let builder = NewPostBuilder(siteURL: tempDir, config: config)
+        let content = builder.buildContent(
+            sectionName: "posts",
+            format: .file,
+            title: "Britta Perry",
+            slug: "britta-perry",
+            date: Date(timeIntervalSince1970: 0)
+        )
+
+        #expect(content.contains("source: \"theme\""))
+        #expect(content.contains("title: \"Britta Perry\""))
+    }
+
+    @Test("Site section archetype beats theme section archetype")
+    func siteArchetypeBeatsThemeArchetype() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let siteArchetypes = tempDir.appendingPathComponent("archetypes")
+        try FileManager.default.createDirectory(at: siteArchetypes, withIntermediateDirectories: true)
+        try """
+        ---
+        source: "site"
+        title: "{{ .Title }}"
+        date: "{{ .Date }}"
+        ---
+        """.write(to: siteArchetypes.appendingPathComponent("posts.md"), atomically: true, encoding: .utf8)
+
+        let themeArchetypes = tempDir.appendingPathComponent("themes/greendale/archetypes")
+        try FileManager.default.createDirectory(at: themeArchetypes, withIntermediateDirectories: true)
+        try """
+        ---
+        source: "theme"
+        title: "{{ .Title }}"
+        date: "{{ .Date }}"
+        ---
+        """.write(to: themeArchetypes.appendingPathComponent("posts.md"), atomically: true, encoding: .utf8)
+
+        let config = HugoConfig(contentDir: "content", archetypeDir: "archetypes", title: nil, themes: ["greendale"])
+        let builder = NewPostBuilder(siteURL: tempDir, config: config)
+        let content = builder.buildContent(
+            sectionName: "posts",
+            format: .file,
+            title: "Jeff Winger",
+            slug: "jeff-winger",
+            date: Date(timeIntervalSince1970: 0)
+        )
+
+        #expect(content.contains("source: \"site\""))
+        #expect(!content.contains("source: \"theme\""))
+    }
+
     @Test("Escaped archetypeDir falls back to in-site archetypes directory")
     func escapedArchetypeDirFallsBackToSafeDefault() throws {
         let parent = FileManager.default.temporaryDirectory.appendingPathComponent("hugora-parent-\(UUID().uuidString)")

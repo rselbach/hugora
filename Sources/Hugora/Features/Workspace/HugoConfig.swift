@@ -11,6 +11,14 @@ struct HugoConfig {
     let contentDir: String
     let archetypeDir: String
     let title: String?
+    let themes: [String]
+
+    init(contentDir: String, archetypeDir: String, title: String?, themes: [String] = []) {
+        self.contentDir = contentDir
+        self.archetypeDir = archetypeDir
+        self.title = title
+        self.themes = themes
+    }
 
     static let `default` = HugoConfig(contentDir: "content", archetypeDir: "archetypes", title: nil)
 
@@ -117,7 +125,8 @@ struct HugoConfig {
         return HugoConfig(
             contentDir: contentDir,
             archetypeDir: archetypeDir,
-            title: title
+            title: title,
+            themes: extractThemes(from: object)
         )
     }
 
@@ -126,5 +135,20 @@ struct HugoConfig {
             return nil
         }
         return entry.value as? String
+    }
+
+    /// Hugo's `theme` key is a string or an array of theme names.
+    private static func extractThemes(from object: [String: Any]) -> [String] {
+        guard let entry = object.first(where: { $0.key.caseInsensitiveCompare("theme") == .orderedSame }) else {
+            return []
+        }
+        switch entry.value {
+        case let name as String:
+            return [name]
+        case let names as [Any]:
+            return names.compactMap { $0 as? String }
+        default:
+            return []
+        }
     }
 }
