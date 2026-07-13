@@ -82,6 +82,9 @@ final class EditorState: ObservableObject {
     private var openRevision: UInt64 = 0
     private var autoSaveTask: Task<Void, Never>?
     var contentRootURL: URL?
+    /// Site config for permalink computation (aliases on rename); kept in
+    /// sync by ContentView.
+    var hugoConfig: HugoConfig?
 
     /// The display title of the current item, or placeholder if none selected.
     var title: String {
@@ -172,6 +175,12 @@ final class EditorState: ObservableObject {
         isLoading = true
         lastError = nil
         do {
+            // A rename of a published post silently breaks its inbound
+            // links; record the old URL as an alias before saving.
+            if let aliased = contentWithRenameAlias(item: item, displayContent: content) {
+                updateEntityMappings(oldText: content, newText: aliased)
+                content = aliased
+            }
             let encodedContent = HTMLEntityCodec.encode(content, mappings: entityMappings)
             let newURL = try saveWithRename(
                 item: item,
@@ -211,9 +220,7 @@ final class EditorState: ObservableObject {
             return item.url
         }
 
-        let slug = deriveSlug(from: displayContent)
-        let datePrefix = deriveDatePrefix(from: displayContent, fallback: item.date)
-        let expectedName = "\(datePrefix)-\(slug)"
+        let expectedName = expectedRenameName(item: item, displayContent: displayContent)
 
         let fm = FileManager.default
         var finalURL = item.url
@@ -260,6 +267,61 @@ final class EditorState: ObservableObject {
 
         try saveData.write(to: finalURL)
         return finalURL
+    }
+
+    private func expectedRenameName(item: ContentItem, displayContent: String) -> String {
+        let slug = deriveSlug(from: displayContent)
+        let datePrefix = deriveDatePrefix(from: displayContent, fallback: item.date)
+        return "\(datePrefix)-\(slug)"
+    }
+
+    /// The URL an auto-rename would move this post to; nil when no rename
+    /// would occur.
+    private func predictedRenameURL(item: ContentItem, displayContent: String) -> URL? {
+        guard autoRenameOnSave else { return nil }
+        let expectedName = expectedRenameName(item: item, displayContent: displayContent)
+
+        switch item.format {
+        case .bundle:
+            let currentFolder = item.url.deletingLastPathComponent()
+            guard currentFolder.lastPathComponent != expectedName else { return nil }
+            return currentFolder.deletingLastPathComponent()
+                .appendingPathComponent(expectedName)
+                .appendingPathComponent(item.url.lastPathComponent)
+        case .file:
+            guard item.url.deletingPathExtension().lastPathComponent != expectedName else { return nil }
+            return item.url.deletingLastPathComponent()
+                .appendingPathComponent(expectedName)
+                .appendingPathExtension(item.url.pathExtension)
+        }
+    }
+
+    /// When an auto-rename is about to change a published post's URL,
+    /// returns the content with the old permalink path appended to
+    /// aliases: so Hugo emits a redirect. Nil when nothing needs adding.
+    private func contentWithRenameAlias(item: ContentItem, displayContent: String) -> String? {
+        guard addAliasOnRename, let config = hugoConfig else { return nil }
+        guard FrontmatterParser.bool(forKey: "draft", in: displayContent) != true else { return nil }
+        guard let renamedURL = predictedRenameURL(item: item, displayContent: displayContent) else {
+            return nil
+        }
+
+        // Old URL from the item's on-disk metadata; new URL from the
+        // pending content at the predicted location.
+        let oldPath = PermalinkResolver.relativePath(content: "", item: item, config: config)
+        let renamedItem = ContentItem(
+            url: renamedURL,
+            format: item.format,
+            section: item.section,
+            content: displayContent
+        )
+        let newPath = PermalinkResolver.relativePath(content: displayContent, item: renamedItem, config: config)
+        guard oldPath != newPath else { return nil }
+
+        let existing = FrontmatterParser.stringArray(forKey: "aliases", in: displayContent)
+        guard !existing.contains(oldPath) else { return nil }
+
+        return FrontmatterRewriter.set("aliases", to: .stringArray(existing + [oldPath]), in: displayContent)
     }
 
     private func validateWritableURL(_ url: URL) throws {
@@ -460,6 +522,10 @@ extension EditorState {
 
     fileprivate var autoRenameOnSave: Bool {
         UserDefaults.standard.object(forKey: DefaultsKey.autoRenameOnSave) as? Bool ?? false
+    }
+
+    fileprivate var addAliasOnRename: Bool {
+        UserDefaults.standard.object(forKey: DefaultsKey.addAliasOnRename) as? Bool ?? true
     }
 }
 

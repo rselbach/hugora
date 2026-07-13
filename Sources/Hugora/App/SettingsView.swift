@@ -41,6 +41,7 @@ struct GeneralSettingsView: View {
     @Binding var spellCheckEnabled: Bool
     @Binding var autoRenameOnSave: Bool
     @AppStorage(DefaultsKey.hugoExecutablePath) private var hugoExecutablePath = ""
+    @AppStorage(DefaultsKey.addAliasOnRename) private var addAliasOnRename = true
 
     private var hugoPathHint: String {
         if let resolved = HugoExecutable.resolve() {
@@ -70,6 +71,7 @@ struct GeneralSettingsView: View {
             Section("Behavior") {
                 Toggle("Auto-save documents", isOn: $autoSaveEnabled)
                 Toggle("Auto-rename on save (date-slug)", isOn: $autoRenameOnSave)
+                Toggle("Add alias when renaming published posts", isOn: $addAliasOnRename)
                 Toggle("Spell checking", isOn: $spellCheckEnabled)
             }
 

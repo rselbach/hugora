@@ -8,6 +8,7 @@ struct EditorStateTests {
     private static let touchedKeys = [
         "autoSaveEnabled",
         "autoRenameOnSave",
+        "addAliasOnRename",
         "hugora.session.currentPost",
         "hugora.workspace.bookmark",
     ]
@@ -215,6 +216,102 @@ struct EditorStateTests {
             let renamedURL = tempDir.appendingPathComponent("2025-01-02-troy-barnes.md")
             #expect(FileManager.default.fileExists(atPath: renamedURL.path))
             #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+        }
+    }
+
+    @Test("Renaming a published post records the old URL as an alias")
+    @MainActor
+    func renameAddsAliasForPublishedPost() async throws {
+        try await withCleanDefaults {
+            let defaults = UserDefaults.standard
+            defaults.set(false, forKey: "autoSaveEnabled")
+            defaults.set(true, forKey: "autoRenameOnSave")
+            defaults.set(true, forKey: "addAliasOnRename")
+
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            let postsDir = tempDir.appendingPathComponent("content/posts")
+            try FileManager.default.createDirectory(at: postsDir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempDir) }
+
+            let fileURL = postsDir.appendingPathComponent("2024-01-01-old-slug.md")
+            try """
+            ---
+            title: "Old Slug"
+            date: 2024-01-01
+            draft: false
+            ---
+            Body
+            """.write(to: fileURL, atomically: true, encoding: .utf8)
+
+            let state = EditorState()
+            state.hugoConfig = HugoConfig(
+                contentDir: "content", archetypeDir: "archetypes", title: nil,
+                baseURL: "https://greendale.edu"
+            )
+            state.openItem(ContentItem(url: fileURL, format: .file, section: "posts"))
+            state.updateContent(
+                """
+                ---
+                title: "Shiny New Slug"
+                date: 2024-01-01
+                draft: false
+                ---
+                Body
+                """)
+            state.save()
+
+            let renamedURL = postsDir.appendingPathComponent("2024-01-01-shiny-new-slug.md")
+            #expect(FileManager.default.fileExists(atPath: renamedURL.path))
+
+            let saved = try String(contentsOf: renamedURL, encoding: .utf8)
+            #expect(saved.contains(#"aliases: ["/posts/2024-01-01-old-slug/"]"#))
+            #expect(state.content.contains("aliases:"))
+            #expect(state.isDirty == false)
+        }
+    }
+
+    @Test("Renaming a draft does not add an alias")
+    @MainActor
+    func renameDraftAddsNoAlias() async throws {
+        try await withCleanDefaults {
+            let defaults = UserDefaults.standard
+            defaults.set(false, forKey: "autoSaveEnabled")
+            defaults.set(true, forKey: "autoRenameOnSave")
+            defaults.set(true, forKey: "addAliasOnRename")
+
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempDir) }
+
+            let fileURL = tempDir.appendingPathComponent("2024-01-01-old.md")
+            try """
+            ---
+            title: "Old"
+            date: 2024-01-01
+            draft: true
+            ---
+            """.write(to: fileURL, atomically: true, encoding: .utf8)
+
+            let state = EditorState()
+            state.hugoConfig = HugoConfig(
+                contentDir: "content", archetypeDir: "archetypes", title: nil,
+                baseURL: "https://greendale.edu"
+            )
+            state.openItem(ContentItem(url: fileURL, format: .file, section: "posts"))
+            state.updateContent(
+                """
+                ---
+                title: "Renamed Draft"
+                date: 2024-01-01
+                draft: true
+                ---
+                """)
+            state.save()
+
+            let renamedURL = tempDir.appendingPathComponent("2024-01-01-renamed-draft.md")
+            #expect(FileManager.default.fileExists(atPath: renamedURL.path))
+            let saved = try String(contentsOf: renamedURL, encoding: .utf8)
+            #expect(!saved.contains("aliases"))
         }
     }
 

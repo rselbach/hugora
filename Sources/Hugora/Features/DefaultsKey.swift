@@ -12,6 +12,7 @@ enum DefaultsKey {
     static let imagePasteNamingStrategy = "imagePasteNamingStrategy"
     static let selectedTheme = "selectedTheme"
     static let autoRenameOnSave = "autoRenameOnSave"
+    static let addAliasOnRename = "addAliasOnRename"
     static let hugoExecutablePath = "hugoExecutablePath"
     static let showFrontmatterInspector = "showFrontmatterInspector"
     static let sessionCurrentPost = "hugora.session.currentPost"

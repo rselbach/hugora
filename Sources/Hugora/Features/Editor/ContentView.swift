@@ -175,6 +175,7 @@ struct ContentView: View {
     /// state. Called via an async hop because @Published emits on willSet.
     private func syncEditorContext() {
         editorState.contentRootURL = workspaceStore.contentDirectoryURL
+        editorState.hugoConfig = workspaceStore.hugoConfig
         if let item = editorState.currentItem, let siteURL = workspaceStore.currentFolderURL {
             viewModel.imageContext = ImageContext(postURL: item.url, siteURL: siteURL)
         } else {
