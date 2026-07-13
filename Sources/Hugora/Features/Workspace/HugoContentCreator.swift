@@ -51,7 +51,7 @@ enum HugoContentCreatorError: LocalizedError, CustomDebugStringConvertible {
         case .executableNotFound:
             return
                 "Hugo executable not found via the Settings path, HUGORA_HUGO_PATH, or standard locations "
-                    + HugoExecutable.standardLocations.joined(separator: ", ")
+                + HugoExecutable.standardLocations.joined(separator: ", ")
         case .commandFailed(let command, let status, let output):
             return "Hugo command failed (exit \(status)): \(command)\nOutput: \(output)"
         case .couldNotResolveCreatedPath(let expectedPath, let output):
