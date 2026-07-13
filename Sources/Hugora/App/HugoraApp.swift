@@ -51,6 +51,7 @@ struct HugoraApp: App {
             WorkspaceCommands(workspaceStore: workspaceStore)
             SiteCommands(workspaceStore: workspaceStore, hugoServer: hugoServer)
             FormatCommands(workspaceStore: workspaceStore)
+            ViewCommands()
         }
 
         Settings {

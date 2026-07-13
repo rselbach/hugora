@@ -140,6 +140,19 @@ struct AppCommands: Commands {
     }
 }
 
+struct ViewCommands: Commands {
+    @AppStorage(DefaultsKey.showFrontmatterInspector) private var showInspector = false
+
+    var body: some Commands {
+        CommandGroup(after: .sidebar) {
+            Button(showInspector ? "Hide Frontmatter Inspector" : "Show Frontmatter Inspector") {
+                showInspector.toggle()
+            }
+            .keyboardShortcut("i", modifiers: [.command, .option])
+        }
+    }
+}
+
 struct FormatCommands: Commands {
     @ObservedObject var workspaceStore: WorkspaceStore
 

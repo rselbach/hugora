@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var showSidebar = true
     @State private var showPostLinkPicker = false
     @State private var postLinkTarget: EditorTextView?
+    @AppStorage(DefaultsKey.showFrontmatterInspector) private var showInspector = false
 
     var body: some View {
         HSplitView {
@@ -17,6 +18,11 @@ struct ContentView: View {
             }
 
             editorPane
+
+            if showInspector, editorState.currentItem != nil {
+                FrontmatterInspectorView()
+                    .frame(minWidth: 230, idealWidth: 270, maxWidth: 360)
+            }
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
@@ -46,6 +52,14 @@ struct ContentView: View {
                     Label("Posts", systemImage: "sidebar.left")
                 }
                 .accessibilityLabel("Toggle sidebar")
+
+                Button {
+                    withAnimation { showInspector.toggle() }
+                } label: {
+                    Label("Front Matter", systemImage: "sidebar.right")
+                }
+                .help("Toggle frontmatter inspector")
+                .accessibilityLabel("Toggle frontmatter inspector")
             }
         }
         .alert(
