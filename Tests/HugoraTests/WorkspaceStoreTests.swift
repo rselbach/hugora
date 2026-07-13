@@ -1015,6 +1015,26 @@ struct WorkspaceStoreTests {
         #expect(store.currentFolderURL?.resolvingSymlinksInPath().path == siteA.resolvingSymlinksInPath().path)
     }
 
+    @Test("Failed openRecent keeps the recents entry")
+    func failedOpenRecentKeepsEntry() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite()
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        store.openFolder(siteURL)
+        let ref = try #require(store.recentWorkspaces.first)
+
+        // The site stops validating (config removed) — e.g. a transient
+        // state; the recents entry must survive so the user can retry.
+        try FileManager.default.removeItem(at: siteURL.appendingPathComponent("hugo.toml"))
+        store.openRecent(ref)
+
+        #expect(store.lastError != nil)
+        #expect(store.recentWorkspaces.contains { $0.path == ref.path })
+    }
+
     // MARK: - closeWorkspace
 
     @Test("Close workspace resets all state")

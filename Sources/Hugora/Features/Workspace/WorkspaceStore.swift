@@ -191,8 +191,12 @@ final class WorkspaceStore: ObservableObject {
             return
         }
 
+        // Sandboxed builds can't stat anything inside the folder until the
+        // security scope is active — start it before validating. Keep the
+        // recents entry on failure: it may be transient (unmounted volume).
+        let scopeActive = url.startAccessingSecurityScopedResource()
         guard validateHugoSite(at: url) else {
-            removeFromRecent(ref)
+            if scopeActive { url.stopAccessingSecurityScopedResource() }
             isLoading = false
             lastError = .notHugoSite
             return
@@ -201,7 +205,7 @@ final class WorkspaceStore: ObservableObject {
         guard isStale else {
             saveCurrentBookmark(ref.bookmarkData)
             promoteRecent(ref, resolvedURL: url, bookmarkData: ref.bookmarkData)
-            startAccessingFolder(url)
+            adoptAccessedFolder(url, scopeActive: scopeActive)
             loadContent(from: url)
             return
         }
@@ -211,7 +215,7 @@ final class WorkspaceStore: ObservableObject {
             saveCurrentBookmark(newData)
         }
 
-        startAccessingFolder(url)
+        adoptAccessedFolder(url, scopeActive: scopeActive)
         loadContent(from: url)
     }
 
@@ -870,9 +874,13 @@ final class WorkspaceStore: ObservableObject {
     }
 
     private func startAccessingFolder(_ url: URL) {
-        if url.startAccessingSecurityScopedResource() {
-            securityScopedURL = url
-        }
+        adoptAccessedFolder(url, scopeActive: url.startAccessingSecurityScopedResource())
+    }
+
+    /// Takes ownership of a folder whose security scope (if any) has
+    /// already been started by the caller.
+    private func adoptAccessedFolder(_ url: URL, scopeActive: Bool) {
+        securityScopedURL = scopeActive ? url : nil
         currentFolderURL = url
     }
 
@@ -1112,8 +1120,14 @@ final class WorkspaceStore: ObservableObject {
             return
         }
 
+        // Start the security scope before validating: without it, sandboxed
+        // builds fail every stat inside the folder, and deleting the
+        // bookmark here would permanently break session restore. Keep the
+        // bookmark on failure — it may be transient (unmounted volume).
+        let scopeActive = url.startAccessingSecurityScopedResource()
         guard validateHugoSite(at: url) else {
-            UserDefaults.standard.removeObject(forKey: DefaultsKey.workspaceBookmark)
+            if scopeActive { url.stopAccessingSecurityScopedResource() }
+            Self.logger.error("Saved workspace no longer looks like a Hugo site: \(url.path)")
             return
         }
 
@@ -1123,7 +1137,7 @@ final class WorkspaceStore: ObservableObject {
             }
         }
 
-        startAccessingFolder(url)
+        adoptAccessedFolder(url, scopeActive: scopeActive)
         loadContent(from: url)
     }
 
