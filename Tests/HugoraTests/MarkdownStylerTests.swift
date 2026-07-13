@@ -1105,3 +1105,94 @@ struct CursorOnlyUpdateTests {
         #expect(cache.lineSpacing > 0)
     }
 }
+
+// MARK: - Shortcode Handling
+
+@Suite("Shortcode Detection")
+struct ShortcodeDetectorTests {
+    @Test("Finds angle and percent shortcode tokens")
+    func findsTokens() {
+        let text = """
+            Intro {{< figure src="a.png" >}} middle.
+
+            {{% notice info %}}
+            Body is *markdown*.
+            {{% /notice %}}
+            """
+        let ranges = ShortcodeDetector.shortcodeRanges(in: text)
+        let nsText = text as NSString
+
+        #expect(ranges.count == 3)
+        #expect(nsText.substring(with: ranges[0]) == "{{< figure src=\"a.png\" >}}")
+        #expect(nsText.substring(with: ranges[1]) == "{{% notice info %}}")
+        #expect(nsText.substring(with: ranges[2]) == "{{% /notice %}}")
+    }
+
+    @Test("Unterminated shortcodes are ignored")
+    func unterminatedIgnored() {
+        #expect(ShortcodeDetector.shortcodeRanges(in: "broken {{< figure src=").isEmpty)
+        // A later complete token is still found.
+        let ranges = ShortcodeDetector.shortcodeRanges(in: "{{< broken\n{{< ok >}}")
+        #expect(ranges.count == 1)
+    }
+
+    @Test("Plain text has no shortcodes")
+    func plainText() {
+        #expect(ShortcodeDetector.shortcodeRanges(in: "no shortcodes { here }").isEmpty)
+    }
+}
+
+@Suite("Shortcode Styling")
+struct ShortcodeStylingTests {
+    let styler = MarkdownStyler(theme: .defaultLight)
+
+    @Test("Shortcode tokens get verbatim styling and suppress emphasis")
+    func shortcodeSuppressesEmphasis() throws {
+        let markdown = #"Photo: {{< figure caption="*not emphasis*" >}} done"#
+        let textStorage = NSTextStorage(string: markdown)
+        let document = Document(parsing: markdown)
+        let visibleRange = NSRange(location: 0, length: textStorage.length)
+
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange,
+            cursorPosition: nil)
+
+        let nsText = markdown as NSString
+        let captionStart = nsText.range(of: "not emphasis").location
+
+        let font = try #require(
+            textStorage.attribute(.font, at: captionStart, effectiveRange: nil) as? NSFont
+        )
+        #expect(font.isFixedPitch)
+        #expect(!NSFontManager.shared.traits(of: font).contains(.italicFontMask))
+
+        // The asterisks stay visible: no clear-color hiding inside shortcodes.
+        let starLocation = nsText.range(of: "*not").location
+        let color = textStorage.attribute(.foregroundColor, at: starLocation, effectiveRange: nil) as? NSColor
+        #expect(color != .clear)
+    }
+
+    @Test("Markdown between paired shortcode tags still styles")
+    func pairedShortcodeBodyStyles() throws {
+        let markdown = """
+            {{% notice %}}
+            some **bold** body
+            {{% /notice %}}
+            """
+        let textStorage = NSTextStorage(string: markdown)
+        let document = Document(parsing: markdown)
+        let visibleRange = NSRange(location: 0, length: textStorage.length)
+
+        let nsText = markdown as NSString
+        let boldStart = nsText.range(of: "bold").location
+
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange,
+            cursorPosition: boldStart)
+
+        let font = try #require(
+            textStorage.attribute(.font, at: boldStart, effectiveRange: nil) as? NSFont
+        )
+        #expect(NSFontManager.shared.traits(of: font).contains(.boldFontMask))
+    }
+}

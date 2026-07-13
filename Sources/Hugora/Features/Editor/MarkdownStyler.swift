@@ -89,6 +89,21 @@ struct MarkdownStyler {
                 SyntaxMarker(range: fm.closingDelimiterRange, parentRange: fm.range, parentKind: .frontmatter))
         }
 
+        // Hugo shortcodes are verbatim text, not markdown: give the tokens a
+        // code-like tint and keep inline styling out of their arguments.
+        let shortcodes = ShortcodeDetector.shortcodeRanges(in: text).filter { range in
+            guard let fm = frontmatter else { return true }
+            return NSIntersectionRange(range, fm.range).length == 0
+        }
+        for shortcodeRange in shortcodes where NSIntersectionRange(shortcodeRange, visibleRange).length > 0 {
+            applyShortcodeStyle(
+                range: shortcodeRange,
+                textStorage: textStorage,
+                theme: activeTheme,
+                fontScale: fontScale
+            )
+        }
+
         var collector = StyleCollector()
         collector.visit(document)
 
@@ -97,6 +112,14 @@ struct MarkdownStyler {
 
             // Skip spans inside frontmatter
             if let fm = frontmatter, NSIntersectionRange(nsRange, fm.range).length > 0 {
+                continue
+            }
+
+            // Underscores and asterisks inside shortcode arguments parse as
+            // emphasis; suppress inline styling that touches a shortcode.
+            if Self.isInlineKind(span.kind),
+                shortcodes.contains(where: { NSIntersectionRange(nsRange, $0).length > 0 })
+            {
                 continue
             }
 
@@ -243,6 +266,29 @@ struct MarkdownStyler {
                 )
             }
         }
+    }
+
+    private static func isInlineKind(_ kind: StyleKind) -> Bool {
+        switch kind {
+        case .bold, .italic, .inlineCode, .link, .image:
+            return true
+        case .heading, .blockquote, .codeBlock, .table, .tableHeader, .tableCell, .frontmatter:
+            return false
+        }
+    }
+
+    private func applyShortcodeStyle(
+        range: NSRange,
+        textStorage: NSTextStorage,
+        theme: Theme,
+        fontScale: CGFloat
+    ) {
+        let clampedRange = NSIntersectionRange(range, NSRange(location: 0, length: textStorage.length))
+        guard clampedRange.length > 0 else { return }
+
+        let font = scaledFont(theme.inlineCodeFont, scale: fontScale)
+        textStorage.addAttribute(.font, value: font, range: clampedRange)
+        textStorage.addAttribute(.foregroundColor, value: theme.inlineCodeColor, range: clampedRange)
     }
 
     private func applyFrontmatterStyle(
