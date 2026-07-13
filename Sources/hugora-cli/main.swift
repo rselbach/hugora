@@ -70,27 +70,43 @@ func openHugora(with folderPath: String?) {
         fputs("Install Hugora.app in /Applications or ~/Applications\n", stderr)
         exit(1)
     }
-    
-    var arguments: [String] = []
-    
-    if let folder = folderPath {
-        let url = URL(fileURLWithPath: folder, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
-        arguments = ["--open", url.standardizedFileURL.path]
-    }
-    
-    let config = NSWorkspace.OpenConfiguration()
-    config.arguments = arguments
-    
+
     let semaphore = DispatchSemaphore(value: 0)
     var openError: Error?
-    
-    NSWorkspace.shared.openApplication(at: appURL, configuration: config) { _, error in
-        openError = error
-        semaphore.signal()
+    let config = NSWorkspace.OpenConfiguration()
+
+    if let folder = folderPath {
+        // Hand the folder over via the hugora:// URL scheme: launch
+        // arguments only reach a freshly launched instance, while an open
+        // URL is delivered to a running app as well.
+        let fileURL = URL(
+            fileURLWithPath: folder,
+            relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        ).standardizedFileURL
+
+        var components = URLComponents()
+        components.scheme = "hugora"
+        components.host = "open"
+        components.queryItems = [URLQueryItem(name: "path", value: fileURL.path)]
+
+        guard let openURL = components.url else {
+            fputs("error: could not encode folder path\n", stderr)
+            exit(1)
+        }
+
+        NSWorkspace.shared.open([openURL], withApplicationAt: appURL, configuration: config) { _, error in
+            openError = error
+            semaphore.signal()
+        }
+    } else {
+        NSWorkspace.shared.openApplication(at: appURL, configuration: config) { _, error in
+            openError = error
+            semaphore.signal()
+        }
     }
-    
+
     semaphore.wait()
-    
+
     if let error = openError {
         fputs("error: \(error.localizedDescription)\n", stderr)
         exit(1)

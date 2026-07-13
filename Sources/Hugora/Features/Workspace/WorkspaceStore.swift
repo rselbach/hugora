@@ -123,18 +123,53 @@ final class WorkspaceStore: ObservableObject {
     // MARK: - Open Folder
 
     /// Displays open panel for user to select a Hugo site folder.
-    func openFolderPanel() {
+    ///
+    /// - Parameter directoryURL: Optional folder to preselect in the panel.
+    func openFolderPanel(directoryURL: URL? = nil) {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.message = "Choose a Hugo site folder"
         panel.prompt = "Open"
+        if let directoryURL {
+            panel.directoryURL = directoryURL
+        }
 
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
             self?.openFolder(url)
         }
+    }
+
+    /// Opens a workspace from a path handed in from outside the app (the
+    /// hugora:// URL scheme or launch arguments).
+    ///
+    /// Sandboxed builds can't read arbitrary paths, so this resolves in
+    /// stages: already open → reuse the recents bookmark → open directly
+    /// when readable → fall back to the open panel preselected on the
+    /// folder, which grants access through user consent.
+    func openFromExternalPath(_ url: URL) {
+        let standardized = url.standardizedFileURL
+
+        if let current = currentFolderURL,
+           current.standardizedFileURL == standardized {
+            return
+        }
+
+        if let ref = recentWorkspaces.first(where: {
+            URL(fileURLWithPath: $0.path).standardizedFileURL == standardized
+        }) {
+            openRecent(ref)
+            return
+        }
+
+        if FileManager.default.isReadableFile(atPath: standardized.path) {
+            openFolder(standardized)
+            return
+        }
+
+        openFolderPanel(directoryURL: standardized)
     }
 
     /// Opens a Hugo workspace at the given URL.

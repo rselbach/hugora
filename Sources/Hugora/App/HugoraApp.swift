@@ -31,6 +31,16 @@ struct HugoraApp: App {
                     appDelegate.workspaceStore = workspaceStore
                     appDelegate.handleLaunchArguments()
                 }
+                // hugora://open?path=/path/to/site — the CLI's handoff
+                // channel; unlike launch arguments it also reaches an
+                // already-running instance.
+                .onOpenURL { url in
+                    guard url.scheme == "hugora", url.host == "open" else { return }
+                    guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                          let path = components.queryItems?.first(where: { $0.name == "path" })?.value,
+                          !path.isEmpty else { return }
+                    workspaceStore.openFromExternalPath(URL(fileURLWithPath: path))
+                }
         }
         .commands {
             AppCommands(editorState: editorState, updater: updaterController.updater)
@@ -102,7 +112,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let url = URL(fileURLWithPath: folderPath)
 
         DispatchQueue.main.async { [weak self] in
-            self?.workspaceStore?.openFolder(url)
+            self?.workspaceStore?.openFromExternalPath(url)
         }
     }
 }
