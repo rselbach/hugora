@@ -68,6 +68,16 @@ final class EditorState: ObservableObject {
         f.dateFormat = "yyyy-MM-dd"
         return f
     }()
+    // FrontmatterParser anchors date-only strings at UTC midnight, so dates
+    // that came from frontmatter must format back in UTC or the prefix
+    // shifts a day for west-of-GMT users.
+    private static let utcDatePrefixFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        return f
+    }()
     private var entityMappings: [HTMLEntityMapping] = []
     private var openRevision: UInt64 = 0
     private var autoSaveTask: Task<Void, Never>?
@@ -287,14 +297,37 @@ final class EditorState: ObservableObject {
 
     private func deriveDatePrefix(from content: String, fallback: Date?) -> String {
         if let dateString = FrontmatterParser.value(forKey: "date", in: content) {
-            return String(dateString.prefix(10))
+            let trimmed = dateString.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let literal = Self.literalDatePrefix(in: trimmed) {
+                return literal
+            }
+            // Hugo accepts non-ISO dates ("Jan 2, 2025"); parse instead of
+            // slicing characters off the raw string.
+            if let parsed = FrontmatterParser.date(forKey: "date", in: content) {
+                return Self.utcDatePrefixFormatter.string(from: parsed)
+            }
         }
 
         if let date = fallback {
-            return Self.datePrefixFormatter.string(from: date)
+            return Self.utcDatePrefixFormatter.string(from: date)
         }
 
         return Self.datePrefixFormatter.string(from: Date())
+    }
+
+    /// Returns the leading yyyy-MM-dd of a date string, or nil when the
+    /// string doesn't start with that shape.
+    private static func literalDatePrefix(in value: String) -> String? {
+        let head = Array(value.prefix(10))
+        guard head.count == 10 else { return nil }
+        for (index, char) in head.enumerated() {
+            if index == 4 || index == 7 {
+                guard char == "-" else { return nil }
+            } else {
+                guard char.isASCII, char.isNumber else { return nil }
+            }
+        }
+        return String(head)
     }
 
     private func scheduleAutoSaveIfNeeded() {

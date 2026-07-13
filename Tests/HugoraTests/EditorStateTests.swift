@@ -111,6 +111,46 @@ struct EditorStateTests {
         }
     }
 
+    @Test("Auto-rename parses non-ISO frontmatter dates")
+    @MainActor
+    func autoRenameParsesNonISODates() async throws {
+        try await withCleanDefaults {
+            let defaults = UserDefaults.standard
+            defaults.set(false, forKey: "autoSaveEnabled")
+            defaults.set(true, forKey: "autoRenameOnSave")
+
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempDir) }
+
+            let fileURL = tempDir.appendingPathComponent("2024-01-01-old-post.md")
+            try """
+            ---
+            title: "Old Post"
+            date: 2024-01-01
+            ---
+            Old content
+            """.write(to: fileURL, atomically: true, encoding: .utf8)
+
+            let item = ContentItem(url: fileURL, format: .file, section: "blog")
+            let state = EditorState()
+            state.openItem(item)
+
+            state.updateContent("""
+            ---
+            title: "Troy Barnes"
+            date: "Jan 2, 2025"
+            ---
+            Updated content
+            """)
+            state.save()
+
+            let renamedURL = tempDir.appendingPathComponent("2025-01-02-troy-barnes.md")
+            #expect(FileManager.default.fileExists(atPath: renamedURL.path))
+            #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+        }
+    }
+
     @Test("Auto-rename fails when target path already exists")
     @MainActor
     func autoRenameCollisionLeavesOriginalFileUntouched() async throws {
@@ -164,9 +204,9 @@ struct EditorStateTests {
         }
     }
 
-    @Test("Auto-rename rejects targets outside content root")
+    @Test("Auto-rename never lets garbage frontmatter escape the content root")
     @MainActor
-    func autoRenameRejectsTargetOutsideContentRoot() async throws {
+    func autoRenameSanitizesGarbageFrontmatter() async throws {
         try await withCleanDefaults {
             let defaults = UserDefaults.standard
             defaults.set(false, forKey: "autoSaveEnabled")
@@ -199,16 +239,15 @@ struct EditorStateTests {
             """)
             state.save()
 
-            #expect(FileManager.default.fileExists(atPath: originalURL.path))
+            // The unparseable date falls back to the item's original date,
+            // so the rename stays inside the content root instead of
+            // producing a traversal path.
+            let renamedURL = contentDir.appendingPathComponent("2024-01-01-human-being.md")
+            #expect(FileManager.default.fileExists(atPath: renamedURL.path))
+            #expect(!FileManager.default.fileExists(atPath: originalURL.path))
             #expect(!FileManager.default.fileExists(atPath: tempDir.appendingPathComponent("oops-human-being.md").path))
-            #expect(state.isDirty == true)
-            let rejectedUnsafeOperation: Bool
-            if case .unsafeFileOperation = state.lastError as? EditorStateError {
-                rejectedUnsafeOperation = true
-            } else {
-                rejectedUnsafeOperation = false
-            }
-            #expect(rejectedUnsafeOperation)
+            #expect(state.isDirty == false)
+            #expect(state.lastError == nil)
         }
     }
 

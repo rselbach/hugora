@@ -99,6 +99,10 @@ enum FrontmatterParser {
             "yyyy-MM-dd HH:mm:ss ZZZZZ",
             "yyyy-MM-dd HH:mm:ss",
             "yyyy-MM-dd",
+            // Month-name styles Hugo also accepts (cast.StringToDate).
+            "MMM d, yyyy",
+            "MMMM d, yyyy",
+            "d MMM yyyy",
         ]
         return formats.map { format in
             let formatter = DateFormatter()
