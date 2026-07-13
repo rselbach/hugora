@@ -359,7 +359,7 @@ struct HugoContentCreatorErrorTests {
     @Test("Executable not found error is user actionable")
     func executableNotFoundErrorDescription() {
         let error = HugoContentCreatorError.executableNotFound
-        #expect(error.localizedDescription.contains("HUGORA_HUGO_PATH"))
+        #expect(error.localizedDescription.contains("Settings"))
     }
 }
 

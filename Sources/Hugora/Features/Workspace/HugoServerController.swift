@@ -142,7 +142,8 @@ final class HugoServerController: ObservableObject {
         process = nil
         siteURL = nil
 
-        let tail = outputBuffer
+        let tail =
+            outputBuffer
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .components(separatedBy: "\n")
             .suffix(4)

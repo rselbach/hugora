@@ -164,10 +164,11 @@ struct SiteCommands: Commands {
                 hugoServer.openInBrowser()
             }
             .keyboardShortcut("b", modifiers: [.command, .shift])
-            .disabled({
-                guard case .running = hugoServer.state else { return true }
-                return false
-            }())
+            .disabled(
+                {
+                    guard case .running = hugoServer.state else { return true }
+                    return false
+                }())
         }
     }
 }

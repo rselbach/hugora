@@ -29,10 +29,10 @@ struct HugoServerControllerTests {
 
         let fakeHugo = tempDir.appendingPathComponent("hugo")
         try """
-            #!/bin/sh
-            echo "Web Server is available at http://localhost:4242/ (bind address 127.0.0.1)"
-            sleep 60
-            """.write(to: fakeHugo, atomically: true, encoding: .utf8)
+        #!/bin/sh
+        echo "Web Server is available at http://localhost:4242/ (bind address 127.0.0.1)"
+        sleep 60
+        """.write(to: fakeHugo, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeHugo.path)
 
         let defaults = UserDefaults.standard
