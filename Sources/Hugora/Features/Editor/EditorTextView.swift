@@ -156,6 +156,10 @@ class EditorTextView: NSTextView {
                 moveCursorRight()
                 return
             }
+            guard shouldAutoPairSymmetric(char, at: selectedRange.location) else {
+                super.insertText(string, replacementRange: replacementRange)
+                return
+            }
             insertPair(opener: char, closer: char)
             return
         }
@@ -238,6 +242,38 @@ class EditorTextView: NSTextView {
         }
     }
 
+    /// Emphasis markers shouldn't pair where they're almost never emphasis:
+    /// `*` at the start of a line is a list bullet, and `*`/`_` right after
+    /// a word character is multiplication or snake_case.
+    private func shouldAutoPairSymmetric(_ char: Character, at location: Int) -> Bool {
+        guard char == "*" || char == "_" else { return true }
+        let nsString = self.string as NSString
+
+        if char == "*", onlyWhitespacePrecedesOnLine(location: location, in: nsString) {
+            return false
+        }
+
+        if location > 0,
+            let scalar = UnicodeScalar(nsString.character(at: location - 1)),
+            CharacterSet.alphanumerics.contains(scalar)
+        {
+            return false
+        }
+
+        return true
+    }
+
+    private func onlyWhitespacePrecedesOnLine(location: Int, in nsString: NSString) -> Bool {
+        var index = location - 1
+        while index >= 0 {
+            let char = nsString.character(at: index)
+            if char == 0x0A { return true }
+            if char != 0x20 && char != 0x09 { return false }
+            index -= 1
+        }
+        return true
+    }
+
     private func shouldSkipOver(char: Character, at location: Int) -> Bool {
         let nsString = (self.string as NSString)
         guard location < nsString.length,
@@ -252,6 +288,135 @@ class EditorTextView: NSTextView {
     private func moveCursorRight() {
         let range = self.selectedRange()
         setSelectedRange(NSRange(location: range.location + 1, length: 0))
+    }
+
+    // MARK: - Markdown Formatting
+
+    @objc func toggleBold(_ sender: Any?) {
+        toggleInlineMarker("**")
+    }
+
+    @objc func toggleItalic(_ sender: Any?) {
+        toggleInlineMarker("*")
+    }
+
+    @objc func toggleInlineCode(_ sender: Any?) {
+        toggleInlineMarker("`")
+    }
+
+    @objc func toggleStrikethrough(_ sender: Any?) {
+        toggleInlineMarker("~~")
+    }
+
+    /// Inserts `[text](url)` markdown. The selection becomes the link text;
+    /// a URL on the clipboard is used directly, otherwise a placeholder is
+    /// left selected so typing replaces it.
+    @objc func insertLinkMarkup(_ sender: Any?) {
+        let range = selectedRange()
+        let nsString = self.string as NSString
+        let selectedText = range.length > 0 ? nsString.substring(with: range) : ""
+
+        let clipboardURL = NSPasteboard.general.string(forType: .string).flatMap { raw -> String? in
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            let isURL =
+                (trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://"))
+                && !trimmed.contains(where: \.isWhitespace)
+            return isURL ? trimmed : nil
+        }
+
+        let text = selectedText.isEmpty ? "text" : selectedText
+        let url = clipboardURL ?? "url"
+        let markup = "[\(text)](\(url))"
+
+        // Select whichever placeholder still needs typing.
+        let selection: NSRange
+        if clipboardURL == nil {
+            let urlOffset = ("[\(text)](" as NSString).length
+            selection = NSRange(location: range.location + urlOffset, length: ("url" as NSString).length)
+        } else if selectedText.isEmpty {
+            selection = NSRange(location: range.location + 1, length: ("text" as NSString).length)
+        } else {
+            selection = NSRange(location: range.location + (markup as NSString).length, length: 0)
+        }
+
+        replaceForFormatting(range, with: markup, select: selection)
+    }
+
+    /// Inserts Hugo's manual summary divider on its own line.
+    @objc func insertSummaryDivider(_ sender: Any?) {
+        let range = selectedRange()
+        let nsString = self.string as NSString
+        let atLineStart = range.location == 0 || nsString.character(at: range.location - 1) == 0x0A
+        let insertion = (atLineStart ? "" : "\n") + "<!--more-->\n"
+        replaceForFormatting(
+            range,
+            with: insertion,
+            select: NSRange(location: range.location + (insertion as NSString).length, length: 0)
+        )
+    }
+
+    /// Wraps the selection in `marker`, or removes the markers when the
+    /// selection (or its immediate surroundings) already carries them. With
+    /// no selection, inserts an empty pair and puts the cursor inside.
+    func toggleInlineMarker(_ marker: String) {
+        let range = selectedRange()
+        let nsString = self.string as NSString
+        let markerLength = (marker as NSString).length
+
+        guard range.length > 0 else {
+            replaceForFormatting(
+                range,
+                with: marker + marker,
+                select: NSRange(location: range.location + markerLength, length: 0)
+            )
+            return
+        }
+
+        let selectedText = nsString.substring(with: range)
+
+        // Markers inside the selection: **bold** selected whole.
+        if selectedText.hasPrefix(marker), selectedText.hasSuffix(marker),
+            range.length >= markerLength * 2
+        {
+            let inner = (selectedText as NSString).substring(
+                with: NSRange(location: markerLength, length: range.length - markerLength * 2)
+            )
+            replaceForFormatting(
+                range,
+                with: inner,
+                select: NSRange(location: range.location, length: (inner as NSString).length)
+            )
+            return
+        }
+
+        // Markers just outside the selection: bold selected inside **…**.
+        let before = NSRange(location: range.location - markerLength, length: markerLength)
+        let after = NSRange(location: NSMaxRange(range), length: markerLength)
+        if before.location >= 0, NSMaxRange(after) <= nsString.length,
+            nsString.substring(with: before) == marker,
+            nsString.substring(with: after) == marker
+        {
+            let full = NSRange(location: before.location, length: markerLength * 2 + range.length)
+            replaceForFormatting(
+                full,
+                with: selectedText,
+                select: NSRange(location: before.location, length: range.length)
+            )
+            return
+        }
+
+        replaceForFormatting(
+            range,
+            with: marker + selectedText + marker,
+            select: NSRange(location: range.location + markerLength, length: range.length)
+        )
+    }
+
+    private func replaceForFormatting(_ range: NSRange, with newText: String, select selection: NSRange) {
+        guard shouldChangeText(in: range, replacementString: newText) else { return }
+        replaceCharacters(in: range, with: newText)
+        didChangeText()
+        setSelectedRange(selection)
     }
 
     // MARK: - Custom Drawing

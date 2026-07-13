@@ -140,6 +140,51 @@ struct AppCommands: Commands {
     }
 }
 
+struct FormatCommands: Commands {
+    var body: some Commands {
+        CommandGroup(replacing: .textFormatting) {
+            Button("Bold") {
+                sendToEditor(#selector(EditorTextView.toggleBold(_:)))
+            }
+            .keyboardShortcut("b", modifiers: .command)
+
+            Button("Italic") {
+                sendToEditor(#selector(EditorTextView.toggleItalic(_:)))
+            }
+            .keyboardShortcut("i", modifiers: .command)
+
+            Button("Inline Code") {
+                sendToEditor(#selector(EditorTextView.toggleInlineCode(_:)))
+            }
+            .keyboardShortcut("e", modifiers: .command)
+
+            Button("Strikethrough") {
+                sendToEditor(#selector(EditorTextView.toggleStrikethrough(_:)))
+            }
+            .keyboardShortcut("x", modifiers: [.command, .shift])
+
+            Divider()
+
+            Button("Insert Link") {
+                sendToEditor(#selector(EditorTextView.insertLinkMarkup(_:)))
+            }
+            .keyboardShortcut("k", modifiers: .command)
+
+            Divider()
+
+            Button("Insert Summary Divider") {
+                sendToEditor(#selector(EditorTextView.insertSummaryDivider(_:)))
+            }
+        }
+    }
+
+    /// Dispatches through the responder chain so the focused editor
+    /// handles the action; a no-op when no editor has focus.
+    private func sendToEditor(_ selector: Selector) {
+        NSApp.sendAction(selector, to: nil, from: nil)
+    }
+}
+
 struct SiteCommands: Commands {
     @ObservedObject var workspaceStore: WorkspaceStore
     @ObservedObject var hugoServer: HugoServerController

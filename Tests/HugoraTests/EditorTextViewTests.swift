@@ -120,3 +120,127 @@ struct EditorViewProgrammaticLoadTests {
         #expect(textView.string == "post B")
     }
 }
+
+@Suite("Markdown Formatting")
+struct MarkdownFormattingTests {
+    @MainActor
+    private func makeEditor(_ text: String, selection: NSRange) -> EditorTextView {
+        let textView = EditorTextView(frame: .zero)
+        textView.string = text
+        textView.setSelectedRange(selection)
+        return textView
+    }
+
+    @Test("Bold wraps the selection and leaves it selected")
+    @MainActor
+    func boldWrapsSelection() {
+        let editor = makeEditor("make this bold", selection: NSRange(location: 5, length: 4))
+        editor.toggleBold(nil)
+        #expect(editor.string == "make **this** bold")
+        #expect(editor.selectedRange() == NSRange(location: 7, length: 4))
+    }
+
+    @Test("Bold applied twice round-trips")
+    @MainActor
+    func boldTogglesOff() {
+        let editor = makeEditor("make this bold", selection: NSRange(location: 5, length: 4))
+        editor.toggleBold(nil)
+        editor.toggleBold(nil)
+        #expect(editor.string == "make this bold")
+        #expect(editor.selectedRange() == NSRange(location: 5, length: 4))
+    }
+
+    @Test("Bold with markers inside the selection unwraps")
+    @MainActor
+    func boldUnwrapsSelectedMarkers() {
+        let editor = makeEditor("a **bold** word", selection: NSRange(location: 2, length: 8))
+        editor.toggleBold(nil)
+        #expect(editor.string == "a bold word")
+    }
+
+    @Test("Italic without selection inserts pair with cursor inside")
+    @MainActor
+    func italicEmptySelection() {
+        let editor = makeEditor("hello ", selection: NSRange(location: 6, length: 0))
+        editor.toggleItalic(nil)
+        #expect(editor.string == "hello **")
+        #expect(editor.selectedRange() == NSRange(location: 7, length: 0))
+    }
+
+    @Test("Insert link uses selection as text and selects the url placeholder")
+    @MainActor
+    func insertLinkSelectsPlaceholder() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("definitely not a link", forType: .string)
+
+        let editor = makeEditor("see the docs here", selection: NSRange(location: 8, length: 4))
+        editor.insertLinkMarkup(nil)
+        #expect(editor.string == "see the [docs](url) here")
+
+        let selection = editor.selectedRange()
+        #expect((editor.string as NSString).substring(with: selection) == "url")
+    }
+
+    @Test("Insert link uses a URL from the clipboard")
+    @MainActor
+    func insertLinkUsesClipboardURL() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("https://rselbach.com/post/", forType: .string)
+
+        let editor = makeEditor("see the docs here", selection: NSRange(location: 8, length: 4))
+        editor.insertLinkMarkup(nil)
+        #expect(editor.string == "see the [docs](https://rselbach.com/post/) here")
+    }
+
+    @Test("Summary divider lands on its own line")
+    @MainActor
+    func summaryDividerOwnLine() {
+        let editor = makeEditor("intro paragraph", selection: NSRange(location: 15, length: 0))
+        editor.insertSummaryDivider(nil)
+        #expect(editor.string == "intro paragraph\n<!--more-->\n")
+    }
+}
+
+@Suite("Context-Aware Auto-Pair")
+struct AutoPairContextTests {
+    @MainActor
+    private func makeEditor(_ text: String, cursor: Int) -> EditorTextView {
+        let textView = EditorTextView(frame: .zero)
+        textView.string = text
+        textView.setSelectedRange(NSRange(location: cursor, length: 0))
+        return textView
+    }
+
+    @Test("Asterisk at line start does not pair (list bullet)")
+    @MainActor
+    func asteriskAtLineStartDoesNotPair() {
+        let editor = makeEditor("first line\n", cursor: 11)
+        editor.insertText("*", replacementRange: NSRange(location: NSNotFound, length: 0))
+        #expect(editor.string == "first line\n*")
+    }
+
+    @Test("Underscore inside a word does not pair (snake_case)")
+    @MainActor
+    func underscoreInWordDoesNotPair() {
+        let editor = makeEditor("my", cursor: 2)
+        editor.insertText("_", replacementRange: NSRange(location: NSNotFound, length: 0))
+        #expect(editor.string == "my_")
+    }
+
+    @Test("Asterisk after a space still pairs")
+    @MainActor
+    func asteriskAfterSpacePairs() {
+        let editor = makeEditor("some ", cursor: 5)
+        editor.insertText("*", replacementRange: NSRange(location: NSNotFound, length: 0))
+        #expect(editor.string == "some **")
+        #expect(editor.selectedRange() == NSRange(location: 6, length: 0))
+    }
+
+    @Test("Backtick after a word still pairs")
+    @MainActor
+    func backtickAfterWordPairs() {
+        let editor = makeEditor("code", cursor: 4)
+        editor.insertText("`", replacementRange: NSRange(location: NSNotFound, length: 0))
+        #expect(editor.string == "code``")
+    }
+}

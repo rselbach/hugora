@@ -50,6 +50,7 @@ struct HugoraApp: App {
             AppCommands(editorState: editorState, updater: updaterController.updater)
             WorkspaceCommands(workspaceStore: workspaceStore)
             SiteCommands(workspaceStore: workspaceStore, hugoServer: hugoServer)
+            FormatCommands()
         }
 
         Settings {
