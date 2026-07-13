@@ -139,10 +139,20 @@ struct HugoCLIContentCreator: HugoContentCreator {
         process.standardInput = FileHandle.nullDevice
 
         try process.run()
-        process.waitUntilExit()
+
+        // Drain both pipes before reaping the child: waiting first deadlocks
+        // once hugo writes more than the pipe buffer holds.
+        var stderrData = Data()
+        let stderrDone = DispatchSemaphore(value: 0)
+        let stderrHandle = stderrPipe.fileHandleForReading
+        DispatchQueue.global(qos: .utility).async {
+            stderrData = stderrHandle.readDataToEndOfFile()
+            stderrDone.signal()
+        }
 
         let stdoutData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        stderrDone.wait()
+        process.waitUntilExit()
 
         return ProcessResult(
             status: process.terminationStatus,
