@@ -75,6 +75,7 @@ struct NewPostBuilderTests {
         ---
         source: "section"
         title: "{{ .Title }}"
+        date: "{{ .Date }}"
         ---
         """.write(to: sectionTemplateURL, atomically: true, encoding: .utf8)
 
@@ -119,6 +120,70 @@ struct NewPostBuilderTests {
         #expect(content.contains("draft: true"))
     }
 
+    @Test("Unsupported template functions fall back to default front matter")
+    func unsupportedArchetypeFallsBackToDefault() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let archetypesDir = tempDir.appendingPathComponent("archetypes")
+        try FileManager.default.createDirectory(at: archetypesDir, withIntermediateDirectories: true)
+
+        // Hugo's stock default.md — the token renderer can't evaluate these.
+        try """
+        +++
+        date = '{{ .Date }}'
+        draft = true
+        title = '{{ replace .File.ContentBaseName "-" " " | title }}'
+        +++
+        """.write(to: archetypesDir.appendingPathComponent("default.md"), atomically: true, encoding: .utf8)
+
+        let config = HugoConfig(contentDir: "content", archetypeDir: "archetypes", title: nil)
+        let builder = NewPostBuilder(siteURL: tempDir, config: config)
+        let content = builder.buildContent(
+            sectionName: "posts",
+            format: .file,
+            title: "Abed Nadir",
+            slug: "abed-nadir",
+            date: Date(timeIntervalSince1970: 0)
+        )
+
+        #expect(content.contains("title: \"Abed Nadir\""))
+        #expect(content.contains("draft: true"))
+        #expect(!content.contains("{{ replace"))
+    }
+
+    @Test("Rendered archetype may contain shortcodes in the body")
+    func archetypeWithShortcodesIsUsable() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let archetypesDir = tempDir.appendingPathComponent("archetypes")
+        try FileManager.default.createDirectory(at: archetypesDir, withIntermediateDirectories: true)
+
+        try """
+        ---
+        title: "{{ .Title }}"
+        date: "{{ .Date }}"
+        ---
+        {{< figure src="cover.png" >}}
+        """.write(to: archetypesDir.appendingPathComponent("default.md"), atomically: true, encoding: .utf8)
+
+        let config = HugoConfig(contentDir: "content", archetypeDir: "archetypes", title: nil)
+        let builder = NewPostBuilder(siteURL: tempDir, config: config)
+        let content = builder.buildContent(
+            sectionName: "posts",
+            format: .file,
+            title: "Troy and Abed in the Morning",
+            slug: "troy-abed-morning",
+            date: Date(timeIntervalSince1970: 0)
+        )
+
+        #expect(content.contains("title: \"Troy and Abed in the Morning\""))
+        #expect(content.contains("{{< figure"))
+    }
+
     @Test("Escaped archetypeDir falls back to in-site archetypes directory")
     func escapedArchetypeDirFallsBackToSafeDefault() throws {
         let parent = FileManager.default.temporaryDirectory.appendingPathComponent("hugora-parent-\(UUID().uuidString)")
@@ -137,6 +202,7 @@ struct NewPostBuilderTests {
         ---
         source: "safe"
         title: "{{ .Title }}"
+        date: "{{ .Date }}"
         ---
         """.write(to: safeArchetypes.appendingPathComponent("default.md"), atomically: true, encoding: .utf8)
 

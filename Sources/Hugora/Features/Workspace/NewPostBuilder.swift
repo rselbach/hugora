@@ -25,10 +25,45 @@ struct NewPostBuilder {
     ) -> String {
         let normalizedSection = normalizeSection(sectionName)
         if let template = loadArchetype(sectionName: normalizedSection, format: format) {
-            return render(template: template, title: title, slug: slug, sectionName: normalizedSection, date: date)
+            let rendered = render(template: template, title: title, slug: slug, sectionName: normalizedSection, date: date)
+            if isRenderedTemplateUsable(rendered) {
+                return rendered
+            }
+            Self.logger.warning(
+                "Archetype uses template constructs the built-in renderer doesn't support; using default front matter instead"
+            )
         }
 
         return defaultFrontmatter(title: title, date: date)
+    }
+
+    /// A rendered archetype is only usable if it produced valid front matter
+    /// with a title and date and left no Go template actions behind.
+    /// Hugo's own stock default.md uses functions like `replace` that the
+    /// token renderer can't evaluate; treat that as "no archetype" rather
+    /// than failing post creation.
+    private func isRenderedTemplateUsable(_ content: String) -> Bool {
+        guard detectFrontmatterBlock(in: content) != nil,
+              FrontmatterParser.value(forKey: "title", in: content) != nil,
+              FrontmatterParser.date(forKey: "date", in: content) != nil else {
+            return false
+        }
+        return !containsUnrenderedTemplateAction(content)
+    }
+
+    /// Detects leftover `{{ ... }}` Go template actions, ignoring Hugo
+    /// shortcodes (`{{<`, `{{%`) which are legitimate post content.
+    private func containsUnrenderedTemplateAction(_ content: String) -> Bool {
+        var search = content.startIndex
+        while let open = content.range(of: "{{", range: search..<content.endIndex) {
+            let next = open.upperBound
+            if next < content.endIndex, content[next] == "<" || content[next] == "%" {
+                search = next
+                continue
+            }
+            return true
+        }
+        return false
     }
 
     private func normalizeSection(_ sectionName: String?) -> String? {
