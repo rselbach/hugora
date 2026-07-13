@@ -8,7 +8,15 @@ struct HugoraApp: App {
     private let updaterController: SPUStandardUpdaterController
 
     init() {
-        updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+        // Sparkle can't initialize outside a real app bundle (`swift run`
+        // dev builds have no Info.plist) and puts up an error dialog if it
+        // tries. Leaving the updater stopped keeps the menu item disabled.
+        let isBundledApp = Bundle.main.bundleIdentifier != nil
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: isBundledApp,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
     }
     @StateObject private var workspaceStore = WorkspaceStore()
     @StateObject private var editorState = EditorState()
