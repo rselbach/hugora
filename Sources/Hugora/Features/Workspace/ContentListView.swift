@@ -295,6 +295,8 @@ struct ContentRow: View {
     @EnvironmentObject private var workspaceStore: WorkspaceStore
     @State private var isHovering = false
     @State private var showDeleteConfirmation = false
+    @State private var showRenameDialog = false
+    @State private var renameText = ""
 
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -312,6 +314,17 @@ struct ContentRow: View {
             return "\(item.title), \(dateString), scheduled"
         case .published:
             return "\(item.title), \(dateString)"
+        }
+    }
+
+    /// The name the rename dialog starts from: the bundle folder name, or
+    /// the file name without extension.
+    private var currentDiskName: String {
+        switch item.format {
+        case .bundle:
+            item.url.deletingLastPathComponent().lastPathComponent
+        case .file:
+            item.url.deletingPathExtension().lastPathComponent
         }
     }
 
@@ -383,9 +396,30 @@ struct ContentRow: View {
                 NSWorkspace.shared.activateFileViewerSelecting([revealURL])
             }
             Divider()
+            Button("Rename…") {
+                renameText = currentDiskName
+                showRenameDialog = true
+            }
+            Button("Duplicate") {
+                workspaceStore.duplicateContent(item)
+            }
+            Divider()
             Button("Delete…", role: .destructive) {
                 showDeleteConfirmation = true
             }
+        }
+        .alert("Rename \u{201C}\(item.title)\u{201D}", isPresented: $showRenameDialog) {
+            TextField("New name", text: $renameText)
+            Button("Rename") {
+                workspaceStore.renameContent(item, to: renameText)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                item.format == .bundle
+                    ? "Renames the bundle folder on disk."
+                    : "Renames the file on disk (extension is kept)."
+            )
         }
         .confirmationDialog(
             "Delete \"\(item.title)\"?",

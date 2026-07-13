@@ -87,6 +87,10 @@ struct ContentView: View {
                 editorState.openItem(item)
             }
 
+            workspaceStore.onContentRenamed = { [weak editorState] oldURL, newURL in
+                editorState?.handleExternalRename(from: oldURL, to: newURL)
+            }
+
             // Cover a session restore that completed before this view appeared.
             syncEditorContext()
             viewModel.setText(editorState.content)

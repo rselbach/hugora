@@ -13,6 +13,20 @@ struct WorkspaceRef: Codable, Identifiable, Equatable {
     }
 }
 
+enum ContentOperationError: LocalizedError {
+    case invalidName(String)
+    case targetExists(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidName(let name):
+            "\u{201C}\(name)\u{201D} is not a valid name."
+        case .targetExists(let name):
+            "\u{201C}\(name)\u{201D} already exists."
+        }
+    }
+}
+
 enum WorkspaceError: LocalizedError, Equatable {
     case notHugoSite
     case unsafeFileOperation(String)
@@ -93,6 +107,10 @@ final class WorkspaceStore: ObservableObject {
     /// Callback invoked when a file should be opened in the editor.
     /// Wired up by ContentView so WorkspaceStore doesn't depend on EditorState.
     var onOpenFile: ((URL) -> Void)?
+
+    /// Callback invoked after a sidebar rename moves a file on disk, so the
+    /// editor can follow if that post is open. Arguments: old and new URL.
+    var onContentRenamed: ((URL, URL) -> Void)?
 
     private var securityScopedURL: URL?
     private let hugoContentCreator: any HugoContentCreator
@@ -478,6 +496,182 @@ final class WorkspaceStore: ObservableObject {
                 }
             }
         }
+    }
+
+    // MARK: - Rename / Duplicate Content
+
+    /// Renames a post's slug on disk: moves the bundle folder or the flat
+    /// file to the new name, keeping the extension and index file name.
+    ///
+    /// - Parameters:
+    ///   - item: The content item to rename.
+    ///   - rawName: The new folder/file name (extension optional for files).
+    func renameContent(_ item: ContentItem, to rawName: String) {
+        guard let contentDir = contentDirectoryURL else {
+            lastError = .unsafeFileOperation(item.url.path)
+            return
+        }
+
+        var name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Allow typing the name with its extension; we re-append it.
+        if item.format == .file,
+            (name as NSString).pathExtension.lowercased() == item.url.pathExtension.lowercased()
+        {
+            name = (name as NSString).deletingPathExtension
+        }
+        guard isValidComponentName(name) else {
+            presentOperationError(ContentOperationError.invalidName(rawName))
+            return
+        }
+
+        let oldFileURL = item.url
+        let sourceURL: URL
+        let targetURL: URL
+        let newFileURL: URL
+        switch item.format {
+        case .bundle:
+            sourceURL = item.url.deletingLastPathComponent()
+            guard sourceURL.lastPathComponent != name else { return }
+            targetURL = sourceURL.deletingLastPathComponent().appendingPathComponent(name)
+            newFileURL = targetURL.appendingPathComponent(item.url.lastPathComponent)
+        case .file:
+            sourceURL = item.url
+            guard item.url.deletingPathExtension().lastPathComponent != name else { return }
+            targetURL = item.url.deletingLastPathComponent()
+                .appendingPathComponent(name)
+                .appendingPathExtension(item.url.pathExtension)
+            newFileURL = targetURL
+        }
+
+        // The target itself doesn't exist yet (symlink resolution can't see
+        // it); its parent is the source's parent, and the validated name
+        // can't traverse out of it, so checking source and parent suffices.
+        guard PathSafety.isSameOrDescendant(sourceURL.standardizedFileURL, of: contentDir.standardizedFileURL),
+            PathSafety.isSameOrDescendant(
+                targetURL.deletingLastPathComponent().standardizedFileURL,
+                of: contentDir.standardizedFileURL
+            )
+        else {
+            lastError = .unsafeFileOperation(targetURL.path)
+            return
+        }
+
+        guard !FileManager.default.fileExists(atPath: targetURL.path) else {
+            presentOperationError(ContentOperationError.targetExists(targetURL.lastPathComponent))
+            return
+        }
+
+        do {
+            try FileManager.default.moveItem(at: sourceURL, to: targetURL)
+        } catch {
+            presentOperationError(error)
+            return
+        }
+
+        onContentRenamed?(oldFileURL, newFileURL)
+        if selectedFileURL == oldFileURL {
+            selectedFileURL = newFileURL
+        }
+        if let siteURL = currentFolderURL {
+            loadContent(from: siteURL)
+        }
+    }
+
+    /// Duplicates a post next to the original with a unique "-copy" name;
+    /// the duplicate is marked draft so it can't publish accidentally.
+    func duplicateContent(_ item: ContentItem) {
+        guard let contentDir = contentDirectoryURL else {
+            lastError = .unsafeFileOperation(item.url.path)
+            return
+        }
+
+        let fm = FileManager.default
+        let sourceURL: URL
+        let baseName: String
+        switch item.format {
+        case .bundle:
+            sourceURL = item.url.deletingLastPathComponent()
+            baseName = sourceURL.lastPathComponent
+        case .file:
+            sourceURL = item.url
+            baseName = item.url.deletingPathExtension().lastPathComponent
+        }
+
+        let parentDir = sourceURL.deletingLastPathComponent()
+        var candidate = "\(baseName)-copy"
+        var counter = 2
+        func targetURL(for name: String) -> URL {
+            switch item.format {
+            case .bundle:
+                return parentDir.appendingPathComponent(name)
+            case .file:
+                return parentDir.appendingPathComponent(name).appendingPathExtension(item.url.pathExtension)
+            }
+        }
+        while fm.fileExists(atPath: targetURL(for: candidate).path) {
+            candidate = "\(baseName)-copy-\(counter)"
+            counter += 1
+        }
+        let target = targetURL(for: candidate)
+
+        // As with rename: the copy target doesn't exist yet, so validate its
+        // parent (the source's parent) instead.
+        guard PathSafety.isSameOrDescendant(sourceURL.standardizedFileURL, of: contentDir.standardizedFileURL),
+            PathSafety.isSameOrDescendant(
+                target.deletingLastPathComponent().standardizedFileURL,
+                of: contentDir.standardizedFileURL
+            )
+        else {
+            lastError = .unsafeFileOperation(target.path)
+            return
+        }
+
+        do {
+            try fm.copyItem(at: sourceURL, to: target)
+        } catch {
+            presentOperationError(error)
+            return
+        }
+
+        let newFileURL: URL
+        switch item.format {
+        case .bundle:
+            newFileURL = target.appendingPathComponent(item.url.lastPathComponent)
+        case .file:
+            newFileURL = target
+        }
+        markDuplicateAsDraft(at: newFileURL)
+
+        if let siteURL = currentFolderURL {
+            loadContent(from: siteURL)
+        }
+        selectedFileURL = newFileURL
+    }
+
+    private func markDuplicateAsDraft(at fileURL: URL) {
+        do {
+            let text = try String(contentsOf: fileURL, encoding: .utf8)
+            guard let updated = FrontmatterRewriter.set("draft", to: .bool(true), in: text) else {
+                Self.logger.error(
+                    "Duplicate has no front matter; leaving draft flag unset: \(fileURL.lastPathComponent)")
+                return
+            }
+            try updated.write(to: fileURL, atomically: true, encoding: .utf8)
+        } catch {
+            presentOperationError(error)
+        }
+    }
+
+    private func isValidComponentName(_ name: String) -> Bool {
+        !name.isEmpty && name != "." && name != ".." && !name.contains("/") && !name.contains("\0")
+    }
+
+    private func presentOperationError(_ error: Error) {
+        guard NSApp != nil, !Self.isRunningTests else {
+            Self.logger.error("Content operation failed: \(error.localizedDescription)")
+            return
+        }
+        NSApp.presentError(error)
     }
 
     // MARK: - Delete Content

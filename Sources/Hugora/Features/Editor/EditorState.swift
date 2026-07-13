@@ -161,6 +161,16 @@ final class EditorState: ObservableObject {
         scheduleAutoSaveIfNeeded()
     }
 
+    /// Points the open document at its new location after an external
+    /// rename (sidebar rename); content and dirty state are untouched.
+    func handleExternalRename(from oldURL: URL, to newURL: URL) {
+        guard let item = currentItem,
+            item.url.standardizedFileURL == oldURL.standardizedFileURL
+        else { return }
+        currentItem = ContentItem(url: newURL, format: item.format, section: item.section, content: content)
+        saveSession()
+    }
+
     /// Saves the current content to disk.
     ///
     /// Encodes HTML entities back to their escaped form, optionally renames

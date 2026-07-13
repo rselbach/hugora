@@ -1293,6 +1293,144 @@ struct WorkspaceStoreTests {
         #expect(store.siteShortcodes.isEmpty)
     }
 
+    // MARK: - rename / duplicate
+
+    @Test("Renaming a flat file moves it and keeps the extension")
+    func renamesFlatFile() async throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(
+            posts: [
+                (
+                    section: "posts", slug: "old-name",
+                    content: """
+                    ---
+                    title: Old Name
+                    date: 2024-01-01
+                    ---
+                    """
+                )
+            ]
+        )
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        store.openFolder(siteURL)
+        let item = try #require(store.sections.first?.items.first)
+
+        var renamedFrom: URL?
+        var renamedTo: URL?
+        store.onContentRenamed = { old, new in
+            renamedFrom = old
+            renamedTo = new
+        }
+
+        store.renameContent(item, to: "new-name")
+
+        let newURL = siteURL.appendingPathComponent("content/posts/new-name.md")
+        #expect(FileManager.default.fileExists(atPath: newURL.path))
+        #expect(!FileManager.default.fileExists(atPath: item.url.path))
+        #expect(renamedFrom == item.url)
+        #expect(renamedTo?.resolvingSymlinksInPath().path == newURL.resolvingSymlinksInPath().path)
+        #expect(store.sections.first?.items.first?.slug == "new-name")
+    }
+
+    @Test("Renaming a bundle moves the folder, keeping the index name")
+    func renamesBundle() async throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(sections: ["posts"])
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        let bundleDir = siteURL.appendingPathComponent("content/posts/old-bundle")
+        try FileManager.default.createDirectory(at: bundleDir, withIntermediateDirectories: true)
+        try """
+        ---
+        title: Old Bundle
+        date: 2024-01-01
+        ---
+        """.write(to: bundleDir.appendingPathComponent("index.markdown"), atomically: true, encoding: .utf8)
+
+        store.openFolder(siteURL)
+        let item = try #require(store.sections.first?.items.first)
+
+        store.renameContent(item, to: "new-bundle")
+
+        let newIndex = siteURL.appendingPathComponent("content/posts/new-bundle/index.markdown")
+        #expect(FileManager.default.fileExists(atPath: newIndex.path))
+        #expect(!FileManager.default.fileExists(atPath: bundleDir.path))
+    }
+
+    @Test("Rename refuses collisions and invalid names")
+    func renameRejectsBadTargets() async throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(
+            posts: [
+                (section: "posts", slug: "first", content: "---\ntitle: First\n---"),
+                (section: "posts", slug: "second", content: "---\ntitle: Second\n---"),
+            ]
+        )
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        store.openFolder(siteURL)
+        let first = try #require(store.sections.first?.items.first { $0.slug == "first" })
+
+        store.renameContent(first, to: "second")
+        #expect(FileManager.default.fileExists(atPath: first.url.path))
+
+        store.renameContent(first, to: "../escape")
+        #expect(FileManager.default.fileExists(atPath: first.url.path))
+        #expect(
+            !FileManager.default.fileExists(
+                atPath: siteURL.appendingPathComponent("content/escape.md").path))
+    }
+
+    @Test("Duplicate copies the post as a draft with a -copy name")
+    func duplicatesPostAsDraft() async throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(
+            posts: [
+                (
+                    section: "posts", slug: "original",
+                    content: """
+                    ---
+                    title: Original
+                    date: 2024-01-01
+                    draft: false
+                    ---
+                    Body
+                    """
+                )
+            ]
+        )
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        store.openFolder(siteURL)
+        let item = try #require(store.sections.first?.items.first)
+
+        store.duplicateContent(item)
+
+        let copyURL = siteURL.appendingPathComponent("content/posts/original-copy.md")
+        #expect(FileManager.default.fileExists(atPath: copyURL.path))
+        let copyContent = try String(contentsOf: copyURL, encoding: .utf8)
+        #expect(copyContent.contains("draft: true"))
+        #expect(copyContent.contains("Body"))
+        // Original untouched.
+        let original = try String(contentsOf: item.url, encoding: .utf8)
+        #expect(original.contains("draft: false"))
+
+        // A second duplicate gets a numbered name.
+        store.duplicateContent(item)
+        #expect(
+            FileManager.default.fileExists(
+                atPath: siteURL.appendingPathComponent("content/posts/original-copy-2.md").path))
+    }
+
     // MARK: - openFile
 
     @Test("openFile sets selectedFileURL")
