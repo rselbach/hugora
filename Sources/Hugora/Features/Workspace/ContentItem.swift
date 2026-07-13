@@ -302,6 +302,16 @@ struct ContentItem: Identifiable, Equatable, Comparable {
         self.searchSlug = self.slug.lowercased()
     }
 
+    /// Content-root-relative document path that Hugo's ref/relref resolve,
+    /// e.g. "/posts/2024-06-20-my-post.md" or "/posts/my-bundle/index.md".
+    /// Nil when the item lies outside the content root.
+    func relrefPath(contentRoot: URL) -> String? {
+        let filePath = url.standardizedFileURL.path
+        let rootPath = contentRoot.standardizedFileURL.path
+        guard filePath.hasPrefix(rootPath + "/") else { return nil }
+        return String(filePath.dropFirst(rootPath.count))
+    }
+
     enum PublishStatus {
         case draft
         case scheduled

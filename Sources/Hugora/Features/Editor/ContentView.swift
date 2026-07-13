@@ -6,6 +6,8 @@ struct ContentView: View {
     @EnvironmentObject private var hugoServer: HugoServerController
     @StateObject private var viewModel = EditorViewModel()
     @State private var showSidebar = true
+    @State private var showPostLinkPicker = false
+    @State private var postLinkTarget: EditorTextView?
 
     var body: some View {
         HSplitView {
@@ -86,6 +88,30 @@ struct ContentView: View {
                 stopPreviewIfWorkspaceChanged()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .insertPostLink)) { _ in
+            guard editorState.currentItem != nil else { return }
+            // Capture the focused editor before the sheet steals focus.
+            postLinkTarget = NSApp.keyWindow?.firstResponder as? EditorTextView
+            showPostLinkPicker = true
+        }
+        .sheet(isPresented: $showPostLinkPicker) {
+            PostLinkPickerView(
+                items: workspaceStore.sections.flatMap(\.items),
+                onSelect: { item in
+                    insertPostLink(to: item)
+                    showPostLinkPicker = false
+                },
+                onCancel: { showPostLinkPicker = false }
+            )
+        }
+    }
+
+    private func insertPostLink(to item: ContentItem) {
+        guard let contentRoot = workspaceStore.contentDirectoryURL,
+            let relrefPath = item.relrefPath(contentRoot: contentRoot),
+            let editor = postLinkTarget
+        else { return }
+        editor.insertPostLink(relrefPath: relrefPath, fallbackText: item.title)
     }
 
     @ViewBuilder

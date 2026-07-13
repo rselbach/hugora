@@ -412,6 +412,26 @@ class EditorTextView: NSTextView {
         )
     }
 
+    /// Inserts an internal link as `[text]({{< relref "path" >}})`. The
+    /// selection becomes the link text; otherwise `fallbackText` is used
+    /// and left selected for editing.
+    func insertPostLink(relrefPath: String, fallbackText: String) {
+        let range = selectedRange()
+        let nsString = self.string as NSString
+        let selectedText = range.length > 0 ? nsString.substring(with: range) : ""
+        let text = selectedText.isEmpty ? fallbackText : selectedText
+        let markup = "[\(text)]({{< relref \"\(relrefPath)\" >}})"
+
+        let selection: NSRange
+        if selectedText.isEmpty {
+            selection = NSRange(location: range.location + 1, length: (text as NSString).length)
+        } else {
+            selection = NSRange(location: range.location + (markup as NSString).length, length: 0)
+        }
+
+        replaceForFormatting(range, with: markup, select: selection)
+    }
+
     /// Inserts a shortcode template at the cursor, selecting its
     /// placeholder so typing fills the main argument.
     func insertShortcodeTemplate(_ shortcode: ShortcodeTemplate) {

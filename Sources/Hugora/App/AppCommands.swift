@@ -172,6 +172,12 @@ struct FormatCommands: Commands {
             }
             .keyboardShortcut("k", modifiers: .command)
 
+            Button("Insert Link to Post…") {
+                NotificationCenter.default.post(name: .insertPostLink, object: nil)
+            }
+            .keyboardShortcut("k", modifiers: [.command, .shift])
+            .disabled(workspaceStore.currentFolderURL == nil)
+
             Divider()
 
             Menu("Insert Shortcode") {

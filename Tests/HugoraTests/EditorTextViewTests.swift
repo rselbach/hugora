@@ -271,3 +271,58 @@ struct ShortcodeInsertionTests {
         #expect((editor.string as NSString).substring(with: selection) == "VIDEO_ID")
     }
 }
+
+@Suite("Post Link Insertion")
+struct PostLinkInsertionTests {
+    @Test("relrefPath is content-root relative")
+    func relrefPathComputation() {
+        let contentRoot = URL(fileURLWithPath: "/site/content")
+
+        let filePost = ContentItem(
+            url: URL(fileURLWithPath: "/site/content/posts/2024-06-20-troy.md"),
+            format: .file, section: "posts",
+            content: "---\ntitle: Troy\n---"
+        )
+        #expect(filePost.relrefPath(contentRoot: contentRoot) == "/posts/2024-06-20-troy.md")
+
+        let bundlePost = ContentItem(
+            url: URL(fileURLWithPath: "/site/content/blog/my-bundle/index.md"),
+            format: .bundle, section: "blog",
+            content: "---\ntitle: Bundle\n---"
+        )
+        #expect(bundlePost.relrefPath(contentRoot: contentRoot) == "/blog/my-bundle/index.md")
+
+        let outside = ContentItem(
+            url: URL(fileURLWithPath: "/elsewhere/post.md"),
+            format: .file, section: "posts",
+            content: "---\ntitle: Outside\n---"
+        )
+        #expect(outside.relrefPath(contentRoot: contentRoot) == nil)
+    }
+
+    @Test("Selection becomes the link text")
+    @MainActor
+    func selectionBecomesLinkText() {
+        let editor = EditorTextView(frame: .zero)
+        editor.string = "read my older post about that"
+        editor.setSelectedRange(NSRange(location: 8, length: 10))
+
+        editor.insertPostLink(relrefPath: "/posts/older.md", fallbackText: "Older Post")
+
+        #expect(editor.string == #"read my [older post]({{< relref "/posts/older.md" >}}) about that"#)
+    }
+
+    @Test("Without a selection the title is inserted and selected")
+    @MainActor
+    func fallbackTitleSelected() {
+        let editor = EditorTextView(frame: .zero)
+        editor.string = "see "
+        editor.setSelectedRange(NSRange(location: 4, length: 0))
+
+        editor.insertPostLink(relrefPath: "/posts/older.md", fallbackText: "Older Post")
+
+        #expect(editor.string == #"see [Older Post]({{< relref "/posts/older.md" >}})"#)
+        let selection = editor.selectedRange()
+        #expect((editor.string as NSString).substring(with: selection) == "Older Post")
+    }
+}
