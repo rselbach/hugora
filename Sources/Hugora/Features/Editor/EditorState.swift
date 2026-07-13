@@ -233,7 +233,9 @@ final class EditorState: ObservableObject {
                     throw EditorStateError.renameTargetAlreadyExists(newFolder.path)
                 }
                 try fm.moveItem(at: currentFolder, to: newFolder)
-                finalURL = newFolder.appendingPathComponent("index.md")
+                // Keep the index file exactly as it was named
+                // (index.markdown, index.en.md, ...); only the folder moved.
+                finalURL = newFolder.appendingPathComponent(item.url.lastPathComponent)
             }
             
         case .file:
@@ -242,7 +244,9 @@ final class EditorState: ObservableObject {
             
             if currentFileName != expectedName {
                 let parentDir = item.url.deletingLastPathComponent()
-                let newFile = parentDir.appendingPathComponent("\(expectedName).md")
+                let newFile = parentDir
+                    .appendingPathComponent(expectedName)
+                    .appendingPathExtension(item.url.pathExtension)
                 try validateWritableURL(newFile)
                 
                 if fm.fileExists(atPath: newFile.path) {

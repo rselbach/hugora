@@ -111,6 +111,70 @@ struct EditorStateTests {
         }
     }
 
+    @Test("Auto-rename preserves the original file extension and index name")
+    @MainActor
+    func autoRenamePreservesExtension() async throws {
+        try await withCleanDefaults {
+            let defaults = UserDefaults.standard
+            defaults.set(false, forKey: "autoSaveEnabled")
+            defaults.set(true, forKey: "autoRenameOnSave")
+
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempDir) }
+
+            // A .markdown flat file must stay .markdown after the rename.
+            let fileURL = tempDir.appendingPathComponent("2024-01-01-old-post.markdown")
+            try """
+            ---
+            title: "Old Post"
+            date: 2024-01-01
+            ---
+            """.write(to: fileURL, atomically: true, encoding: .utf8)
+
+            let state = EditorState()
+            state.openItem(ContentItem(url: fileURL, format: .file, section: "blog"))
+            state.updateContent("""
+            ---
+            title: "Shirley Bennett"
+            date: 2024-06-20
+            ---
+            """)
+            state.save()
+
+            let renamedURL = tempDir.appendingPathComponent("2024-06-20-shirley-bennett.markdown")
+            #expect(FileManager.default.fileExists(atPath: renamedURL.path))
+            #expect(state.currentItem?.url == renamedURL)
+
+            // A bundle keeps its index filename when the folder is renamed.
+            let bundleDir = tempDir.appendingPathComponent("2024-01-01-old-bundle")
+            try FileManager.default.createDirectory(at: bundleDir, withIntermediateDirectories: true)
+            let indexURL = bundleDir.appendingPathComponent("index.markdown")
+            try """
+            ---
+            title: "Old Bundle"
+            date: 2024-01-01
+            ---
+            """.write(to: indexURL, atomically: true, encoding: .utf8)
+
+            let bundleState = EditorState()
+            bundleState.openItem(ContentItem(url: indexURL, format: .bundle, section: "blog"))
+            bundleState.updateContent("""
+            ---
+            title: "Ben Chang"
+            date: 2024-06-21
+            ---
+            """)
+            bundleState.save()
+
+            let renamedIndexURL = tempDir
+                .appendingPathComponent("2024-06-21-ben-chang")
+                .appendingPathComponent("index.markdown")
+            #expect(FileManager.default.fileExists(atPath: renamedIndexURL.path))
+            #expect(bundleState.currentItem?.url == renamedIndexURL)
+        }
+    }
+
     @Test("Auto-rename parses non-ISO frontmatter dates")
     @MainActor
     func autoRenameParsesNonISODates() async throws {
