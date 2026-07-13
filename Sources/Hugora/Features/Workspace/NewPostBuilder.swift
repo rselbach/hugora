@@ -83,9 +83,13 @@ struct NewPostBuilder {
         return candidates
     }
 
+    // Local time with offset, like `hugo new` writes. Keeping this in the
+    // local zone means the yyyy-MM-dd folder prefix (also local) and the
+    // frontmatter date can never disagree across midnight.
     private static let isoFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
+        f.timeZone = .current
         return f
     }()
 

@@ -48,7 +48,13 @@ struct NewPostBuilderTests {
         #expect(content.contains("source: \"index\""))
         #expect(!content.contains("source: \"section\""))
         #expect(content.contains("title: \"Troy Barnes\""))
-        #expect(content.contains("date: \"1970-01-01T00:00:00Z\""))
+        // Dates render in the local timezone (matching `hugo new` and the
+        // date-prefixed folder name), so compute the expected string the
+        // same way.
+        let wantFormatter = ISO8601DateFormatter()
+        wantFormatter.formatOptions = [.withInternetDateTime]
+        wantFormatter.timeZone = .current
+        #expect(content.contains("date: \"\(wantFormatter.string(from: date))\""))
         #expect(content.contains("slug: \"troy-barnes\""))
         #expect(content.contains("type: \"posts\""))
     }
