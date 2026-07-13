@@ -76,6 +76,10 @@ final class WorkspaceStore: ObservableObject {
     /// Which file is highlighted in the sidebar list (selection state only).
     @Published var selectedFileURL: URL?
 
+    /// Names of shortcodes the site defines (layouts/shortcodes, including
+    /// themes), for the Insert Shortcode menu.
+    @Published private(set) var siteShortcodes: [String] = []
+
     /// Callback invoked when a file should be opened in the editor.
     /// Wired up by ContentView so WorkspaceStore doesn't depend on EditorState.
     var onOpenFile: ((URL) -> Void)?
@@ -279,6 +283,7 @@ final class WorkspaceStore: ObservableObject {
         siteName = nil
         lastError = nil
         isLoading = false
+        siteShortcodes = []
         UserDefaults.standard.removeObject(forKey: DefaultsKey.workspaceBookmark)
     }
 
@@ -535,12 +540,42 @@ final class WorkspaceStore: ObservableObject {
         return false
     }
 
+    /// Collects shortcode names from the site's (and its themes')
+    /// layouts/shortcodes directories for the Insert Shortcode menu.
+    private func discoverSiteShortcodes(siteURL: URL) {
+        var directories = [siteURL.appendingPathComponent("layouts/shortcodes")]
+        for theme in hugoConfig?.themes ?? [] {
+            directories.append(
+                siteURL
+                    .appendingPathComponent("themes")
+                    .appendingPathComponent(theme)
+                    .appendingPathComponent("layouts/shortcodes")
+            )
+        }
+
+        var names = Set<String>()
+        for directory in directories {
+            let entries =
+                (try? FileManager.default.contentsOfDirectory(
+                    at: directory,
+                    includingPropertiesForKeys: nil,
+                    options: [.skipsHiddenFiles]
+                )) ?? []
+            for entry in entries where entry.pathExtension.lowercased() == "html" {
+                names.insert(entry.deletingPathExtension().lastPathComponent)
+            }
+        }
+
+        siteShortcodes = names.sorted()
+    }
+
     // MARK: - Content Loading
 
     private func loadContent(from siteURL: URL) {
         isLoading = true
         hugoConfig = HugoConfig.load(from: siteURL)
         siteName = siteURL.lastPathComponent
+        discoverSiteShortcodes(siteURL: siteURL)
 
         guard let config = hugoConfig else {
             sections = []

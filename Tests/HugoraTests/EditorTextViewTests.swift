@@ -244,3 +244,30 @@ struct AutoPairContextTests {
         #expect(editor.string == "code``")
     }
 }
+
+@Suite("Shortcode Insertion")
+struct ShortcodeInsertionTests {
+    @Test("Built-in templates carry their selection placeholder")
+    func templatesAreConsistent() {
+        for shortcode in ShortcodeCatalog.builtIn {
+            #expect(shortcode.template.contains(shortcode.name))
+            if let placeholder = shortcode.selectionPlaceholder {
+                #expect(shortcode.template.contains(placeholder))
+            }
+        }
+    }
+
+    @Test("Inserting a template selects the placeholder")
+    @MainActor
+    func insertSelectsPlaceholder() {
+        let editor = EditorTextView(frame: .zero)
+        editor.string = "before "
+        editor.setSelectedRange(NSRange(location: 7, length: 0))
+
+        editor.insertShortcodeTemplate(ShortcodeCatalog.builtIn.first { $0.name == "youtube" }!)
+
+        #expect(editor.string == "before {{< youtube VIDEO_ID >}}")
+        let selection = editor.selectedRange()
+        #expect((editor.string as NSString).substring(with: selection) == "VIDEO_ID")
+    }
+}

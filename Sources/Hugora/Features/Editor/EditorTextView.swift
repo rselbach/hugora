@@ -412,6 +412,31 @@ class EditorTextView: NSTextView {
         )
     }
 
+    /// Inserts a shortcode template at the cursor, selecting its
+    /// placeholder so typing fills the main argument.
+    func insertShortcodeTemplate(_ shortcode: ShortcodeTemplate) {
+        let range = selectedRange()
+        let template = shortcode.template
+        let templateNS = template as NSString
+
+        let selection: NSRange
+        if let placeholder = shortcode.selectionPlaceholder {
+            let placeholderRange = templateNS.range(of: placeholder)
+            if placeholderRange.location != NSNotFound {
+                selection = NSRange(
+                    location: range.location + placeholderRange.location,
+                    length: placeholderRange.length
+                )
+            } else {
+                selection = NSRange(location: range.location + templateNS.length, length: 0)
+            }
+        } else {
+            selection = NSRange(location: range.location + templateNS.length, length: 0)
+        }
+
+        replaceForFormatting(range, with: template, select: selection)
+    }
+
     private func replaceForFormatting(_ range: NSRange, with newText: String, select selection: NSRange) {
         guard shouldChangeText(in: range, replacementString: newText) else { return }
         replaceCharacters(in: range, with: newText)

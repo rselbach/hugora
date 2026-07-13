@@ -1228,6 +1228,35 @@ struct WorkspaceStoreTests {
         #expect(section?.items.contains(where: { $0.slug == "nicolas-cage" }) == true)
     }
 
+    @Test("Site and theme shortcodes are discovered")
+    func discoversSiteShortcodes() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(
+            configContent: """
+                title = "Greendale"
+                theme = "human-being"
+                """
+        )
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        let siteShortcodes = siteURL.appendingPathComponent("layouts/shortcodes")
+        try FileManager.default.createDirectory(at: siteShortcodes, withIntermediateDirectories: true)
+        try "".write(to: siteShortcodes.appendingPathComponent("chart.html"), atomically: true, encoding: .utf8)
+
+        let themeShortcodes = siteURL.appendingPathComponent("themes/human-being/layouts/shortcodes")
+        try FileManager.default.createDirectory(at: themeShortcodes, withIntermediateDirectories: true)
+        try "".write(to: themeShortcodes.appendingPathComponent("notice.html"), atomically: true, encoding: .utf8)
+
+        store.openFolder(siteURL)
+
+        #expect(store.siteShortcodes == ["chart", "notice"])
+
+        store.closeWorkspace()
+        #expect(store.siteShortcodes.isEmpty)
+    }
+
     // MARK: - openFile
 
     @Test("openFile sets selectedFileURL")

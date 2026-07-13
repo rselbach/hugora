@@ -141,6 +141,8 @@ struct AppCommands: Commands {
 }
 
 struct FormatCommands: Commands {
+    @ObservedObject var workspaceStore: WorkspaceStore
+
     var body: some Commands {
         CommandGroup(replacing: .textFormatting) {
             Button("Bold") {
@@ -172,6 +174,23 @@ struct FormatCommands: Commands {
 
             Divider()
 
+            Menu("Insert Shortcode") {
+                ForEach(ShortcodeCatalog.builtIn) { shortcode in
+                    Button(shortcode.name) {
+                        insertShortcode(shortcode)
+                    }
+                }
+
+                if !workspaceStore.siteShortcodes.isEmpty {
+                    Divider()
+                    ForEach(workspaceStore.siteShortcodes, id: \.self) { name in
+                        Button(name) {
+                            insertShortcode(ShortcodeCatalog.siteTemplate(named: name))
+                        }
+                    }
+                }
+            }
+
             Button("Insert Summary Divider") {
                 sendToEditor(#selector(EditorTextView.insertSummaryDivider(_:)))
             }
@@ -182,6 +201,11 @@ struct FormatCommands: Commands {
     /// handles the action; a no-op when no editor has focus.
     private func sendToEditor(_ selector: Selector) {
         NSApp.sendAction(selector, to: nil, from: nil)
+    }
+
+    private func insertShortcode(_ shortcode: ShortcodeTemplate) {
+        guard let editor = NSApp.keyWindow?.firstResponder as? EditorTextView else { return }
+        editor.insertShortcodeTemplate(shortcode)
     }
 }
 
