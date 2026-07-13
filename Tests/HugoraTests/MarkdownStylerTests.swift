@@ -368,6 +368,17 @@ struct FrontmatterDetectionTests {
         #expect(frontmatter != nil)
         #expect(frontmatter?.format == .json)
     }
+
+    @Test("Leading Hugo shortcode is not JSON frontmatter")
+    func shortcodeIsNotJSONFrontmatter() {
+        let text = """
+        {{< figure src="/images/troy.png" alt="Troy Barnes" >}}
+
+        Body text.
+        """
+
+        #expect(detectFrontmatter(in: text) == nil)
+    }
 }
 
 // MARK: - Style Application Integration Tests

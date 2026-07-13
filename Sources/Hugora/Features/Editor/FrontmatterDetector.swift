@@ -97,6 +97,12 @@ private func detectJSONFrontmatter(in nsString: NSString, start: Int) -> Frontma
         return nil
     }
 
+    // "{{" is never valid JSON but is how Hugo shortcodes/templates start
+    // ({{< figure >}}), so a post beginning with one is not frontmatter.
+    if start + 1 < nsString.length, nsString.character(at: start + 1) == 0x7B {
+        return nil
+    }
+
     var depth = 0
     var inString = false
     var escaped = false
