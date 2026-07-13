@@ -79,3 +79,45 @@ struct EditorTextViewPreferencesTests {
         #expect(textView.insertionPointColor == theme.baseColor)
     }
 }
+
+@Suite("EditorView Programmatic Loads")
+struct EditorViewProgrammaticLoadTests {
+    @Test("Loading a shorter document clamps the previous selection")
+    @MainActor
+    func clampsSelectionOnLoad() {
+        let textView = NSTextView()
+        textView.string = String(repeating: "long content ", count: 100)
+        textView.setSelectedRange(NSRange(location: 500, length: 20))
+
+        EditorView.loadProgrammaticText("short", into: textView)
+
+        let selection = textView.selectedRange()
+        #expect(NSMaxRange(selection) <= 5)
+    }
+
+    @Test("Loading a document clears the undo stack")
+    @MainActor
+    func clearsUndoStackOnLoad() {
+        // A bare NSTextView has no undo manager; provide one via delegate
+        // like a window-hosted text view would have.
+        final class UndoProvidingDelegate: NSObject, NSTextViewDelegate {
+            let manager = UndoManager()
+            func undoManager(for view: NSTextView) -> UndoManager? { manager }
+        }
+
+        let delegate = UndoProvidingDelegate()
+        let textView = NSTextView()
+        textView.delegate = delegate
+        textView.allowsUndo = true
+        textView.string = "post A"
+
+        // Simulate a user edit registered with the undo manager.
+        textView.insertText(" edited", replacementRange: NSRange(location: 6, length: 0))
+        #expect(delegate.manager.canUndo)
+
+        EditorView.loadProgrammaticText("post B", into: textView)
+
+        #expect(!delegate.manager.canUndo)
+        #expect(textView.string == "post B")
+    }
+}

@@ -74,12 +74,32 @@ struct EditorView: NSViewRepresentable {
         
         // Don't sync text back if the change came from the text view itself
         if !context.coordinator.isUpdatingFromTextView && textView.string != text {
-            let selectedRanges = textView.selectedRanges
-            textView.string = text
-            textView.selectedRanges = selectedRanges
+            Self.loadProgrammaticText(text, into: textView)
             // Keep parser state in sync for programmatic content loads (e.g. open file).
             viewModel.setText(text)
         }
+    }
+
+    /// Replaces the text view content for a programmatic load (open file,
+    /// switch post, session restore). The previous document's undo stack
+    /// must not survive — Cmd+Z would replay its edits into the new text —
+    /// and its selection has to be clamped to the new length or NSTextView
+    /// raises NSRangeException.
+    static func loadProgrammaticText(_ text: String, into textView: NSTextView) {
+        let selectedRanges = textView.selectedRanges
+        textView.string = text
+        let maxLength = (text as NSString).length
+        let clamped = selectedRanges
+            .map(\.rangeValue)
+            .filter { $0.location <= maxLength }
+            .map { range in
+                NSValue(range: NSRange(
+                    location: range.location,
+                    length: min(range.length, maxLength - range.location)
+                ))
+            }
+        textView.selectedRanges = clamped.isEmpty ? [NSValue(range: NSRange(location: 0, length: 0))] : clamped
+        textView.undoManager?.removeAllActions()
     }
 
     func makeCoordinator() -> Coordinator {
