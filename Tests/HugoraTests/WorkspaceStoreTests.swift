@@ -140,8 +140,8 @@ struct WorkspaceStoreTests {
     // MARK: - validateHugoSite (tested via openFolder)
 
     @Test("Accepts Hugo site with hugo.toml", arguments: [
-        "hugo.toml", "hugo.yaml", "hugo.json",
-        "config.toml", "config.yaml", "config.json",
+        "hugo.toml", "hugo.yaml", "hugo.yml", "hugo.json",
+        "config.toml", "config.yaml", "config.yml", "config.json",
     ])
     func acceptsValidConfigFile(configFile: String) throws {
         let (store, cleanup) = makeStore()

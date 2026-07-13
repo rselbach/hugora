@@ -361,6 +361,23 @@ struct HugoConfigTests {
         #expect(config.archetypeDir == "yaml-archetypes")
     }
 
+    @Test("Loads from .yml config")
+    func loadsFromYmlConfig() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let configFile = tempDir.appendingPathComponent("config.yml")
+        try """
+        title: Greendale YML
+        contentDir: yml-content
+        """.write(to: configFile, atomically: true, encoding: .utf8)
+
+        let config = HugoConfig.load(from: tempDir)
+        #expect(config.title == "Greendale YML")
+        #expect(config.contentDir == "yml-content")
+    }
+
     @Test("Falls back to default when no config")
     func fallsBackToDefault() {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

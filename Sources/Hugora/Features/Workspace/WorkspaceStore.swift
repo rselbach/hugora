@@ -431,8 +431,8 @@ final class WorkspaceStore: ObservableObject {
         let fm = FileManager.default
 
         let configFiles = [
-            "hugo.toml", "hugo.yaml", "hugo.json",
-            "config.toml", "config.yaml", "config.json"
+            "hugo.toml", "hugo.yaml", "hugo.yml", "hugo.json",
+            "config.toml", "config.yaml", "config.yml", "config.json"
         ]
         for file in configFiles {
             if fm.fileExists(atPath: url.appendingPathComponent(file).path) {
