@@ -16,6 +16,7 @@ struct WorkspaceRef: Codable, Identifiable, Equatable {
 enum WorkspaceError: LocalizedError, Equatable {
     case notHugoSite
     case unsafeFileOperation(String)
+    case staleWorkspaceReference(String)
 
     var errorDescription: String? {
         switch self {
@@ -23,6 +24,8 @@ enum WorkspaceError: LocalizedError, Equatable {
             "This folder doesn't appear to be a Hugo site. Expected hugo.toml, config.toml, or a config/ directory."
         case .unsafeFileOperation(let path):
             "Refusing to modify a file outside the workspace content directory: \(path)"
+        case .staleWorkspaceReference(let path):
+            "The saved reference to \(path) is no longer valid. The folder may have been moved or deleted."
         }
     }
 }
@@ -141,16 +144,20 @@ final class WorkspaceStore: ObservableObject {
     ///
     /// - Parameter url: The URL of the folder to open.
     func openFolder(_ url: URL) {
-        stopAccessingCurrentFolder()
         lastError = nil
         lastSafetyWarning = nil
         isLoading = true
 
+        // Validate before touching the current workspace: a failed open must
+        // leave the existing workspace (scope, watchers, open document)
+        // fully functional.
         guard validateHugoSite(at: url) else {
             isLoading = false
             lastError = .notHugoSite
             return
         }
+
+        stopAccessingCurrentFolder()
 
         guard let bookmarkData = createBookmark(for: url) else {
             openFolderWithoutBookmark(url)
@@ -170,7 +177,6 @@ final class WorkspaceStore: ObservableObject {
     ///
     /// - Parameter ref: The workspace reference containing the bookmark data.
     func openRecent(_ ref: WorkspaceRef) {
-        stopAccessingCurrentFolder()
         lastError = nil
         lastSafetyWarning = nil
         isLoading = true
@@ -188,12 +194,14 @@ final class WorkspaceStore: ObservableObject {
             Self.logger.error("Failed to resolve bookmark for recent workspace \(ref.path): \(error.localizedDescription)")
             removeFromRecent(ref)
             isLoading = false
+            lastError = .staleWorkspaceReference(ref.path)
             return
         }
 
         // Sandboxed builds can't stat anything inside the folder until the
         // security scope is active — start it before validating. Keep the
         // recents entry on failure: it may be transient (unmounted volume).
+        // The current workspace is only torn down once the new one is valid.
         let scopeActive = url.startAccessingSecurityScopedResource()
         guard validateHugoSite(at: url) else {
             if scopeActive { url.stopAccessingSecurityScopedResource() }
@@ -201,6 +209,8 @@ final class WorkspaceStore: ObservableObject {
             lastError = .notHugoSite
             return
         }
+
+        stopAccessingCurrentFolder()
 
         guard isStale else {
             saveCurrentBookmark(ref.bookmarkData)

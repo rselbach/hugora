@@ -1015,6 +1015,50 @@ struct WorkspaceStoreTests {
         #expect(store.currentFolderURL?.resolvingSymlinksInPath().path == siteA.resolvingSymlinksInPath().path)
     }
 
+    @Test("Failed open keeps the current workspace intact")
+    func failedOpenKeepsCurrentWorkspace() async throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(
+            posts: [(section: "posts", slug: "troy", content: """
+            ---
+            title: "Troy Barnes"
+            date: 2024-01-01
+            ---
+            """)]
+        )
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        let notASite = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hugora-not-a-site-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: notASite, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: notASite) }
+
+        store.openFolder(siteURL)
+        #expect(store.currentFolderURL != nil)
+
+        store.openFolder(notASite)
+
+        #expect(store.lastError == .notHugoSite)
+        #expect(store.currentFolderURL?.path == siteURL.path)
+        #expect(!store.sections.isEmpty)
+
+        // The surviving workspace must still auto-refresh (watchers alive).
+        let newFile = siteURL.appendingPathComponent("content/posts/annie.md")
+        try """
+        ---
+        title: "Annie Edison"
+        date: 2024-02-01
+        ---
+        """.write(to: newFile, atomically: true, encoding: .utf8)
+
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        let section = store.sections.first { $0.name == "posts" }
+        #expect(section?.items.contains(where: { $0.slug == "annie" }) == true)
+    }
+
     @Test("Failed openRecent keeps the recents entry")
     func failedOpenRecentKeepsEntry() throws {
         let (store, cleanup) = makeStore()
