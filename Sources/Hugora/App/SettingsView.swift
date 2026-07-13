@@ -30,7 +30,7 @@ struct SettingsView: View {
                     Label("Themes", systemImage: "paintpalette")
                 }
         }
-        .frame(width: 450, height: 300)
+        .frame(width: 450, height: 380)
     }
 }
 
@@ -40,6 +40,14 @@ struct GeneralSettingsView: View {
     @Binding var autoSaveEnabled: Bool
     @Binding var spellCheckEnabled: Bool
     @Binding var autoRenameOnSave: Bool
+    @AppStorage(DefaultsKey.hugoExecutablePath) private var hugoExecutablePath = ""
+
+    private var hugoPathHint: String {
+        if let resolved = HugoExecutable.resolve() {
+            return "Using \(resolved.path)"
+        }
+        return "Hugo not found — new posts fall back to built-in templates"
+    }
 
     var body: some View {
         Form {
@@ -63,6 +71,14 @@ struct GeneralSettingsView: View {
                 Toggle("Auto-save documents", isOn: $autoSaveEnabled)
                 Toggle("Auto-rename on save (date-slug)", isOn: $autoRenameOnSave)
                 Toggle("Spell checking", isOn: $spellCheckEnabled)
+            }
+
+            Section("Hugo") {
+                TextField("Hugo binary path:", text: $hugoExecutablePath, prompt: Text("auto-detect"))
+                    .textFieldStyle(.roundedBorder)
+                Text(hugoPathHint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding()

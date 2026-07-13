@@ -38,7 +38,7 @@ enum HugoContentCreatorError: LocalizedError, CustomDebugStringConvertible {
     var errorDescription: String? {
         switch self {
         case .executableNotFound:
-            return "Could not find Hugo CLI. Set HUGORA_HUGO_PATH or install Hugo in a standard location."
+            return "Could not find Hugo CLI. Set its path in Settings → General or install Hugo in a standard location."
         case .commandFailed:
             return "Could not create the post. Hugo reported an error."
         case .couldNotResolveCreatedPath:
@@ -50,7 +50,8 @@ enum HugoContentCreatorError: LocalizedError, CustomDebugStringConvertible {
         switch self {
         case .executableNotFound:
             return
-                "Hugo executable not found in HUGORA_HUGO_PATH, /opt/homebrew/bin/hugo, /usr/local/bin/hugo, or /usr/bin/hugo"
+                "Hugo executable not found via the Settings path, HUGORA_HUGO_PATH, or standard locations "
+                    + HugoExecutable.standardLocations.joined(separator: ", ")
         case .commandFailed(let command, let status, let output):
             return "Hugo command failed (exit \(status)): \(command)\nOutput: \(output)"
         case .couldNotResolveCreatedPath(let expectedPath, let output):
@@ -64,12 +65,6 @@ struct HugoCLIContentCreator: HugoContentCreator {
         subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
         category: "HugoCLIContentCreator"
     )
-
-    private static let standardExecutableLocations = [
-        "/opt/homebrew/bin/hugo",
-        "/usr/local/bin/hugo",
-        "/usr/bin/hugo",
-    ]
 
     func isAvailable(at siteURL: URL) -> Bool {
         do {
@@ -126,7 +121,7 @@ struct HugoCLIContentCreator: HugoContentCreator {
     }
 
     private func runHugo(arguments: [String], siteURL: URL) throws -> ProcessResult {
-        guard let hugoExecutable = resolveHugoExecutable() else {
+        guard let hugoExecutable = HugoExecutable.resolve() else {
             throw HugoContentCreatorError.executableNotFound
         }
 
@@ -162,24 +157,6 @@ struct HugoCLIContentCreator: HugoContentCreator {
             stdout: String(data: stdoutData, encoding: .utf8) ?? "",
             stderr: String(data: stderrData, encoding: .utf8) ?? ""
         )
-    }
-
-    private func resolveHugoExecutable() -> URL? {
-        let fm = FileManager.default
-        if let configuredPath = ProcessInfo.processInfo.environment["HUGORA_HUGO_PATH"],
-            !configuredPath.isEmpty
-        {
-            let configuredURL = URL(fileURLWithPath: configuredPath).standardizedFileURL
-            if fm.isExecutableFile(atPath: configuredURL.path) {
-                return configuredURL
-            }
-        }
-
-        for path in Self.standardExecutableLocations where fm.isExecutableFile(atPath: path) {
-            return URL(fileURLWithPath: path)
-        }
-
-        return nil
     }
 
     private func mergedOutput(stdout: String, stderr: String) -> String {
