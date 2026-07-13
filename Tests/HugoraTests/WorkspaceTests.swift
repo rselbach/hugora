@@ -63,8 +63,10 @@ struct ContentItemTests {
 
     @Test("Items without dates sort alphabetically")
     func itemsWithoutDatesSortAlphabetically() {
-        let aItem = ContentItem(url: URL(fileURLWithPath: "/site/content/blog/aardvark.md"), format: .file, section: "blog")
-        let zItem = ContentItem(url: URL(fileURLWithPath: "/site/content/blog/zebra.md"), format: .file, section: "blog")
+        let aItem = ContentItem(
+            url: URL(fileURLWithPath: "/site/content/blog/aardvark.md"), format: .file, section: "blog")
+        let zItem = ContentItem(
+            url: URL(fileURLWithPath: "/site/content/blog/zebra.md"), format: .file, section: "blog")
 
         #expect(aItem < zItem)
     }

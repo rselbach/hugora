@@ -6,7 +6,8 @@ extension Theme {
     ]
 
     static func named(_ name: String, appearance: NSAppearance? = nil) -> Theme {
-        let resolvedAppearance = appearance
+        let resolvedAppearance =
+            appearance
             ?? NSApp?.effectiveAppearance
             ?? NSAppearance(named: .aqua)
             ?? .currentDrawing()
@@ -254,8 +255,8 @@ extension Theme {
         let baseSize: CGFloat = 16
         let base00 = NSColor(hex: "#657b83")  // body text
         let base01 = NSColor(hex: "#586e75")  // emphasis
-        let base1 = NSColor(hex: "#93a1a1")   // comments
-        let base2 = NSColor(hex: "#eee8d5")   // background highlights
+        let base1 = NSColor(hex: "#93a1a1")  // comments
+        let base2 = NSColor(hex: "#eee8d5")  // background highlights
         let blue = NSColor(hex: "#268bd2")
         let cyan = NSColor(hex: "#2aa198")
         let orange = NSColor(hex: "#cb4b16")
@@ -296,8 +297,8 @@ extension Theme {
 
     static var solarizedDark: Theme {
         let baseSize: CGFloat = 16
-        let base0 = NSColor(hex: "#839496")   // body text
-        let base1 = NSColor(hex: "#93a1a1")   // emphasis
+        let base0 = NSColor(hex: "#839496")  // body text
+        let base1 = NSColor(hex: "#93a1a1")  // emphasis
         let base01 = NSColor(hex: "#586e75")  // comments
         let base02 = NSColor(hex: "#073642")  // background highlights
         let blue = NSColor(hex: "#268bd2")

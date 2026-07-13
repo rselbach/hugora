@@ -69,13 +69,16 @@ enum ImagePasteDestinationAllocator {
         switch location {
         case .pageFolder:
             let postDirectory = context.postURL.deletingLastPathComponent()
-            return ImagePasteDestination(saveURL: postDirectory.appendingPathComponent(filename), markdownPath: filename)
+            return ImagePasteDestination(
+                saveURL: postDirectory.appendingPathComponent(filename), markdownPath: filename)
         case .siteStatic:
             let staticDirectory = context.siteURL.appendingPathComponent("static")
-            return ImagePasteDestination(saveURL: staticDirectory.appendingPathComponent(filename), markdownPath: "/\(filename)")
+            return ImagePasteDestination(
+                saveURL: staticDirectory.appendingPathComponent(filename), markdownPath: "/\(filename)")
         case .siteAssets:
             let assetsDirectory = context.siteURL.appendingPathComponent("assets")
-            return ImagePasteDestination(saveURL: assetsDirectory.appendingPathComponent(filename), markdownPath: "assets/\(filename)")
+            return ImagePasteDestination(
+                saveURL: assetsDirectory.appendingPathComponent(filename), markdownPath: "assets/\(filename)")
         }
     }
 

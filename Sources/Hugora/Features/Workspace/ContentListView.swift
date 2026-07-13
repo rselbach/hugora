@@ -104,7 +104,8 @@ struct ContentListView: View {
         if let error = workspaceStore.lastError { return .error(error) }
         if !filteredSections.isEmpty { return .sections }
         if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-           !workspaceStore.sections.isEmpty {
+            !workspaceStore.sections.isEmpty
+        {
             return .noResults
         }
         if workspaceStore.currentFolderURL != nil { return .emptyContent }
@@ -319,7 +320,8 @@ struct ContentRow: View {
                 workspaceStore.openFile(item.url)
             }
             Button("Reveal in Finder") {
-                let revealURL = item.format == .bundle
+                let revealURL =
+                    item.format == .bundle
                     ? item.url.deletingLastPathComponent()
                     : item.url
                 NSWorkspace.shared.activateFileViewerSelecting([revealURL])

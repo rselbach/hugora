@@ -93,7 +93,7 @@ private func detectDelimitedFrontmatter(
 }
 
 private func detectJSONFrontmatter(in nsString: NSString, start: Int) -> FrontmatterRange? {
-    guard start < nsString.length, nsString.character(at: start) == 0x7B else { // {
+    guard start < nsString.length, nsString.character(at: start) == 0x7B else {  // {
         return nil
     }
 
@@ -115,9 +115,9 @@ private func detectJSONFrontmatter(in nsString: NSString, start: Int) -> Frontma
         if inString {
             if escaped {
                 escaped = false
-            } else if char == 0x5C { // \
+            } else if char == 0x5C {  // \
                 escaped = true
-            } else if char == 0x22 { // "
+            } else if char == 0x22 {  // "
                 inString = false
             }
             index += 1
@@ -125,11 +125,11 @@ private func detectJSONFrontmatter(in nsString: NSString, start: Int) -> Frontma
         }
 
         switch char {
-        case 0x22: // "
+        case 0x22:  // "
             inString = true
-        case 0x7B: // {
+        case 0x7B:  // {
             depth += 1
-        case 0x7D: // }
+        case 0x7D:  // }
             depth -= 1
             if depth == 0 {
                 closeBraceIndex = index

@@ -11,8 +11,9 @@ import Markdown
 /// Returns nil if conversion fails (e.g., invalid line/column).
 func convertRange(_ sourceRange: SourceRange, in text: String) -> NSRange? {
     guard let startIndex = sourceLocationToIndex(sourceRange.lowerBound, in: text),
-          let endIndex = sourceLocationToIndex(sourceRange.upperBound, in: text),
-          startIndex <= endIndex else {
+        let endIndex = sourceLocationToIndex(sourceRange.upperBound, in: text),
+        startIndex <= endIndex
+    else {
         return nil
     }
     return NSRange(startIndex..<endIndex, in: text)
@@ -37,8 +38,9 @@ func sourceLocationToIndex(_ location: SourceLocation, in text: String) -> Strin
         lineStartIndex = text.index(after: newlineIndex)
         // Handle \r\n as single newline
         if text[newlineIndex] == "\r",
-           lineStartIndex < text.endIndex,
-           text[lineStartIndex] == "\n" {
+            lineStartIndex < text.endIndex,
+            text[lineStartIndex] == "\n"
+        {
             lineStartIndex = text.index(after: lineStartIndex)
         }
         currentLine += 1

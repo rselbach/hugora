@@ -67,11 +67,11 @@ struct EditorView: NSViewRepresentable {
         guard let textView = scrollView.documentView as? EditorTextView else { return }
 
         textView.imageContext = viewModel.imageContext
-        
+
         // Skip if input method is composing (dead keys, IME) - touching the text view breaks composition
         guard !textView.hasMarkedText() else { return }
         textView.applyTheme(viewModel.editorTheme)
-        
+
         // Don't sync text back if the change came from the text view itself
         if !context.coordinator.isUpdatingFromTextView && textView.string != text {
             Self.loadProgrammaticText(text, into: textView)
@@ -89,14 +89,16 @@ struct EditorView: NSViewRepresentable {
         let selectedRanges = textView.selectedRanges
         textView.string = text
         let maxLength = (text as NSString).length
-        let clamped = selectedRanges
+        let clamped =
+            selectedRanges
             .map(\.rangeValue)
             .filter { $0.location <= maxLength }
             .map { range in
-                NSValue(range: NSRange(
-                    location: range.location,
-                    length: min(range.length, maxLength - range.location)
-                ))
+                NSValue(
+                    range: NSRange(
+                        location: range.location,
+                        length: min(range.length, maxLength - range.location)
+                    ))
             }
         textView.selectedRanges = clamped.isEmpty ? [NSValue(range: NSRange(location: 0, length: 0))] : clamped
         textView.undoManager?.removeAllActions()
@@ -191,18 +193,18 @@ struct EditorView: NSViewRepresentable {
 
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView = textView else { return }
-            
+
             let cursorPos = textView.selectedRange().location
             viewModel.updateCursorPosition(cursorPos)
             onCursorChange?(cursorPos)
-            
+
         }
 
         func triggerStyling() {
             guard let textView = textView else { return }
             // Don't style while input method is composing (dead keys, IME)
             guard !textView.hasMarkedText() else { return }
-            
+
             isStyling = true
             defer { isStyling = false }
 

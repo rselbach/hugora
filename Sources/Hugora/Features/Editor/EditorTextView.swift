@@ -6,7 +6,7 @@ class EditorTextView: NSTextView {
     private var spellCheckEnabled = true
     private var autoPairEnabled = true
     private var currentTheme = Theme.defaultLight
-    
+
     /// Context for saving pasted images. Set by the coordinator.
     var imageContext: ImageContext?
 
@@ -28,7 +28,7 @@ class EditorTextView: NSTextView {
         "{": "}",
         "*": "*",
         "_": "_",
-        "`": "`"
+        "`": "`",
     ]
 
     private static let openers: Set<Character> = Set(pairs.keys)
@@ -119,20 +119,21 @@ class EditorTextView: NSTextView {
         typingAttributes = [
             .font: NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular),
             .foregroundColor: currentTheme.baseColor,
-            .paragraphStyle: paragraphStyle
+            .paragraphStyle: paragraphStyle,
         ]
     }
-    
+
     override func insertText(_ string: Any, replacementRange: NSRange) {
-        
+
         // If input method is composing (dead keys, IME), skip auto-pairing entirely
         let isComposing = hasMarkedText() || replacementRange.location != NSNotFound
-        
+
         guard autoPairEnabled,
-              !isComposing,
-              let insertedString = string as? String,
-              insertedString.count == 1,
-              let char = insertedString.first else {
+            !isComposing,
+            let insertedString = string as? String,
+            insertedString.count == 1,
+            let char = insertedString.first
+        else {
             super.insertText(string, replacementRange: replacementRange)
             return
         }
@@ -170,14 +171,14 @@ class EditorTextView: NSTextView {
     override func deleteBackward(_ sender: Any?) {
         guard autoPairEnabled else {
             super.deleteBackward(sender)
-    
+
             return
         }
 
         let selectedRange = self.selectedRange()
         guard selectedRange.length == 0, selectedRange.location > 0 else {
             super.deleteBackward(sender)
-    
+
             return
         }
 
@@ -190,7 +191,8 @@ class EditorTextView: NSTextView {
         let prevChar = Character(prevScalar)
 
         guard let expectedCloser = Self.pairs[prevChar],
-              selectedRange.location < nsString.length else {
+            selectedRange.location < nsString.length
+        else {
             super.deleteBackward(sender)
             return
         }
@@ -239,7 +241,8 @@ class EditorTextView: NSTextView {
     private func shouldSkipOver(char: Character, at location: Int) -> Bool {
         let nsString = (self.string as NSString)
         guard location < nsString.length,
-              let scalar = UnicodeScalar(nsString.character(at: location)) else {
+            let scalar = UnicodeScalar(nsString.character(at: location))
+        else {
             return false
         }
         let nextChar = Character(scalar)
@@ -250,7 +253,7 @@ class EditorTextView: NSTextView {
         let range = self.selectedRange()
         setSelectedRange(NSRange(location: range.location + 1, length: 0))
     }
-    
+
     // MARK: - Custom Drawing
 
     override func draw(_ dirtyRect: NSRect) {
@@ -332,44 +335,46 @@ class EditorTextView: NSTextView {
 
         NSGraphicsContext.restoreGraphicsState()
     }
-    
+
     // MARK: - Blockquote Border Drawing
-    
+
     private func drawBlockquoteBorders(in dirtyRect: NSRect) {
         guard let textStorage = textStorage,
-              let layoutManager = layoutManager,
-              let textContainer = textContainer else { return }
-        
+            let layoutManager = layoutManager,
+            let textContainer = textContainer
+        else { return }
+
         let borderWidth: CGFloat = 3
         let borderInset: CGFloat = 16  // matches the paragraph indent step
-        
+
         // Find visible character range
         let visibleGlyphRange = layoutManager.glyphRange(forBoundingRect: dirtyRect, in: textContainer)
         let visibleCharRange = layoutManager.characterRange(forGlyphRange: visibleGlyphRange, actualGlyphRange: nil)
-        
+
         textStorage.enumerateAttribute(.blockquoteInfo, in: visibleCharRange, options: []) { value, range, _ in
             guard let info = value as? BlockquoteInfo else { return }
-            
+
             // Get the line fragment rects for this blockquote range
             let glyphRange = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
-            
-            layoutManager.enumerateLineFragments(forGlyphRange: glyphRange) { lineRect, usedRect, container, lineGlyphRange, stop in
+
+            layoutManager.enumerateLineFragments(forGlyphRange: glyphRange) {
+                lineRect, usedRect, container, lineGlyphRange, stop in
                 // Calculate border position based on nesting level
                 // Each level gets a border at a different x position
                 for level in 1...info.nestingLevel {
                     let borderX = self.textContainerOrigin.x + CGFloat(level - 1) * borderInset + 2
                     let lineY = lineRect.origin.y + self.textContainerOrigin.y
-                    
+
                     let borderRect = NSRect(
                         x: borderX,
                         y: lineY,
                         width: borderWidth,
                         height: lineRect.height
                     )
-                    
+
                     // Only draw if it intersects the dirty rect
                     guard borderRect.intersects(dirtyRect) else { continue }
-                    
+
                     // Draw the border
                     info.borderColor.setFill()
                     let path = NSBezierPath(roundedRect: borderRect, xRadius: 1.5, yRadius: 1.5)
@@ -378,30 +383,31 @@ class EditorTextView: NSTextView {
             }
         }
     }
-    
+
     private func drawRenderedImages(in dirtyRect: NSRect) {
         guard let textStorage = textStorage,
-              let layoutManager = layoutManager,
-              let textContainer = textContainer else { return }
-        
+            let layoutManager = layoutManager,
+            let textContainer = textContainer
+        else { return }
+
         let cursorLocation = selectedRange().location
         let maxWidth: CGFloat = 600
-        
+
         // Find all image ranges in the visible area
         let visibleGlyphRange = layoutManager.glyphRange(forBoundingRect: dirtyRect, in: textContainer)
         let visibleCharRange = layoutManager.characterRange(forGlyphRange: visibleGlyphRange, actualGlyphRange: nil)
-        
+
         textStorage.enumerateAttribute(.renderedImage, in: visibleCharRange, options: []) { value, range, _ in
             guard let imageInfo = value as? RenderedImageInfo else { return }
-            
+
             // Don't draw if cursor is inside this image's markdown
             let cursorInImage = cursorLocation >= range.location && cursorLocation <= NSMaxRange(range)
             if cursorInImage { return }
-            
+
             // Get the bounding rect for the entire image markdown range
             let glyphRange = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
             let boundingRect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
-            
+
             // Calculate scaled image size
             let originalSize = imageInfo.originalSize
             var targetSize = originalSize
@@ -409,7 +415,7 @@ class EditorTextView: NSTextView {
                 let scale = maxWidth / originalSize.width
                 targetSize = NSSize(width: maxWidth, height: originalSize.height * scale)
             }
-            
+
             // Draw image below the markdown text, accounting for text container inset
             // The bounding rect gives us where the (hidden) markdown text is
             let imageRect = NSRect(
@@ -418,94 +424,99 @@ class EditorTextView: NSTextView {
                 width: targetSize.width,
                 height: targetSize.height
             )
-            
+
             // Only draw if image rect intersects dirty rect
             guard imageRect.intersects(dirtyRect) else { return }
-            
+
             // Draw with rounded corners and shadow
             let path = NSBezierPath(roundedRect: imageRect, xRadius: 4, yRadius: 4)
-            
+
             NSGraphicsContext.saveGraphicsState()
-            
+
             // Shadow
             let shadow = NSShadow()
             shadow.shadowColor = NSColor.black.withAlphaComponent(0.2)
             shadow.shadowOffset = NSSize(width: 0, height: -2)
             shadow.shadowBlurRadius = 4
             shadow.set()
-            
+
             // Clip to rounded rect
             path.addClip()
-            
+
             // Draw image with proper orientation for flipped view
             // NSTextView is flipped, so we need to flip the image drawing
             if let context = NSGraphicsContext.current?.cgContext {
                 context.saveGState()
-                
+
                 // Flip the context for this image
                 context.translateBy(x: imageRect.origin.x, y: imageRect.origin.y + imageRect.height)
                 context.scaleBy(x: 1.0, y: -1.0)
-                
+
                 let drawRect = CGRect(origin: .zero, size: imageRect.size)
                 imageInfo.image.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: 1.0)
-                
+
                 context.restoreGState()
             }
-            
+
             NSGraphicsContext.restoreGraphicsState()
-            
+
             // Draw border
             NSColor.separatorColor.setStroke()
             path.lineWidth = 0.5
             path.stroke()
         }
     }
-    
+
     // MARK: - Image Paste
-    
+
     override var readablePasteboardTypes: [NSPasteboard.PasteboardType] {
         var types = super.readablePasteboardTypes
         types.insert(NSPasteboard.PasteboardType("public.png"), at: 0)
         types.insert(.tiff, at: 0)
         return types
     }
-    
+
     override func paste(_ sender: Any?) {
         let pasteboard = NSPasteboard.general
-        
+
         if let image = pasteboardImage(from: pasteboard) {
             handleImagePaste(image)
             return
         }
-        
+
         super.paste(sender)
     }
-    
+
     private func pasteboardImage(from pasteboard: NSPasteboard) -> NSImage? {
         // Try PNG first (preferred for quality) - use UTType string directly
         let pngType = NSPasteboard.PasteboardType("public.png")
         if let pngData = pasteboard.data(forType: pngType),
-           let image = NSImage(data: pngData) {
+            let image = NSImage(data: pngData)
+        {
             return image
         }
-        
+
         // Try TIFF (common for screenshots)
         if let tiffData = pasteboard.data(forType: .tiff),
-           let image = NSImage(data: tiffData) {
+            let image = NSImage(data: tiffData)
+        {
             return image
         }
-        
+
         // Try file URLs pointing to images
-        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [
-            .urlReadingFileURLsOnly: true,
-            .urlReadingContentsConformToTypes: ["public.image"]
-        ]) as? [URL], let url = urls.first {
+        if let urls = pasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: [
+                .urlReadingFileURLsOnly: true,
+                .urlReadingContentsConformToTypes: ["public.image"],
+            ]) as? [URL], let url = urls.first
+        {
             return NSImage(contentsOf: url)
         }
-        
+
         return nil
     }
-    
+
     private func handleImagePaste(_ image: NSImage) {
         guard !isPastingImage else { return }
 
@@ -569,12 +580,14 @@ class EditorTextView: NSTextView {
                     withIntermediateDirectories: true
                 )
 
-                guard let encodedData = self?.encodeImageData(
-                    from: tiffData,
-                    format: outputFormat,
-                    maxDimension: maxDimension,
-                    jpegQuality: jpegQuality
-                ) else {
+                guard
+                    let encodedData = self?.encodeImageData(
+                        from: tiffData,
+                        format: outputFormat,
+                        maxDimension: maxDimension,
+                        jpegQuality: jpegQuality
+                    )
+                else {
                     throw CocoaError(.fileWriteUnknown)
                 }
 
@@ -678,11 +691,12 @@ class EditorTextView: NSTextView {
         targetImage.unlockFocus()
 
         guard let targetTIFF = targetImage.tiffRepresentation,
-              let targetBitmap = NSBitmapImageRep(data: targetTIFF) else {
+            let targetBitmap = NSBitmapImageRep(data: targetTIFF)
+        else {
             return nil
         }
 
         return targetBitmap
     }
-    
+
 }

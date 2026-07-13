@@ -73,7 +73,9 @@ struct WorkspaceStoreTests {
 
     /// Create a WorkspaceStore with a clean UserDefaults slate.
     /// Restores original values when the returned closure is called.
-    private func makeStore(hugoContentCreator: (any HugoContentCreator)? = nil) -> (store: WorkspaceStore, cleanup: () -> Void) {
+    private func makeStore(hugoContentCreator: (any HugoContentCreator)? = nil) -> (
+        store: WorkspaceStore, cleanup: () -> Void
+    ) {
         let defaults = UserDefaults.standard
         let saved = Self.defaultsKeys.map { ($0, defaults.object(forKey: $0)) }
 
@@ -85,8 +87,7 @@ struct WorkspaceStoreTests {
 
         let cleanup = {
             for (key, original) in saved {
-                if let original { defaults.set(original, forKey: key) }
-                else { defaults.removeObject(forKey: key) }
+                if let original { defaults.set(original, forKey: key) } else { defaults.removeObject(forKey: key) }
             }
         }
         return (store, cleanup)
@@ -96,8 +97,8 @@ struct WorkspaceStoreTests {
     private func makeTempHugoSite(
         configFileName: String = "hugo.toml",
         configContent: String = """
-            title = "Greendale Community College Blog"
-            """,
+        title = "Greendale Community College Blog"
+        """,
         sections: [String] = ["posts"],
         posts: [(section: String, slug: String, content: String)] = []
     ) throws -> URL {
@@ -139,10 +140,12 @@ struct WorkspaceStoreTests {
 
     // MARK: - validateHugoSite (tested via openFolder)
 
-    @Test("Accepts Hugo site with hugo.toml", arguments: [
-        "hugo.toml", "hugo.yaml", "hugo.yml", "hugo.json",
-        "config.toml", "config.yaml", "config.yml", "config.json",
-    ])
+    @Test(
+        "Accepts Hugo site with hugo.toml",
+        arguments: [
+            "hugo.toml", "hugo.yaml", "hugo.yml", "hugo.json",
+            "config.toml", "config.yaml", "config.yml", "config.json",
+        ])
     func acceptsValidConfigFile(configFile: String) throws {
         let (store, cleanup) = makeStore()
         defer { cleanup() }
@@ -204,26 +207,35 @@ struct WorkspaceStoreTests {
         let siteURL = try makeTempHugoSite(
             sections: ["posts", "pages"],
             posts: [
-                (section: "posts", slug: "2024-01-15-troy-barnes-adventure", content: """
-                ---
-                title: "Troy Barnes's Big Adventure"
-                date: 2024-01-15
-                ---
-                Troy and Abed in the morning!
-                """),
-                (section: "posts", slug: "2024-03-01-paintball-war", content: """
-                ---
-                title: "The Paintball War"
-                date: 2024-03-01
-                ---
-                It's like the Hunger Games but with paint.
-                """),
-                (section: "pages", slug: "about", content: """
-                ---
-                title: "About Greendale"
-                ---
-                E Pluribus Anus.
-                """),
+                (
+                    section: "posts", slug: "2024-01-15-troy-barnes-adventure",
+                    content: """
+                    ---
+                    title: "Troy Barnes's Big Adventure"
+                    date: 2024-01-15
+                    ---
+                    Troy and Abed in the morning!
+                    """
+                ),
+                (
+                    section: "posts", slug: "2024-03-01-paintball-war",
+                    content: """
+                    ---
+                    title: "The Paintball War"
+                    date: 2024-03-01
+                    ---
+                    It's like the Hunger Games but with paint.
+                    """
+                ),
+                (
+                    section: "pages", slug: "about",
+                    content: """
+                    ---
+                    title: "About Greendale"
+                    ---
+                    E Pluribus Anus.
+                    """
+                ),
             ]
         )
         defer { try? FileManager.default.removeItem(at: siteURL) }
@@ -251,14 +263,17 @@ struct WorkspaceStoreTests {
         let siteURL = try makeTempHugoSite(
             sections: ["posts"],
             posts: [
-                (section: "posts", slug: "metadata-stress", content: """
-                ---
-                title: "Troy Barnes Metadata Stress Test"
-                description: "\(hugeDescription)"
-                date: 2024-01-15
-                ---
-                Troy and Abed audit in the morning!
-                """),
+                (
+                    section: "posts", slug: "metadata-stress",
+                    content: """
+                    ---
+                    title: "Troy Barnes Metadata Stress Test"
+                    description: "\(hugeDescription)"
+                    date: 2024-01-15
+                    ---
+                    Troy and Abed audit in the morning!
+                    """
+                )
             ]
         )
         defer { try? FileManager.default.removeItem(at: siteURL) }
@@ -279,7 +294,8 @@ struct WorkspaceStoreTests {
         defer { try? FileManager.default.removeItem(at: base) }
 
         // Create a bundle post: content/blog/senor-chang/index.md
-        let bundleDir = base
+        let bundleDir =
+            base
             .appendingPathComponent("content/blog/senor-chang")
         try FileManager.default.createDirectory(at: bundleDir, withIntermediateDirectories: true)
         let indexMD = bundleDir.appendingPathComponent("index.md")
@@ -323,9 +339,9 @@ struct WorkspaceStoreTests {
 
         let siteURL = try makeTempHugoSite(
             configContent: """
-            title = "Greendale Community College Blog"
-            contentDir = "missing-content"
-            """
+                title = "Greendale Community College Blog"
+                contentDir = "missing-content"
+                """
         )
         defer { try? FileManager.default.removeItem(at: siteURL) }
 
@@ -356,8 +372,8 @@ struct WorkspaceStoreTests {
 
         let siteURL = try makeTempHugoSite(
             configContent: """
-            title = "Human Beings Unite"
-            """
+                title = "Human Beings Unite"
+                """
         )
         defer { try? FileManager.default.removeItem(at: siteURL) }
 
@@ -371,7 +387,8 @@ struct WorkspaceStoreTests {
         let (store, cleanup) = makeStore()
         defer { cleanup() }
 
-        let parentDir = FileManager.default.temporaryDirectory.appendingPathComponent("hugora-parent-\(UUID().uuidString)")
+        let parentDir = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "hugora-parent-\(UUID().uuidString)")
         let siteDir = parentDir.appendingPathComponent("site")
         let siblingDir = parentDir.appendingPathComponent("site2")
         let siblingContentDir = siblingDir.appendingPathComponent("content")
@@ -402,7 +419,8 @@ struct WorkspaceStoreTests {
         defer { try? FileManager.default.removeItem(at: siteURL) }
 
         // Add a root-level .md file
-        let aboutFile = siteURL
+        let aboutFile =
+            siteURL
             .appendingPathComponent("content/about.md")
         try """
         ---
@@ -871,13 +889,16 @@ struct WorkspaceStoreTests {
         let siteURL = try makeTempHugoSite(
             sections: ["posts"],
             posts: [
-                (section: "posts", slug: "2024-01-01-abed-nadir-film", content: """
-                ---
-                title: "Abed Nadir's Student Film"
-                date: 2024-01-01
-                ---
-                Cool. Cool cool cool.
-                """),
+                (
+                    section: "posts", slug: "2024-01-01-abed-nadir-film",
+                    content: """
+                    ---
+                    title: "Abed Nadir's Student Film"
+                    date: 2024-01-01
+                    ---
+                    Cool. Cool cool cool.
+                    """
+                )
             ]
         )
         defer { try? FileManager.default.removeItem(at: siteURL) }
@@ -909,14 +930,17 @@ struct WorkspaceStoreTests {
         let siteURL = try makeTempHugoSite(
             sections: ["posts"],
             posts: [
-                (section: "posts", slug: "2024-02-14-jeff-winger-speech", content: """
-                ---
-                title: "Jeff Winger's Valentines Day Speech"
-                date: 2024-02-14
-                ---
-                I discovered at a very early age that if I talk long enough,
-                I can make anything right or wrong.
-                """),
+                (
+                    section: "posts", slug: "2024-02-14-jeff-winger-speech",
+                    content: """
+                    ---
+                    title: "Jeff Winger's Valentines Day Speech"
+                    date: 2024-02-14
+                    ---
+                    I discovered at a very early age that if I talk long enough,
+                    I can make anything right or wrong.
+                    """
+                )
             ]
         )
         defer { try? FileManager.default.removeItem(at: siteURL) }
@@ -1021,12 +1045,17 @@ struct WorkspaceStoreTests {
         defer { cleanup() }
 
         let siteURL = try makeTempHugoSite(
-            posts: [(section: "posts", slug: "troy", content: """
-            ---
-            title: "Troy Barnes"
-            date: 2024-01-01
-            ---
-            """)]
+            posts: [
+                (
+                    section: "posts", slug: "troy",
+                    content: """
+                    ---
+                    title: "Troy Barnes"
+                    date: 2024-01-01
+                    ---
+                    """
+                )
+            ]
         )
         defer { try? FileManager.default.removeItem(at: siteURL) }
 
@@ -1089,12 +1118,15 @@ struct WorkspaceStoreTests {
         let siteURL = try makeTempHugoSite(
             sections: ["posts"],
             posts: [
-                (section: "posts", slug: "anything", content: """
-                ---
-                title: "Pierce Hawthorne's Moist Towelettes"
-                ---
-                Streets ahead.
-                """),
+                (
+                    section: "posts", slug: "anything",
+                    content: """
+                    ---
+                    title: "Pierce Hawthorne's Moist Towelettes"
+                    ---
+                    Streets ahead.
+                    """
+                )
             ]
         )
         defer { try? FileManager.default.removeItem(at: siteURL) }

@@ -92,9 +92,11 @@ enum CLIInstaller {
         // "with administrator privileges", so hand the user the exact
         // command instead of failing cryptically.
         if isSandboxed {
-            completion(.failure(CLIInstallerError.requiresManualCommand(
-                command: "sudo ln -sf '\(bundledURL.path)' '\(installPath)'"
-            )))
+            completion(
+                .failure(
+                    CLIInstallerError.requiresManualCommand(
+                        command: "sudo ln -sf '\(bundledURL.path)' '\(installPath)'"
+                    )))
             return
         }
 
@@ -128,9 +130,11 @@ enum CLIInstaller {
 
         // Need admin privileges
         if isSandboxed {
-            completion(.failure(CLIInstallerError.requiresManualCommand(
-                command: "sudo rm '\(installPath)'"
-            )))
+            completion(
+                .failure(
+                    CLIInstallerError.requiresManualCommand(
+                        command: "sudo rm '\(installPath)'"
+                    )))
             return
         }
 
@@ -175,8 +179,9 @@ enum CLIInstaller {
                     result in
                     switch result {
                     case .success:
-                        runPrivilegedCommand("/bin/ln", args: ["-s", bundledURL.path, installPath],
-                                              completion: completion)
+                        runPrivilegedCommand(
+                            "/bin/ln", args: ["-s", bundledURL.path, installPath],
+                            completion: completion)
                     case .failure(let error):
                         completion(.failure(error))
                     }
@@ -202,7 +207,8 @@ enum CLIInstaller {
         let shellCommand = "\(command) \(escapedArgs)"
         // Escape for AppleScript's double-quoted string context:
         // backslashes and double quotes are special inside "..." in AppleScript.
-        let appleScriptSafe = shellCommand
+        let appleScriptSafe =
+            shellCommand
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
         let script = """

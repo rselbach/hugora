@@ -76,7 +76,8 @@ struct HugoConfig {
             let table = try TOMLTable(string: content)
             let jsonString = table.convert(to: .json)
             guard let data = jsonString.data(using: .utf8),
-                  let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            else {
                 return nil
             }
             return config(from: object)

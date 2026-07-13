@@ -25,7 +25,8 @@ struct NewPostBuilder {
     ) -> String {
         let normalizedSection = normalizeSection(sectionName)
         if let template = loadArchetype(sectionName: normalizedSection, format: format) {
-            let rendered = render(template: template, title: title, slug: slug, sectionName: normalizedSection, date: date)
+            let rendered = render(
+                template: template, title: title, slug: slug, sectionName: normalizedSection, date: date)
             if isRenderedTemplateUsable(rendered) {
                 return rendered
             }
@@ -44,8 +45,9 @@ struct NewPostBuilder {
     /// than failing post creation.
     private func isRenderedTemplateUsable(_ content: String) -> Bool {
         guard detectFrontmatterBlock(in: content) != nil,
-              FrontmatterParser.value(forKey: "title", in: content) != nil,
-              FrontmatterParser.date(forKey: "date", in: content) != nil else {
+            FrontmatterParser.value(forKey: "title", in: content) != nil,
+            FrontmatterParser.date(forKey: "date", in: content) != nil
+        else {
             return false
         }
         return !containsUnrenderedTemplateAction(content)
@@ -84,7 +86,8 @@ struct NewPostBuilder {
                 do {
                     return try String(contentsOf: url, encoding: .utf8)
                 } catch {
-                    Self.logger.error("Failed to read archetype \(url.lastPathComponent): \(error.localizedDescription)")
+                    Self.logger.error(
+                        "Failed to read archetype \(url.lastPathComponent): \(error.localizedDescription)")
                 }
             }
         }
@@ -95,7 +98,8 @@ struct NewPostBuilder {
     private func archetypeBaseURLs() -> [URL] {
         var bases = [archetypeBaseURL()]
         for theme in config.themes {
-            let candidate = siteURL
+            let candidate =
+                siteURL
                 .appendingPathComponent("themes")
                 .appendingPathComponent(theme)
                 .appendingPathComponent("archetypes")
@@ -164,7 +168,7 @@ struct NewPostBuilder {
     private func replaceToken(in template: String, token: String, value: String) -> String {
         let variants = [
             "{{ \(token) }}",
-            "{{\(token)}}"
+            "{{\(token)}}",
         ]
         return variants.reduce(template) { partial, variant in
             partial.replacingOccurrences(of: variant, with: value)
@@ -175,12 +179,12 @@ struct NewPostBuilder {
         let dateString = Self.isoFormatter.string(from: date)
 
         return """
-        ---
-        title: "\(title)"
-        date: \(dateString)
-        draft: true
-        ---
+            ---
+            title: "\(title)"
+            date: \(dateString)
+            draft: true
+            ---
 
-        """
+            """
     }
 }

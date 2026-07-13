@@ -4,8 +4,8 @@ import Foundation
 
 /// Context for resolving image paths relative to Hugo's site structure.
 struct ImageContext {
-    let postURL: URL           // URL of the current .md file
-    let siteURL: URL           // URL of the Hugo site root
+    let postURL: URL  // URL of the current .md file
+    let siteURL: URL  // URL of the Hugo site root
     let remoteImagesEnabled: Bool
 
     init(postURL: URL, siteURL: URL, remoteImagesEnabled: Bool = false) {
@@ -57,8 +57,10 @@ struct ImageContext {
         let standardized = url.standardizedFileURL
         let postDirectory = postURL.deletingLastPathComponent()
 
-        guard PathSafety.isSameOrDescendant(standardized, of: siteURL)
-                || PathSafety.isSameOrDescendant(standardized, of: postDirectory) else {
+        guard
+            PathSafety.isSameOrDescendant(standardized, of: siteURL)
+                || PathSafety.isSameOrDescendant(standardized, of: postDirectory)
+        else {
             return nil
         }
 

@@ -76,7 +76,8 @@ struct EditorSettingsView: View {
     @AppStorage(DefaultsKey.imagePasteFormat) private var imagePasteFormat = ImagePasteFormat.png.rawValue
     @AppStorage(DefaultsKey.imagePasteJPEGQuality) private var imagePasteJPEGQuality = 0.85
     @AppStorage(DefaultsKey.imagePasteMaxDimension) private var imagePasteMaxDimension = 0.0
-    @AppStorage(DefaultsKey.imagePasteNamingStrategy) private var imagePasteNamingStrategy = ImagePasteNamingStrategy.timestamp.rawValue
+    @AppStorage(DefaultsKey.imagePasteNamingStrategy) private var imagePasteNamingStrategy = ImagePasteNamingStrategy
+        .timestamp.rawValue
 
     var body: some View {
         Form {

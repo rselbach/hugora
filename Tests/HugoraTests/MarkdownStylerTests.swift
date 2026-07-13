@@ -160,10 +160,11 @@ struct StyleCollectorTests {
         var collector = StyleCollector()
         collector.visit(document)
 
-        let heading = try #require(collector.spans.first {
-            if case .heading = $0.kind { return true }
-            return false
-        })
+        let heading = try #require(
+            collector.spans.first {
+                if case .heading = $0.kind { return true }
+                return false
+            })
 
         let markers = SyntaxMarkerCalculator.markers(for: heading, in: markdown)
         #expect(markers.count == 1)
@@ -180,10 +181,11 @@ struct StyleCollectorTests {
         var collector = StyleCollector()
         collector.visit(document)
 
-        let heading = try #require(collector.spans.first {
-            if case .heading = $0.kind { return true }
-            return false
-        })
+        let heading = try #require(
+            collector.spans.first {
+                if case .heading = $0.kind { return true }
+                return false
+            })
 
         let markers = SyntaxMarkerCalculator.markers(for: heading, in: markdown)
         let marker = try #require(markers.first)
@@ -277,10 +279,10 @@ struct StyleCollectorTests {
     @Test("Collects table spans")
     func testTableCollection() {
         let markdown = """
-        | A | B |
-        |---|---|
-        | 1 | 2 |
-        """
+            | A | B |
+            |---|---|
+            | 1 | 2 |
+            """
         let document = Document(parsing: markdown)
         var collector = StyleCollector()
         collector.visit(document)
@@ -343,11 +345,11 @@ struct FrontmatterDetectionTests {
     @Test("Detects TOML frontmatter")
     func detectsTomlFrontmatter() {
         let text = """
-        +++
-        title = "Greendale"
-        +++
-        Body
-        """
+            +++
+            title = "Greendale"
+            +++
+            Body
+            """
 
         let frontmatter = detectFrontmatter(in: text)
         #expect(frontmatter != nil)
@@ -357,12 +359,12 @@ struct FrontmatterDetectionTests {
     @Test("Detects JSON frontmatter")
     func detectsJSONFrontmatter() {
         let text = """
-        {
-          "title": "Human Being",
-          "date": "2025-01-01T00:00:00Z"
-        }
-        Body
-        """
+            {
+              "title": "Human Being",
+              "date": "2025-01-01T00:00:00Z"
+            }
+            Body
+            """
 
         let frontmatter = detectFrontmatter(in: text)
         #expect(frontmatter != nil)
@@ -372,10 +374,10 @@ struct FrontmatterDetectionTests {
     @Test("Leading Hugo shortcode is not JSON frontmatter")
     func shortcodeIsNotJSONFrontmatter() {
         let text = """
-        {{< figure src="/images/troy.png" alt="Troy Barnes" >}}
+            {{< figure src="/images/troy.png" alt="Troy Barnes" >}}
 
-        Body text.
-        """
+            Body text.
+            """
 
         #expect(detectFrontmatter(in: text) == nil)
     }
@@ -409,13 +411,15 @@ struct StyleApplicationTests {
         let textStorage = NSTextStorage(string: markdown)
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
-        
+
         // Pass cursor position inside the bold element so syntax isn't hidden
         let cursorInBold = 7
-        styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: cursorInBold)
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange,
+            cursorPosition: cursorInBold)
 
         // Check content position (after **), not syntax marker
-        let boldContentStart = 7 // "b" in "bold"
+        let boldContentStart = 7  // "b" in "bold"
         var effectiveRange = NSRange()
         let font = textStorage.attribute(.font, at: boldContentStart, effectiveRange: &effectiveRange) as? NSFont
         #expect(font != nil)
@@ -430,13 +434,15 @@ struct StyleApplicationTests {
         let textStorage = NSTextStorage(string: markdown)
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
-        
+
         // Pass cursor position inside the italic element so syntax isn't hidden
         let cursorInItalic = 6
-        styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: cursorInItalic)
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange,
+            cursorPosition: cursorInItalic)
 
         // Check content position (after *), not syntax marker
-        let italicContentStart = 6 // "i" in "italic"
+        let italicContentStart = 6  // "i" in "italic"
         var effectiveRange = NSRange()
         let font = textStorage.attribute(.font, at: italicContentStart, effectiveRange: &effectiveRange) as? NSFont
         #expect(font != nil)
@@ -451,13 +457,15 @@ struct StyleApplicationTests {
         let textStorage = NSTextStorage(string: markdown)
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
-        
+
         // Pass cursor position inside the code element so syntax isn't hidden
         let cursorInCode = 5
-        styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: cursorInCode)
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange,
+            cursorPosition: cursorInCode)
 
         // Check content position (after `), not syntax marker
-        let codeContentStart = 5 // "c" in "code"
+        let codeContentStart = 5  // "c" in "code"
         var effectiveRange = NSRange()
         let font = textStorage.attribute(.font, at: codeContentStart, effectiveRange: &effectiveRange) as? NSFont
         #expect(font != nil)
@@ -485,15 +493,18 @@ struct StyleApplicationTests {
         let textStorage = NSTextStorage(string: markdown)
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
-        
+
         // Pass cursor position inside the link element so syntax isn't hidden
         let cursorInLink = 7
-        styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: cursorInLink)
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange,
+            cursorPosition: cursorInLink)
 
         // Check content position (after [), not syntax marker
-        let linkContentStart = 7 // "h" in "here"
+        let linkContentStart = 7  // "h" in "here"
         var effectiveRange = NSRange()
-        let color = textStorage.attribute(.foregroundColor, at: linkContentStart, effectiveRange: &effectiveRange) as? NSColor
+        let color =
+            textStorage.attribute(.foregroundColor, at: linkContentStart, effectiveRange: &effectiveRange) as? NSColor
         #expect(color == theme.linkColor)
     }
 
@@ -560,9 +571,10 @@ struct ThemeTests {
         let textStorage = NSTextStorage(string: markdown)
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
-        
+
         // Place cursor inside link so content is visible
-        styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 2)
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 2)
 
         var effectiveRange = NSRange()
         // Check position 1 which is "l" in "link" (after [)
@@ -577,7 +589,7 @@ struct ThemeTests {
 struct SyntaxHidingTests {
     let theme = Theme.defaultLight
     lazy var styler = MarkdownStyler(theme: theme)
-    
+
     @Test("Bold syntax hidden when cursor outside")
     func testBoldSyntaxHidden() {
         let markdown = "Some **bold** text"
@@ -585,16 +597,17 @@ struct SyntaxHidingTests {
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
         let styler = MarkdownStyler(theme: Theme.defaultLight)
-        
+
         // Cursor at position 0 (outside bold element)
-        styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
-        
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
+
         // Check ** at position 5-6 is hidden (tiny font)
         let font = textStorage.attribute(.font, at: 5, effectiveRange: nil) as? NSFont
         #expect(font != nil)
-        #expect(font!.pointSize < 1.0) // Hidden = tiny font
+        #expect(font!.pointSize < 1.0)  // Hidden = tiny font
     }
-    
+
     @Test("Bold syntax visible when cursor inside")
     func testBoldSyntaxVisible() {
         let markdown = "Some **bold** text"
@@ -602,10 +615,11 @@ struct SyntaxHidingTests {
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
         let styler = MarkdownStyler(theme: Theme.defaultLight)
-        
+
         // Cursor at position 8 (inside "bold")
-        styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 8)
-        
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 8)
+
         // Check ** at position 5 is visible (normal font)
         let font = textStorage.attribute(.font, at: 5, effectiveRange: nil) as? NSFont
         #expect(font != nil)
@@ -613,7 +627,7 @@ struct SyntaxHidingTests {
         let expectedBase = CGFloat(storedFontSize ?? Double(theme.baseFont.pointSize))
         #expect(font!.pointSize >= expectedBase)
     }
-    
+
     @Test("Heading hash hidden when cursor outside")
     func testHeadingHashHidden() {
         let markdown = "# Heading\n\nParagraph"
@@ -621,16 +635,18 @@ struct SyntaxHidingTests {
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
         let styler = MarkdownStyler(theme: Theme.defaultLight)
-        
+
         // Cursor in paragraph (position 12)
-        styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 15)
-        
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 15
+        )
+
         // Check # at position 0 is hidden
         let font = textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
         #expect(font != nil)
         #expect(font!.pointSize < 1.0)
     }
-    
+
     @Test("Heading hash visible when cursor on heading line")
     func testHeadingHashVisible() {
         let markdown = "# Heading\n\nParagraph"
@@ -638,16 +654,17 @@ struct SyntaxHidingTests {
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
         let styler = MarkdownStyler(theme: Theme.defaultLight)
-        
+
         // Cursor on heading (position 5)
-        styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 5)
-        
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 5)
+
         // Check # at position 0 is visible
         let font = textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
         #expect(font != nil)
         #expect(font!.pointSize > 1.0)
     }
-    
+
     @Test("Link URL hidden when cursor outside")
     func testLinkUrlHidden() {
         let markdown = "Click [here](https://example.com) now"
@@ -655,21 +672,23 @@ struct SyntaxHidingTests {
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
         let styler = MarkdownStyler(theme: Theme.defaultLight)
-        
+
         // Cursor at end (outside link)
-        styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 35)
-        
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 35
+        )
+
         // Check [ at position 6 is hidden
         let bracketFont = textStorage.attribute(.font, at: 6, effectiveRange: nil) as? NSFont
         #expect(bracketFont != nil)
         #expect(bracketFont!.pointSize < 1.0)
-        
+
         // Check URL part is hidden (position 12 is inside ](url))
         let urlFont = textStorage.attribute(.font, at: 12, effectiveRange: nil) as? NSFont
         #expect(urlFont != nil)
         #expect(urlFont!.pointSize < 1.0)
     }
-    
+
     @Test("String content unchanged after syntax hiding")
     func testContentUnchanged() {
         let markdown = "# Title\n\n**bold** and *italic* with `code`"
@@ -677,9 +696,10 @@ struct SyntaxHidingTests {
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
         let styler = MarkdownStyler(theme: Theme.defaultLight)
-        
-        styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
-        
+
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
+
         #expect(textStorage.string == markdown)
     }
 }
@@ -701,8 +721,9 @@ struct ImageHandlingTests {
         image.unlockFocus()
 
         guard let tiffData = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            let bitmap = NSBitmapImageRep(data: tiffData),
+            let pngData = bitmap.representation(using: .png, properties: [:])
+        else {
             throw CocoaError(.fileWriteUnknown)
         }
 
@@ -716,13 +737,13 @@ struct ImageHandlingTests {
         let document = Document(parsing: markdown)
         var collector = StyleCollector()
         collector.visit(document)
-        
+
         let images = collector.spans.filter {
             if case .image = $0.kind { return true }
             return false
         }
         #expect(images.count == 1)
-        
+
         if case .image(let source, let altText) = images[0].kind {
             #expect(source == "image.png")
             #expect(altText == "Alt text")
@@ -730,33 +751,33 @@ struct ImageHandlingTests {
             Issue.record("Expected image span")
         }
     }
-    
+
     @Test("Collects image with empty alt text")
     func testImageEmptyAlt() {
         let markdown = "![](photo.jpg)"
         let document = Document(parsing: markdown)
         var collector = StyleCollector()
         collector.visit(document)
-        
+
         let images = collector.spans.filter {
             if case .image = $0.kind { return true }
             return false
         }
         #expect(images.count == 1)
-        
+
         if case .image(let source, let altText) = images[0].kind {
             #expect(source == "photo.jpg")
             #expect(altText == "")
         }
     }
-    
+
     @Test("Collects multiple images")
     func testMultipleImages() {
         let markdown = "![One](a.png) and ![Two](b.png)"
         let document = Document(parsing: markdown)
         var collector = StyleCollector()
         collector.visit(document)
-        
+
         let images = collector.spans.filter {
             if case .image = $0.kind { return true }
             return false
@@ -802,27 +823,27 @@ struct ImageHandlingTests {
         )
         #expect(textStorage.attribute(.renderedImage, at: 0, effectiveRange: nil) != nil)
     }
-    
+
     @Test("Image context resolves relative path")
     func testRelativePathResolution() throws {
         let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/my-post/index.md")
         let siteURL = URL(fileURLWithPath: "/tmp/greendale/site")
         let context = ImageContext(postURL: postURL, siteURL: siteURL)
-        
+
         let resolved = context.resolveImagePath("photo.png")
         #expect(resolved?.path == "/tmp/greendale/site/content/blog/my-post/photo.png")
     }
-    
+
     @Test("Image context resolves absolute path from static root")
     func testAbsolutePathResolution() throws {
         let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/my-post/index.md")
         let siteURL = URL(fileURLWithPath: "/tmp/greendale/site")
         let context = ImageContext(postURL: postURL, siteURL: siteURL)
-        
+
         let resolved = context.resolveImagePath("/other-post/image.png")
         #expect(resolved?.path == "/tmp/greendale/site/static/other-post/image.png")
     }
-    
+
     @Test("Image context blocks remote URLs by default")
     func testRemoteURLBlocked() {
         let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/post.md")
@@ -842,13 +863,13 @@ struct ImageHandlingTests {
         let resolved = context.resolveImagePath("https://example.com/image.png")
         #expect(resolved?.absoluteString == "https://example.com/image.png")
     }
-    
+
     @Test("Image context returns nil for empty source")
     func testEmptySource() {
         let postURL = URL(fileURLWithPath: "/tmp/greendale/site/content/blog/post.md")
         let siteURL = URL(fileURLWithPath: "/tmp/greendale/site")
         let context = ImageContext(postURL: postURL, siteURL: siteURL)
-        
+
         let resolved = context.resolveImagePath("")
         #expect(resolved == nil)
     }
@@ -874,7 +895,7 @@ struct ImageHandlingTests {
         let resolved = context.resolveImagePath("../../../site2/secret.png")
         #expect(resolved == nil)
     }
-    
+
     @Test("Image syntax hidden when cursor outside")
     func testImageSyntaxHidden() {
         let markdown = "Text\n\n![Alt](img.png)\n\nMore"
@@ -882,18 +903,19 @@ struct ImageHandlingTests {
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
         let styler = MarkdownStyler(theme: Theme.defaultLight)
-        
+
         // Cursor at beginning, outside image
-        styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
-        
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
+
         // Image syntax should be hidden (tiny font)
-        let imageStart = 6 // "![Alt](img.png)" starts after "Text\n\n"
+        let imageStart = 6  // "![Alt](img.png)" starts after "Text\n\n"
         var effectiveRange = NSRange()
         let font = textStorage.attribute(.font, at: imageStart, effectiveRange: &effectiveRange) as? NSFont
         #expect(font != nil)
         #expect(font!.pointSize < 1.0)
     }
-    
+
     @Test("Image syntax visible when cursor inside")
     func testImageSyntaxVisible() {
         let markdown = "![Alt](img.png)"
@@ -903,7 +925,8 @@ struct ImageHandlingTests {
         let styler = MarkdownStyler(theme: Theme.defaultLight)
 
         // Cursor inside the image markdown
-        styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 5)
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 5)
 
         // Image syntax should be visible (normal font)
         var effectiveRange = NSRange()
@@ -927,7 +950,8 @@ struct CursorOnlyUpdateTests {
         let visibleRange = NSRange(location: 0, length: textStorage.length)
 
         // Full restyle with cursor inside bold
-        let cache = styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 8)
+        let cache = styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 8)
 
         // ** at position 5 should be visible
         let fontBefore = textStorage.attribute(.font, at: 5, effectiveRange: nil) as? NSFont
@@ -953,7 +977,8 @@ struct CursorOnlyUpdateTests {
         let visibleRange = NSRange(location: 0, length: textStorage.length)
 
         // Full restyle with cursor outside bold
-        let cache = styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
+        let cache = styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
 
         // ** at position 5 should be hidden
         let fontBefore = textStorage.attribute(.font, at: 5, effectiveRange: nil) as? NSFont
@@ -979,7 +1004,8 @@ struct CursorOnlyUpdateTests {
         let visibleRange = NSRange(location: 0, length: textStorage.length)
 
         // Full restyle with cursor inside bold
-        let cache = styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 7)
+        let cache = styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 7)
 
         // Snapshot font at ** position
         let fontBefore = textStorage.attribute(.font, at: 5, effectiveRange: nil) as? NSFont
@@ -1001,7 +1027,8 @@ struct CursorOnlyUpdateTests {
         let visibleRange = NSRange(location: 0, length: textStorage.length)
 
         // Full restyle with cursor on heading
-        let cache = styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 5)
+        let cache = styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 5)
 
         // # at position 0 should be visible
         let fontVisible = textStorage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
@@ -1026,13 +1053,17 @@ struct CursorOnlyUpdateTests {
         let visibleRange = NSRange(location: 0, length: markdown.utf16.count)
 
         // Path 1: full restyle with cursor inside bold, then lightweight move to outside
-        let cache = styler.style(text: markdown, document: document, textStorage: textStorage1, visibleRange: visibleRange, cursorPosition: 16)
+        let cache = styler.style(
+            text: markdown, document: document, textStorage: textStorage1, visibleRange: visibleRange,
+            cursorPosition: 16)
         textStorage1.beginEditing()
         styler.updateCursorStyles(in: textStorage1, cache: cache, oldCursor: 16, newCursor: 0, imageContext: nil)
         textStorage1.endEditing()
 
         // Path 2: full restyle directly with cursor at 0
-        styler.style(text: markdown, document: document, textStorage: textStorage2, visibleRange: visibleRange, cursorPosition: 0)
+        styler.style(
+            text: markdown, document: document, textStorage: textStorage2, visibleRange: visibleRange, cursorPosition: 0
+        )
 
         // The ** markers should match: both hidden
         let font1 = textStorage1.attribute(.font, at: 14, effectiveRange: nil) as? NSFont
@@ -1048,7 +1079,8 @@ struct CursorOnlyUpdateTests {
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
 
-        let cache = styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
+        let cache = styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
 
         textStorage.beginEditing()
         styler.updateCursorStyles(in: textStorage, cache: cache, oldCursor: 0, newCursor: 15, imageContext: nil)
@@ -1064,7 +1096,8 @@ struct CursorOnlyUpdateTests {
         let document = Document(parsing: markdown)
         let visibleRange = NSRange(location: 0, length: textStorage.length)
 
-        let cache = styler.style(text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
+        let cache = styler.style(
+            text: markdown, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: 0)
 
         // Should have markers for heading (# ) and bold (** **)
         #expect(cache.markers.count >= 3)  // 1 heading prefix + 2 bold markers

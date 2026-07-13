@@ -19,7 +19,8 @@ final class AsyncImageLoader {
             defer { self.inFlight.remove(url) }
 
             guard FileManager.default.fileExists(atPath: url.path),
-                  let image = NSImage(contentsOf: url) else {
+                let image = NSImage(contentsOf: url)
+            else {
                 return
             }
 

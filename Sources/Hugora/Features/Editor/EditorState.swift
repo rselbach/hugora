@@ -29,9 +29,9 @@ enum EditorStateError: LocalizedError, Equatable {
 final class EditorState: ObservableObject {
     private enum Timing {
         /// How long the "Saved" indicator stays visible after a save.
-        static let justSavedDuration: UInt64 = 2_000_000_000   // 2 s
+        static let justSavedDuration: UInt64 = 2_000_000_000  // 2 s
         /// Delay before auto-saving after the user stops typing.
-        static let autoSaveDelay: UInt64 = 1_000_000_000       // 1 s
+        static let autoSaveDelay: UInt64 = 1_000_000_000  // 1 s
     }
 
     private static let logger = Logger(
@@ -119,7 +119,8 @@ final class EditorState: ObservableObject {
                 }.value
                 let decoded = HTMLEntityCodec.decode(rawContent)
                 guard self.openRevision == capturedRevision,
-                      self.currentItem?.url == item.url else {
+                    self.currentItem?.url == item.url
+                else {
                     return
                 }
                 self.currentItem = item
@@ -185,8 +186,7 @@ final class EditorState: ObservableObject {
             isLoading = false
             justSaved = true
             Task { @MainActor in
-                do { try await Task.sleep(nanoseconds: Timing.justSavedDuration) }
-                catch { return } // task cancelled
+                do { try await Task.sleep(nanoseconds: Timing.justSavedDuration) } catch { return }  // task cancelled
                 self.justSaved = false
             }
         } catch {
@@ -214,7 +214,7 @@ final class EditorState: ObservableObject {
         let slug = deriveSlug(from: displayContent)
         let datePrefix = deriveDatePrefix(from: displayContent, fallback: item.date)
         let expectedName = "\(datePrefix)-\(slug)"
-        
+
         let fm = FileManager.default
         var finalURL = item.url
 
@@ -223,12 +223,12 @@ final class EditorState: ObservableObject {
             let currentFolder = item.url.deletingLastPathComponent()
             try validateWritableURL(currentFolder)
             let currentFolderName = currentFolder.lastPathComponent
-            
+
             if currentFolderName != expectedName {
                 let parentDir = currentFolder.deletingLastPathComponent()
                 let newFolder = parentDir.appendingPathComponent(expectedName)
                 try validateWritableURL(newFolder)
-                
+
                 if fm.fileExists(atPath: newFolder.path) {
                     throw EditorStateError.renameTargetAlreadyExists(newFolder.path)
                 }
@@ -237,18 +237,19 @@ final class EditorState: ObservableObject {
                 // (index.markdown, index.en.md, ...); only the folder moved.
                 finalURL = newFolder.appendingPathComponent(item.url.lastPathComponent)
             }
-            
+
         case .file:
             try validateWritableURL(item.url)
             let currentFileName = item.url.deletingPathExtension().lastPathComponent
-            
+
             if currentFileName != expectedName {
                 let parentDir = item.url.deletingLastPathComponent()
-                let newFile = parentDir
+                let newFile =
+                    parentDir
                     .appendingPathComponent(expectedName)
                     .appendingPathExtension(item.url.pathExtension)
                 try validateWritableURL(newFile)
-                
+
                 if fm.fileExists(atPath: newFile.path) {
                     throw EditorStateError.renameTargetAlreadyExists(newFile.path)
                 }
@@ -271,24 +272,27 @@ final class EditorState: ObservableObject {
 
     private func deriveSlug(from content: String) -> String {
         if let slugValue = FrontmatterParser.value(forKey: "slug", in: content),
-           let cleaned = cleanedSlugComponent(from: slugValue) {
+            let cleaned = cleanedSlugComponent(from: slugValue)
+        {
             return cleaned
         }
 
         if let urlValue = FrontmatterParser.value(forKey: "url", in: content),
-           let cleaned = cleanedSlugComponent(from: urlValue) {
+            let cleaned = cleanedSlugComponent(from: urlValue)
+        {
             return cleaned
         }
 
         if let title = FrontmatterParser.value(forKey: "title", in: content) {
             return Slug.from(title)
         }
-        
+
         return "untitled"
     }
 
     private func cleanedSlugComponent(from value: String) -> String? {
-        let trimmed = value
+        let trimmed =
+            value
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -374,7 +378,8 @@ final class EditorState: ObservableObject {
 
     private func restoreSession() {
         guard let path = UserDefaults.standard.string(forKey: DefaultsKey.sessionCurrentPost),
-              FileManager.default.fileExists(atPath: path) else {
+            FileManager.default.fileExists(atPath: path)
+        else {
             return
         }
 
@@ -402,7 +407,8 @@ final class EditorState: ObservableObject {
                 self.isDirty = false
             } catch {
                 guard self.openRevision == capturedRevision else { return }
-                Self.logger.error("Failed to restore session file \(url.lastPathComponent): \(error.localizedDescription)")
+                Self.logger.error(
+                    "Failed to restore session file \(url.lastPathComponent): \(error.localizedDescription)")
                 self.lastError = error
             }
         }
@@ -425,7 +431,8 @@ final class EditorState: ObservableObject {
             let standardizedFile = fileURL.standardizedFileURL
             return PathSafety.isSameOrDescendant(standardizedFile, of: workspaceURL.standardizedFileURL)
         } catch {
-            Self.logger.error("Session restore skipped: failed to resolve workspace bookmark: \(error.localizedDescription)")
+            Self.logger.error(
+                "Session restore skipped: failed to resolve workspace bookmark: \(error.localizedDescription)")
             return false
         }
     }
@@ -472,7 +479,8 @@ private func computeTextChange(oldText: String, newText: String) -> TextChange? 
 
     var prefixLength = 0
     while prefixLength < minLength,
-          oldString.character(at: prefixLength) == newString.character(at: prefixLength) {
+        oldString.character(at: prefixLength) == newString.character(at: prefixLength)
+    {
         prefixLength += 1
     }
 
@@ -481,8 +489,8 @@ private func computeTextChange(oldText: String, newText: String) -> TextChange? 
     let newRemaining = newLength - prefixLength
     let maxSuffix = min(oldRemaining, newRemaining)
     while suffixLength < maxSuffix,
-          oldString.character(at: oldLength - 1 - suffixLength) ==
-          newString.character(at: newLength - 1 - suffixLength) {
+        oldString.character(at: oldLength - 1 - suffixLength) == newString.character(at: newLength - 1 - suffixLength)
+    {
         suffixLength += 1
     }
 
@@ -511,11 +519,12 @@ private extension EditorState {
                 newRange.location += delta
             }
 
-            updatedMappings.append(HTMLEntityMapping(
-                decodedRange: newRange,
-                encodedText: mapping.encodedText,
-                decodedText: mapping.decodedText
-            ))
+            updatedMappings.append(
+                HTMLEntityMapping(
+                    decodedRange: newRange,
+                    encodedText: mapping.encodedText,
+                    decodedText: mapping.decodedText
+                ))
         }
 
         entityMappings = updatedMappings

@@ -39,7 +39,7 @@ enum WorkspaceError: LocalizedError, Equatable {
 final class WorkspaceStore: ObservableObject {
     private enum Timing {
         /// Debounce before reloading all sections after a content directory change.
-        static let contentReloadDebounce: UInt64 = 250_000_000   // 250 ms
+        static let contentReloadDebounce: UInt64 = 250_000_000  // 250 ms
         /// Debounce before refreshing a single section after its directory changes.
         static let sectionRefreshDebounce: UInt64 = 150_000_000  // 150 ms
     }
@@ -153,7 +153,8 @@ final class WorkspaceStore: ObservableObject {
         let standardized = url.standardizedFileURL
 
         if let current = currentFolderURL,
-           current.standardizedFileURL == standardized {
+            current.standardizedFileURL == standardized
+        {
             return
         }
 
@@ -226,7 +227,8 @@ final class WorkspaceStore: ObservableObject {
                 bookmarkDataIsStale: &isStale
             )
         } catch {
-            Self.logger.error("Failed to resolve bookmark for recent workspace \(ref.path): \(error.localizedDescription)")
+            Self.logger.error(
+                "Failed to resolve bookmark for recent workspace \(ref.path): \(error.localizedDescription)")
             removeFromRecent(ref)
             isLoading = false
             lastError = .staleWorkspaceReference(ref.path)
@@ -408,11 +410,14 @@ final class WorkspaceStore: ObservableObject {
             return
         }
 
-        guard shouldUseHugoCLI || confirmFrontmatterPreview(
-            frontmatter: frontmatter,
-            sectionName: targetSection.name,
-            format: format
-        ) else {
+        guard
+            shouldUseHugoCLI
+                || confirmFrontmatterPreview(
+                    frontmatter: frontmatter,
+                    sectionName: targetSection.name,
+                    format: format
+                )
+        else {
             isLoading = false
             return
         }
@@ -444,7 +449,8 @@ final class WorkspaceStore: ObservableObject {
                     }
 
                     self.loadContent(from: siteURL)
-                    let finalURL = self.resolveCreatedURLAfterRefresh(createdURL: createdURL, fallbackURL: expectedFileURL)
+                    let finalURL = self.resolveCreatedURLAfterRefresh(
+                        createdURL: createdURL, fallbackURL: expectedFileURL)
                     self.selectedFileURL = finalURL
                     self.onOpenFile?(finalURL)
                     self.isLoading = false
@@ -512,7 +518,7 @@ final class WorkspaceStore: ObservableObject {
 
         let configFiles = [
             "hugo.toml", "hugo.yaml", "hugo.yml", "hugo.json",
-            "config.toml", "config.yaml", "config.yml", "config.json"
+            "config.toml", "config.yaml", "config.yml", "config.json",
         ]
         for file in configFiles {
             if fm.fileExists(atPath: url.appendingPathComponent(file).path) {
@@ -581,7 +587,8 @@ final class WorkspaceStore: ObservableObject {
 
     private func resolveNewPostSection() -> ContentSection? {
         if let preferredName = WorkspacePreferenceStore.preferences(for: currentFolderURL).preferredSection,
-           let preferred = sections.first(where: { $0.name == preferredName }) {
+            let preferred = sections.first(where: { $0.name == preferredName })
+        {
             return preferred
         }
 
@@ -620,7 +627,8 @@ final class WorkspaceStore: ObservableObject {
             ) {
                 for entry in entries {
                     guard let values = try? entry.resourceValues(forKeys: [.isDirectoryKey]),
-                          values.isDirectory == true else {
+                        values.isDirectory == true
+                    else {
                         continue
                     }
                     candidates.append(ContentSection(name: entry.lastPathComponent, url: entry, items: []))
@@ -657,7 +665,8 @@ final class WorkspaceStore: ObservableObject {
             popup.addItem(withTitle: sectionOptionTitle(section))
         }
         if let preferred = resolveNewPostSection(),
-           let preferredIdx = candidates.firstIndex(where: { $0.name == preferred.name }) {
+            let preferredIdx = candidates.firstIndex(where: { $0.name == preferred.name })
+        {
             popup.selectItem(at: preferredIdx)
         }
         alert.accessoryView = popup
@@ -887,16 +896,20 @@ final class WorkspaceStore: ObservableObject {
 
     private func resolveCreatedURLAfterRefresh(createdURL: URL, fallbackURL: URL) -> URL {
         let createdPath = createdURL.standardizedFileURL.path
-        if let item = sections
+        if let item =
+            sections
             .flatMap(\.items)
-            .first(where: { $0.url.standardizedFileURL.path == createdPath }) {
+            .first(where: { $0.url.standardizedFileURL.path == createdPath })
+        {
             return item.url
         }
 
         let fallbackPath = fallbackURL.standardizedFileURL.path
-        if let item = sections
+        if let item =
+            sections
             .flatMap(\.items)
-            .first(where: { $0.url.standardizedFileURL.path == fallbackPath }) {
+            .first(where: { $0.url.standardizedFileURL.path == fallbackPath })
+        {
             return item.url
         }
 
@@ -1015,11 +1028,13 @@ final class WorkspaceStore: ObservableObject {
     }
 
     private func nestedDirectories(under sectionURL: URL, contentRoot: URL) -> [URL] {
-        guard let enumerator = FileManager.default.enumerator(
-            at: sectionURL,
-            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
+        guard
+            let enumerator = FileManager.default.enumerator(
+                at: sectionURL,
+                includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+                options: [.skipsHiddenFiles]
+            )
+        else { return [] }
 
         var directories: [URL] = []
         for case let url as URL in enumerator {
@@ -1058,8 +1073,7 @@ final class WorkspaceStore: ObservableObject {
     private func scheduleContentReload() {
         contentWatcherReloadTask?.cancel()
         contentWatcherReloadTask = Task { @MainActor [weak self] in
-            do { try await Task.sleep(nanoseconds: Timing.contentReloadDebounce) }
-            catch { return } // task cancelled
+            do { try await Task.sleep(nanoseconds: Timing.contentReloadDebounce) } catch { return }  // task cancelled
             guard let self, let url = self.currentFolderURL else { return }
             self.loadContent(from: url)
         }
@@ -1069,8 +1083,7 @@ final class WorkspaceStore: ObservableObject {
         sectionRefreshTasks[sectionName]?.cancel()
         sectionRefreshTasks[sectionName] = Task { @MainActor [weak self] in
             defer { self?.sectionRefreshTasks.removeValue(forKey: sectionName) }
-            do { try await Task.sleep(nanoseconds: Timing.sectionRefreshDebounce) }
-            catch { return } // task cancelled
+            do { try await Task.sleep(nanoseconds: Timing.sectionRefreshDebounce) } catch { return }  // task cancelled
             guard let self else { return }
             guard self.currentFolderURL != nil else { return }
             guard let currentContentDir = self.contentDirectoryURL else { return }

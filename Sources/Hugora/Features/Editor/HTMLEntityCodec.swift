@@ -16,7 +16,7 @@ private let namedEntities: [String: String] = [
     "bull": "\u{2022}", "hellip": "\u{2026}", "permil": "\u{2030}", "prime": "\u{2032}", "Prime": "\u{2033}",
     "lsaquo": "\u{2039}", "rsaquo": "\u{203A}", "oline": "\u{203E}", "frasl": "\u{2044}", "euro": "\u{20AC}",
     "trade": "\u{2122}", "larr": "\u{2190}", "uarr": "\u{2191}", "rarr": "\u{2192}", "darr": "\u{2193}",
-    "harr": "\u{2194}", "spades": "\u{2660}", "clubs": "\u{2663}", "hearts": "\u{2665}", "diams": "\u{2666}"
+    "harr": "\u{2194}", "spades": "\u{2660}", "clubs": "\u{2663}", "hearts": "\u{2665}", "diams": "\u{2666}",
 ]
 
 struct HTMLEntityMapping: Equatable {
@@ -51,7 +51,8 @@ enum HTMLEntityCodec {
             let decodedStart = decoded.utf16.count
             decoded.append(contentsOf: replacement)
             let decodedRange = NSRange(location: decodedStart, length: replacement.utf16.count)
-            mappings.append(HTMLEntityMapping(decodedRange: decodedRange, encodedText: encodedText, decodedText: replacement))
+            mappings.append(
+                HTMLEntityMapping(decodedRange: decodedRange, encodedText: encodedText, decodedText: replacement))
 
             cursor = matchRange.upperBound
         }
@@ -91,14 +92,16 @@ enum HTMLEntityCodec {
 
     private static func replacement(for match: NSTextCheckingResult, in string: String) -> String? {
         if let decRange = Range(match.range(at: 1), in: string),
-           let codePoint = UInt32(string[decRange]),
-           let scalar = Unicode.Scalar(codePoint) {
+            let codePoint = UInt32(string[decRange]),
+            let scalar = Unicode.Scalar(codePoint)
+        {
             return String(Character(scalar))
         }
 
         if let hexRange = Range(match.range(at: 2), in: string),
-           let codePoint = UInt32(string[hexRange], radix: 16),
-           let scalar = Unicode.Scalar(codePoint) {
+            let codePoint = UInt32(string[hexRange], radix: 16),
+            let scalar = Unicode.Scalar(codePoint)
+        {
             return String(Character(scalar))
         }
 

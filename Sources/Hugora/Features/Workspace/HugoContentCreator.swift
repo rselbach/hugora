@@ -49,7 +49,8 @@ enum HugoContentCreatorError: LocalizedError, CustomDebugStringConvertible {
     var debugDescription: String {
         switch self {
         case .executableNotFound:
-            return "Hugo executable not found in HUGORA_HUGO_PATH, /opt/homebrew/bin/hugo, /usr/local/bin/hugo, or /usr/bin/hugo"
+            return
+                "Hugo executable not found in HUGORA_HUGO_PATH, /opt/homebrew/bin/hugo, /usr/local/bin/hugo, or /usr/bin/hugo"
         case .commandFailed(let command, let status, let output):
             return "Hugo command failed (exit \(status)): \(command)\nOutput: \(output)"
         case .couldNotResolveCreatedPath(let expectedPath, let output):
@@ -102,7 +103,8 @@ struct HugoCLIContentCreator: HugoContentCreator {
             )
         }
 
-        let expectedURL = siteURL
+        let expectedURL =
+            siteURL
             .appendingPathComponent(contentDir)
             .appendingPathComponent(relativePath)
             .standardizedFileURL
@@ -112,7 +114,8 @@ struct HugoCLIContentCreator: HugoContentCreator {
         }
 
         if let parsedURL = parseCreatedPath(from: result.stdout, siteURL: siteURL),
-           FileManager.default.fileExists(atPath: parsedURL.path) {
+            FileManager.default.fileExists(atPath: parsedURL.path)
+        {
             return parsedURL.standardizedFileURL
         }
 
@@ -164,7 +167,8 @@ struct HugoCLIContentCreator: HugoContentCreator {
     private func resolveHugoExecutable() -> URL? {
         let fm = FileManager.default
         if let configuredPath = ProcessInfo.processInfo.environment["HUGORA_HUGO_PATH"],
-           !configuredPath.isEmpty {
+            !configuredPath.isEmpty
+        {
             let configuredURL = URL(fileURLWithPath: configuredPath).standardizedFileURL
             if fm.isExecutableFile(atPath: configuredURL.path) {
                 return configuredURL
@@ -198,7 +202,7 @@ struct HugoCLIContentCreator: HugoContentCreator {
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
         let range = NSRange(output.startIndex..., in: output)
         guard let match = regex.firstMatch(in: output, range: range),
-              let pathRange = Range(match.range(at: 1), in: output)
+            let pathRange = Range(match.range(at: 1), in: output)
         else {
             return nil
         }

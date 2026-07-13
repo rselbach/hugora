@@ -71,7 +71,8 @@ final class ImageCache {
     private func enforceLimits() {
         while cache.count > countLimit || totalCost > totalCostLimit {
             guard let oldest = order.first,
-                  let entry = cache[oldest] else {
+                let entry = cache[oldest]
+            else {
                 break
             }
             cache.removeValue(forKey: oldest)

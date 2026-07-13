@@ -17,8 +17,7 @@ struct EditorStateTests {
         let saved = Self.touchedKeys.map { ($0, defaults.object(forKey: $0)) }
         defer {
             for (key, original) in saved {
-                if let original { defaults.set(original, forKey: key) }
-                else { defaults.removeObject(forKey: key) }
+                if let original { defaults.set(original, forKey: key) } else { defaults.removeObject(forKey: key) }
             }
         }
         try await body()
@@ -38,12 +37,12 @@ struct EditorStateTests {
 
             let fileURL = tempDir.appendingPathComponent("2024-01-01-old-post.md")
             let initialContent = """
-            ---
-            title: "Old Post"
-            date: 2024-01-01
-            ---
-            Old content
-            """
+                ---
+                title: "Old Post"
+                date: 2024-01-01
+                ---
+                Old content
+                """
             try initialContent.write(to: fileURL, atomically: true, encoding: .utf8)
 
             let item = ContentItem(url: fileURL, format: .file, section: "blog")
@@ -51,12 +50,12 @@ struct EditorStateTests {
             state.openItem(item)
 
             let updatedContent = """
-            ---
-            title: "Greendale Community College Rules"
-            date: 2024-06-20
-            ---
-            Updated content
-            """
+                ---
+                title: "Greendale Community College Rules"
+                date: 2024-06-20
+                ---
+                Updated content
+                """
             state.updateContent(updatedContent)
             state.save()
 
@@ -82,12 +81,12 @@ struct EditorStateTests {
 
             let fileURL = tempDir.appendingPathComponent("2024-01-01-old-post.md")
             let initialContent = """
-            ---
-            title: "Old Post"
-            date: 2024-01-01
-            ---
-            Old content
-            """
+                ---
+                title: "Old Post"
+                date: 2024-01-01
+                ---
+                Old content
+                """
             try initialContent.write(to: fileURL, atomically: true, encoding: .utf8)
 
             let item = ContentItem(url: fileURL, format: .file, section: "blog")
@@ -95,13 +94,13 @@ struct EditorStateTests {
             state.openItem(item)
 
             let updatedContent = """
-            ---
-            title: "Annie Edison"
-            slug: "human-being"
-            date: 2024-06-20
-            ---
-            Updated content
-            """
+                ---
+                title: "Annie Edison"
+                slug: "human-being"
+                date: 2024-06-20
+                ---
+                Updated content
+                """
             state.updateContent(updatedContent)
             state.save()
 
@@ -134,12 +133,13 @@ struct EditorStateTests {
 
             let state = EditorState()
             state.openItem(ContentItem(url: fileURL, format: .file, section: "blog"))
-            state.updateContent("""
-            ---
-            title: "Shirley Bennett"
-            date: 2024-06-20
-            ---
-            """)
+            state.updateContent(
+                """
+                ---
+                title: "Shirley Bennett"
+                date: 2024-06-20
+                ---
+                """)
             state.save()
 
             let renamedURL = tempDir.appendingPathComponent("2024-06-20-shirley-bennett.markdown")
@@ -159,15 +159,17 @@ struct EditorStateTests {
 
             let bundleState = EditorState()
             bundleState.openItem(ContentItem(url: indexURL, format: .bundle, section: "blog"))
-            bundleState.updateContent("""
-            ---
-            title: "Ben Chang"
-            date: 2024-06-21
-            ---
-            """)
+            bundleState.updateContent(
+                """
+                ---
+                title: "Ben Chang"
+                date: 2024-06-21
+                ---
+                """)
             bundleState.save()
 
-            let renamedIndexURL = tempDir
+            let renamedIndexURL =
+                tempDir
                 .appendingPathComponent("2024-06-21-ben-chang")
                 .appendingPathComponent("index.markdown")
             #expect(FileManager.default.fileExists(atPath: renamedIndexURL.path))
@@ -200,13 +202,14 @@ struct EditorStateTests {
             let state = EditorState()
             state.openItem(item)
 
-            state.updateContent("""
-            ---
-            title: "Troy Barnes"
-            date: "Jan 2, 2025"
-            ---
-            Updated content
-            """)
+            state.updateContent(
+                """
+                ---
+                title: "Troy Barnes"
+                date: "Jan 2, 2025"
+                ---
+                Updated content
+                """)
             state.save()
 
             let renamedURL = tempDir.appendingPathComponent("2025-01-02-troy-barnes.md")
@@ -247,14 +250,15 @@ struct EditorStateTests {
 
             let state = EditorState()
             state.openItem(ContentItem(url: originalURL, format: .file, section: "blog"))
-            state.updateContent("""
-            ---
-            title: "Annie Edison"
-            slug: "human-being"
-            date: 2024-06-20
-            ---
-            Updated content
-            """)
+            state.updateContent(
+                """
+                ---
+                title: "Annie Edison"
+                slug: "human-being"
+                date: 2024-06-20
+                ---
+                Updated content
+                """)
             state.save()
 
             #expect(FileManager.default.fileExists(atPath: originalURL.path))
@@ -293,14 +297,15 @@ struct EditorStateTests {
             let state = EditorState()
             state.contentRootURL = tempDir.appendingPathComponent("content")
             state.openItem(ContentItem(url: originalURL, format: .file, section: "posts"))
-            state.updateContent("""
-            ---
-            title: "Unsafe Rename"
-            slug: "human-being"
-            date: ../../oops
-            ---
-            Updated content
-            """)
+            state.updateContent(
+                """
+                ---
+                title: "Unsafe Rename"
+                slug: "human-being"
+                date: ../../oops
+                ---
+                Updated content
+                """)
             state.save()
 
             // The unparseable date falls back to the item's original date,

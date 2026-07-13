@@ -22,7 +22,9 @@ enum ImagePasteLocation: String, CaseIterable, Identifiable, Codable {
         if let workspaceLocation = WorkspacePreferenceStore.preferences(for: siteURL).imagePasteLocation {
             return workspaceLocation
         }
-        let raw = UserDefaults.standard.string(forKey: DefaultsKey.imagePasteLocation) ?? ImagePasteLocation.pageFolder.rawValue
+        let raw =
+            UserDefaults.standard.string(forKey: DefaultsKey.imagePasteLocation)
+            ?? ImagePasteLocation.pageFolder.rawValue
         return ImagePasteLocation(rawValue: raw) ?? .pageFolder
     }
 }

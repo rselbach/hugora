@@ -29,8 +29,8 @@ struct StyleSpan {
 
 /// Represents syntax characters to hide (e.g., `**`, `#`, backticks).
 struct SyntaxMarker {
-    let range: NSRange         // Range of the syntax characters to hide
-    let parentRange: NSRange   // Full range of the containing element (for cursor detection)
+    let range: NSRange  // Range of the syntax characters to hide
+    let parentRange: NSRange  // Full range of the containing element (for cursor detection)
     let parentKind: StyleKind  // Kind of the parent element (for restoring styles)
     let preserveLineHeight: Bool  // If true, only hide color (don't shrink font) to preserve line height
 
@@ -94,7 +94,7 @@ enum SyntaxMarkerCalculator {
             let suffixRange = NSRange(location: NSMaxRange(nsRange) - 2, length: 2)
             return [
                 SyntaxMarker(range: prefixRange, parentRange: nsRange, parentKind: kind),
-                SyntaxMarker(range: suffixRange, parentRange: nsRange, parentKind: kind)
+                SyntaxMarker(range: suffixRange, parentRange: nsRange, parentKind: kind),
             ]
 
         case .italic:
@@ -104,7 +104,7 @@ enum SyntaxMarkerCalculator {
             let suffixRange = NSRange(location: NSMaxRange(nsRange) - 1, length: 1)
             return [
                 SyntaxMarker(range: prefixRange, parentRange: nsRange, parentKind: kind),
-                SyntaxMarker(range: suffixRange, parentRange: nsRange, parentKind: kind)
+                SyntaxMarker(range: suffixRange, parentRange: nsRange, parentKind: kind),
             ]
 
         case .inlineCode:
@@ -113,7 +113,8 @@ enum SyntaxMarkerCalculator {
             // Check if double backticks
             let nsString = text as NSString
             let firstChar = nsString.substring(with: NSRange(location: nsRange.location, length: 1))
-            let secondChar = nsRange.length > 1 ? nsString.substring(with: NSRange(location: nsRange.location + 1, length: 1)) : ""
+            let secondChar =
+                nsRange.length > 1 ? nsString.substring(with: NSRange(location: nsRange.location + 1, length: 1)) : ""
             let backtickCount = (firstChar == "`" && secondChar == "`") ? 2 : 1
 
             guard nsRange.length >= backtickCount * 2 else { return [] }
@@ -121,7 +122,7 @@ enum SyntaxMarkerCalculator {
             let suffixRange = NSRange(location: NSMaxRange(nsRange) - backtickCount, length: backtickCount)
             return [
                 SyntaxMarker(range: prefixRange, parentRange: nsRange, parentKind: kind),
-                SyntaxMarker(range: suffixRange, parentRange: nsRange, parentKind: kind)
+                SyntaxMarker(range: suffixRange, parentRange: nsRange, parentKind: kind),
             ]
 
         case .link:
@@ -144,7 +145,7 @@ enum SyntaxMarkerCalculator {
 
             return [
                 SyntaxMarker(range: openBracketRange, parentRange: nsRange, parentKind: kind),
-                SyntaxMarker(range: urlPartRange, parentRange: nsRange, parentKind: kind)
+                SyntaxMarker(range: urlPartRange, parentRange: nsRange, parentKind: kind),
             ]
 
         case .blockquote:
@@ -169,7 +170,10 @@ enum SyntaxMarkerCalculator {
                     let markerRange = NSRange(location: offset, length: min(markerLen, line.utf16.count))
                     // For empty blockquote lines, preserve line height so the line doesn't collapse
                     let isEmptyLine = markerLen >= line.utf16.count
-                    markers.append(SyntaxMarker(range: markerRange, parentRange: nsRange, parentKind: kind, preserveLineHeight: isEmptyLine))
+                    markers.append(
+                        SyntaxMarker(
+                            range: markerRange, parentRange: nsRange, parentKind: kind, preserveLineHeight: isEmptyLine)
+                    )
                 }
                 offset += line.utf16.count + 1  // +1 for newline
             }
@@ -184,7 +188,7 @@ enum SyntaxMarkerCalculator {
             guard lines.count >= 2 else { return [] }
 
             // Opening fence (first line)
-            let openFenceLen = lines[0].utf16.count + 1 // +1 for newline
+            let openFenceLen = lines[0].utf16.count + 1  // +1 for newline
             let openRange = NSRange(location: nsRange.location, length: min(openFenceLen, nsRange.length))
 
             // Closing fence (last line)
@@ -195,7 +199,7 @@ enum SyntaxMarkerCalculator {
                 let closeRange = NSRange(location: max(nsRange.location, closeStart), length: closeLen)
                 return [
                     SyntaxMarker(range: openRange, parentRange: nsRange, parentKind: kind),
-                    SyntaxMarker(range: closeRange, parentRange: nsRange, parentKind: kind)
+                    SyntaxMarker(range: closeRange, parentRange: nsRange, parentKind: kind),
                 ]
             }
 

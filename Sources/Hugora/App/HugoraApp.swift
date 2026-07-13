@@ -37,8 +37,9 @@ struct HugoraApp: App {
                 .onOpenURL { url in
                     guard url.scheme == "hugora", url.host == "open" else { return }
                     guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-                          let path = components.queryItems?.first(where: { $0.name == "path" })?.value,
-                          !path.isEmpty else { return }
+                        let path = components.queryItems?.first(where: { $0.name == "path" })?.value,
+                        !path.isEmpty
+                    else { return }
                     workspaceStore.openFromExternalPath(URL(fileURLWithPath: path))
                 }
         }
@@ -78,7 +79,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !editorState.autoSaveEnabled {
             let alert = NSAlert()
             alert.messageText = "You have unsaved changes"
-            alert.informativeText = "Do you want to save the changes to \u{201C}\(editorState.title)\u{201D} before quitting?"
+            alert.informativeText =
+                "Do you want to save the changes to \u{201C}\(editorState.title)\u{201D} before quitting?"
             alert.alertStyle = .warning
             alert.addButton(withTitle: "Save and Quit")
             alert.addButton(withTitle: "Cancel")
@@ -106,7 +108,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let args = ProcessInfo.processInfo.arguments
         guard let openIndex = args.firstIndex(of: "--open"),
-              openIndex + 1 < args.count else { return }
+            openIndex + 1 < args.count
+        else { return }
 
         let folderPath = args[openIndex + 1]
         let url = URL(fileURLWithPath: folderPath)

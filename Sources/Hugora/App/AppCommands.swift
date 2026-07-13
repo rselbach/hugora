@@ -4,11 +4,11 @@ import Sparkle
 
 struct CheckForUpdatesView: View {
     @ObservedObject private var checkForUpdatesViewModel: CheckForUpdatesViewModel
-    
+
     init(updater: SPUUpdater) {
         self.checkForUpdatesViewModel = CheckForUpdatesViewModel(updater: updater)
     }
-    
+
     var body: some View {
         Button("Check for Updates…") {
             checkForUpdatesViewModel.updater.checkForUpdates()
@@ -20,7 +20,7 @@ struct CheckForUpdatesView: View {
 final class CheckForUpdatesViewModel: ObservableObject {
     @Published var canCheckForUpdates = false
     let updater: SPUUpdater
-    
+
     init(updater: SPUUpdater) {
         self.updater = updater
         updater.publisher(for: \.canCheckForUpdates)
@@ -31,9 +31,9 @@ final class CheckForUpdatesViewModel: ObservableObject {
 struct AppCommands: Commands {
     @ObservedObject var editorState: EditorState
     @State private var cliInstalled = CLIInstaller.isInstalled
-    
+
     private let updater: SPUUpdater
-    
+
     init(editorState: EditorState, updater: SPUUpdater) {
         self.editorState = editorState
         self.updater = updater
@@ -42,15 +42,13 @@ struct AppCommands: Commands {
     var body: some Commands {
         CommandGroup(after: .appInfo) {
             CheckForUpdatesView(updater: updater)
-            
+
             Divider()
 
             Button(cliInstalled ? "Uninstall Command Line Tool…" : "Install Command Line Tool…") {
                 cliInstalled ? uninstallCLI() : installCLI()
             }
         }
-
-
 
         CommandGroup(replacing: .saveItem) {
             Button("Save") {
@@ -184,5 +182,3 @@ struct WorkspaceCommands: Commands {
         }
     }
 }
-
-

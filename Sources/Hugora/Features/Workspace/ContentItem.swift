@@ -203,7 +203,7 @@ enum FrontmatterParser {
 
 enum ContentFormat: String, Codable, CaseIterable {
     case bundle  // content/section/slug/index.*
-    case file    // content/section/slug.*
+    case file  // content/section/slug.*
 
     var displayName: String {
         switch self {
@@ -220,7 +220,7 @@ struct ContentItem: Identifiable, Equatable, Comparable {
     )
 
     let id: URL
-    let url: URL          // path to the .md file
+    let url: URL  // path to the .md file
     let slug: String
     let title: String
     let format: ContentFormat

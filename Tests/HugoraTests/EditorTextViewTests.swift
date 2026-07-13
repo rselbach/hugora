@@ -20,8 +20,7 @@ struct EditorTextViewPreferencesTests {
         let saved = Self.touchedKeys.map { ($0, defaults.object(forKey: $0)) }
         defer {
             for (key, original) in saved {
-                if let original { defaults.set(original, forKey: key) }
-                else { defaults.removeObject(forKey: key) }
+                if let original { defaults.set(original, forKey: key) } else { defaults.removeObject(forKey: key) }
             }
         }
         try body()

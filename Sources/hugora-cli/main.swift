@@ -15,7 +15,7 @@ func isValidHugoraApp(at url: URL) -> Bool {
 
 func findHugoraApp() -> URL? {
     let fm = FileManager.default
-    
+
     // Check common locations
     let candidates = [
         "/Applications/Hugora.app",
@@ -24,7 +24,7 @@ func findHugoraApp() -> URL? {
         "\(fm.currentDirectoryPath)/.build/debug/Hugora.app",
         "\(fm.currentDirectoryPath)/.build/release/Hugora.app",
     ]
-    
+
     for path in candidates {
         if fm.fileExists(atPath: path) {
             let url = URL(fileURLWithPath: path)
@@ -33,20 +33,20 @@ func findHugoraApp() -> URL? {
             }
         }
     }
-    
+
     // Try mdfind as fallback
     let task = Process()
     task.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
     task.arguments = ["kMDItemCFBundleIdentifier == 'com.selbach.hugora'"]
-    
+
     let pipe = Pipe()
     task.standardOutput = pipe
     task.standardError = FileHandle.nullDevice
-    
+
     do {
         try task.run()
         task.waitUntilExit()
-        
+
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         if let output = String(data: data, encoding: .utf8) {
             let paths = output.split(separator: "\n")
@@ -60,7 +60,7 @@ func findHugoraApp() -> URL? {
     } catch {
         fputs("warning: mdfind search failed: \(error.localizedDescription)\n", stderr)
     }
-    
+
     return nil
 }
 
@@ -115,19 +115,20 @@ func openHugora(with folderPath: String?) {
 
 // Handle --help
 if args.contains("-h") || args.contains("--help") {
-    fputs("""
+    fputs(
+        """
         hugora - Hugo blog editor
-        
+
         Usage: hugora [folder]
-        
+
         Arguments:
             folder    Path to a Hugo site folder (optional)
-        
+
         Examples:
             hugora                  # Open Hugora
             hugora ~/blog           # Open Hugora with ~/blog
             hugora .                # Open Hugora with current directory
-        
+
         """, stdout)
     exit(0)
 }

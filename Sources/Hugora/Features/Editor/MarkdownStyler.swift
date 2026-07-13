@@ -33,9 +33,14 @@ struct MarkdownStyler {
     ///   - imageContext: Optional context for resolving image paths.
     /// - Returns: A cache of styled elements for efficient cursor-only updates.
     @discardableResult
-    func applyStyles(to textStorage: NSTextStorage, in visibleRange: NSRange, document: Document, cursorPosition: Int? = nil, imageContext: ImageContext? = nil) -> StylePassCache {
+    func applyStyles(
+        to textStorage: NSTextStorage, in visibleRange: NSRange, document: Document, cursorPosition: Int? = nil,
+        imageContext: ImageContext? = nil
+    ) -> StylePassCache {
         let text = textStorage.string
-        return style(text: text, document: document, textStorage: textStorage, visibleRange: visibleRange, cursorPosition: cursorPosition, imageContext: imageContext)
+        return style(
+            text: text, document: document, textStorage: textStorage, visibleRange: visibleRange,
+            cursorPosition: cursorPosition, imageContext: imageContext)
     }
 
     @discardableResult
@@ -78,8 +83,10 @@ struct MarkdownStyler {
             )
 
             // Add delimiter markers for hiding
-            allMarkers.append(SyntaxMarker(range: fm.openingDelimiterRange, parentRange: fm.range, parentKind: .frontmatter))
-            allMarkers.append(SyntaxMarker(range: fm.closingDelimiterRange, parentRange: fm.range, parentKind: .frontmatter))
+            allMarkers.append(
+                SyntaxMarker(range: fm.openingDelimiterRange, parentRange: fm.range, parentKind: .frontmatter))
+            allMarkers.append(
+                SyntaxMarker(range: fm.closingDelimiterRange, parentRange: fm.range, parentKind: .frontmatter))
         }
 
         var collector = StyleCollector()
@@ -343,7 +350,7 @@ struct MarkdownStyler {
             .foregroundColor: theme.baseColor,
             .backgroundColor: NSColor.clear,
             .underlineStyle: 0,
-            .paragraphStyle: paragraphStyle
+            .paragraphStyle: paragraphStyle,
         ]
         textStorage.setAttributes(baseAttributes, range: clampedRange)
     }
@@ -474,25 +481,34 @@ struct MarkdownStyler {
             }
 
             if cursorInImage {
-                fallbackToMarkdown(imageSpan, range: range, textStorage: textStorage, theme: theme, fontScale: fontScale, lineSpacing: lineSpacing)
+                fallbackToMarkdown(
+                    imageSpan, range: range, textStorage: textStorage, theme: theme, fontScale: fontScale,
+                    lineSpacing: lineSpacing)
                 continue
             }
 
             // Cursor outside: load and display image
             guard let source = imageSpan.source,
-                  let imageURL = imageContext.resolveImagePath(source) else {
-                fallbackToMarkdown(imageSpan, range: range, textStorage: textStorage, theme: theme, fontScale: fontScale, lineSpacing: lineSpacing)
+                let imageURL = imageContext.resolveImagePath(source)
+            else {
+                fallbackToMarkdown(
+                    imageSpan, range: range, textStorage: textStorage, theme: theme, fontScale: fontScale,
+                    lineSpacing: lineSpacing)
                 continue
             }
 
             guard imageURL.isFileURL else {
-                fallbackToMarkdown(imageSpan, range: range, textStorage: textStorage, theme: theme, fontScale: fontScale, lineSpacing: lineSpacing)
+                fallbackToMarkdown(
+                    imageSpan, range: range, textStorage: textStorage, theme: theme, fontScale: fontScale,
+                    lineSpacing: lineSpacing)
                 continue
             }
 
             guard let nsImage = ImageCache.shared.image(for: imageURL) else {
                 AsyncImageLoader.shared.load(imageURL)
-                fallbackToMarkdown(imageSpan, range: range, textStorage: textStorage, theme: theme, fontScale: fontScale, lineSpacing: lineSpacing)
+                fallbackToMarkdown(
+                    imageSpan, range: range, textStorage: textStorage, theme: theme, fontScale: fontScale,
+                    lineSpacing: lineSpacing)
                 continue
             }
 

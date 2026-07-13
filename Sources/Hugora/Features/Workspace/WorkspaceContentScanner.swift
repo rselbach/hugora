@@ -137,12 +137,14 @@ enum WorkspaceContentScanner {
                 do {
                     try handle.close()
                 } catch {
-                    logger.error("Failed to close file handle for \(url.lastPathComponent): \(error.localizedDescription)")
+                    logger.error(
+                        "Failed to close file handle for \(url.lastPathComponent): \(error.localizedDescription)")
                 }
             }
 
             guard let data = try handle.read(upToCount: metadataReadLimit),
-                  !data.isEmpty else {
+                !data.isEmpty
+            else {
                 return ""
             }
 
@@ -155,7 +157,8 @@ enum WorkspaceContentScanner {
 
     private static func needsFullReadForMetadata(window: String, url: URL) -> Bool {
         guard let fileSize = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-              fileSize > metadataReadLimit else {
+            fileSize > metadataReadLimit
+        else {
             return false
         }
 
@@ -184,7 +187,8 @@ enum WorkspaceContentScanner {
                     return false
                 }
                 guard let values = try? entry.resourceValues(forKeys: [.isSymbolicLinkKey]),
-                      values.isSymbolicLink != true else {
+                    values.isSymbolicLink != true
+                else {
                     return false
                 }
                 let resolved = entry.resolvingSymlinksInPath().standardizedFileURL

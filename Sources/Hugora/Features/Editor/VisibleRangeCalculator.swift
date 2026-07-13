@@ -10,8 +10,9 @@ func computeRenderableRange(for textView: NSTextView, padding: Int = 2000) -> NS
     guard fullRange.length > 0 else { return fullRange }
 
     guard let layoutManager = textView.layoutManager,
-          let textContainer = textView.textContainer,
-          let scrollView = textView.enclosingScrollView else {
+        let textContainer = textView.textContainer,
+        let scrollView = textView.enclosingScrollView
+    else {
         return fullRange
     }
 

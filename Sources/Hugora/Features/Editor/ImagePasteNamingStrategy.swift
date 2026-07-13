@@ -19,7 +19,9 @@ enum ImagePasteNamingStrategy: String, CaseIterable, Identifiable, Codable {
     }
 
     static func current() -> ImagePasteNamingStrategy {
-        let raw = UserDefaults.standard.string(forKey: DefaultsKey.imagePasteNamingStrategy) ?? ImagePasteNamingStrategy.timestamp.rawValue
+        let raw =
+            UserDefaults.standard.string(forKey: DefaultsKey.imagePasteNamingStrategy)
+            ?? ImagePasteNamingStrategy.timestamp.rawValue
         return ImagePasteNamingStrategy(rawValue: raw) ?? .timestamp
     }
 }
