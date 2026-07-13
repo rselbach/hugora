@@ -931,6 +931,33 @@ struct WorkspaceStoreTests {
         #expect(store.lastError == .unsafeFileOperation(outsideFile.path))
     }
 
+    // MARK: - openRecent
+
+    @Test("Opening a recent workspace moves it to the front of the list")
+    func openRecentPromotesToFront() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteA = try makeTempHugoSite()
+        defer { try? FileManager.default.removeItem(at: siteA) }
+        let siteB = try makeTempHugoSite()
+        defer { try? FileManager.default.removeItem(at: siteB) }
+
+        store.openFolder(siteA)
+        store.openFolder(siteB)
+        #expect(store.recentWorkspaces.first?.path == siteB.path)
+
+        let refA = try #require(store.recentWorkspaces.first { $0.path == siteA.path })
+        store.openRecent(refA)
+
+        // Bookmark resolution can rewrite paths (e.g. /var -> /private/var),
+        // so compare symlink-resolved paths.
+        let resolved = store.recentWorkspaces.map { URL(fileURLWithPath: $0.path).resolvingSymlinksInPath().path }
+        let wantOrder = [siteA, siteB].map { $0.resolvingSymlinksInPath().path }
+        #expect(resolved == wantOrder)
+        #expect(store.currentFolderURL?.resolvingSymlinksInPath().path == siteA.resolvingSymlinksInPath().path)
+    }
+
     // MARK: - closeWorkspace
 
     @Test("Close workspace resets all state")

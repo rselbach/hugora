@@ -200,14 +200,14 @@ final class WorkspaceStore: ObservableObject {
 
         guard isStale else {
             saveCurrentBookmark(ref.bookmarkData)
+            promoteRecent(ref, resolvedURL: url, bookmarkData: ref.bookmarkData)
             startAccessingFolder(url)
             loadContent(from: url)
             return
         }
 
         if let newData = createBookmark(for: url) {
-            let updatedRef = WorkspaceRef(path: url.path, bookmarkData: newData)
-            updateRecent(updatedRef)
+            promoteRecent(ref, resolvedURL: url, bookmarkData: newData)
             saveCurrentBookmark(newData)
         }
 
@@ -1068,10 +1068,10 @@ final class WorkspaceStore: ObservableObject {
         saveRecentWorkspaces()
     }
 
-    private func updateRecent(_ ref: WorkspaceRef) {
-        if let idx = recentWorkspaces.firstIndex(where: { $0.path == ref.path }) {
-            recentWorkspaces[idx] = ref
-            saveRecentWorkspaces()
-        }
+    /// Moves a reopened workspace to the front of the recents list, dropping
+    /// the stored entry even when bookmark resolution yielded a moved path.
+    private func promoteRecent(_ ref: WorkspaceRef, resolvedURL: URL, bookmarkData: Data) {
+        recentWorkspaces.removeAll { $0.path == ref.path }
+        addToRecent(url: resolvedURL, bookmarkData: bookmarkData)
     }
 }
