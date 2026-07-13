@@ -889,7 +889,7 @@ final class WorkspaceStore: ObservableObject {
 
         let watchedSections = sections.filter { $0.name != "(root)" }
         for section in watchedSections {
-            configureSectionWatcher(section: section, contentDir: contentDir)
+            configureSectionWatchers(sectionName: section.name, sectionURL: section.url, contentDir: contentDir)
         }
     }
 
@@ -916,10 +916,32 @@ final class WorkspaceStore: ObservableObject {
         contentDirectoryWatcher = source
     }
 
-    private func configureSectionWatcher(section: ContentSection, contentDir: URL) {
-        let fd = open(section.url.path, O_EVTONLY)
+    /// Watches a section directory and every nested directory beneath it.
+    /// kqueue directory events only fire for direct children, so each level
+    /// of nesting (content/blog/2024/...) needs its own watcher.
+    private func configureSectionWatchers(sectionName: String, sectionURL: URL, contentDir: URL) {
+        for directory in [sectionURL] + nestedDirectories(under: sectionURL, contentRoot: contentDir) {
+            addSectionDirectoryWatcher(
+                directory: directory,
+                sectionName: sectionName,
+                sectionURL: sectionURL,
+                contentDir: contentDir
+            )
+        }
+    }
+
+    private func addSectionDirectoryWatcher(
+        directory: URL,
+        sectionName: String,
+        sectionURL: URL,
+        contentDir: URL
+    ) {
+        let key = directory.standardizedFileURL.path
+        guard sectionWatchers[key] == nil else { return }
+
+        let fd = open(directory.path, O_EVTONLY)
         guard fd >= 0 else {
-            Self.logger.error("Failed to watch section directory: \(section.url.path)")
+            Self.logger.error("Failed to watch section directory: \(directory.path)")
             return
         }
 
@@ -928,8 +950,6 @@ final class WorkspaceStore: ObservableObject {
             eventMask: [.write, .delete, .rename],
             queue: .main
         )
-        let sectionName = section.name
-        let sectionURL = section.url
         source.setEventHandler { [weak self] in
             self?.scheduleSectionRefresh(sectionName: sectionName, sectionURL: sectionURL, contentDir: contentDir)
         }
@@ -938,7 +958,48 @@ final class WorkspaceStore: ObservableObject {
         }
         source.resume()
 
-        sectionWatchers[sectionName] = source
+        sectionWatchers[key] = source
+    }
+
+    private func nestedDirectories(under sectionURL: URL, contentRoot: URL) -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: sectionURL,
+            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+            options: [.skipsHiddenFiles]
+        ) else { return [] }
+
+        var directories: [URL] = []
+        for case let url as URL in enumerator {
+            let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            if values?.isSymbolicLink == true {
+                enumerator.skipDescendants()
+                continue
+            }
+            guard values?.isDirectory == true else { continue }
+            let resolved = url.resolvingSymlinksInPath().standardizedFileURL
+            guard PathSafety.isSameOrDescendant(resolved, of: contentRoot) else {
+                enumerator.skipDescendants()
+                continue
+            }
+            directories.append(url)
+        }
+        return directories
+    }
+
+    /// Drops and re-registers the watchers for one section's subtree so
+    /// directories created or deleted since the last scan are covered.
+    private func rebuildSectionWatchers(sectionName: String, sectionURL: URL, contentDir: URL) {
+        removeSectionWatchers(under: sectionURL)
+        configureSectionWatchers(sectionName: sectionName, sectionURL: sectionURL, contentDir: contentDir)
+    }
+
+    private func removeSectionWatchers(under sectionURL: URL) {
+        let prefix = sectionURL.standardizedFileURL.path
+        for (key, watcher) in sectionWatchers where key == prefix || key.hasPrefix(prefix + "/") {
+            watcher.setEventHandler {}
+            watcher.cancel()
+            sectionWatchers.removeValue(forKey: key)
+        }
     }
 
     private func scheduleContentReload() {
@@ -964,6 +1025,7 @@ final class WorkspaceStore: ObservableObject {
 
             if !FileManager.default.fileExists(atPath: sectionURL.path) {
                 self.sections.removeAll { $0.name == sectionName }
+                self.removeSectionWatchers(under: sectionURL)
                 return
             }
 
@@ -972,6 +1034,7 @@ final class WorkspaceStore: ObservableObject {
                 sectionName: sectionName,
                 contentRoot: contentDir
             )
+            self.rebuildSectionWatchers(sectionName: sectionName, sectionURL: sectionURL, contentDir: contentDir)
 
             if let idx = self.sections.firstIndex(where: { $0.name == sectionName }) {
                 self.sections[idx].items = refreshedItems

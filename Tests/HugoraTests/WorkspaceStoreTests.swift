@@ -1103,6 +1103,35 @@ struct WorkspaceStoreTests {
         #expect(section?.items.contains(where: { $0.slug == "abed-nadir" }) == true)
     }
 
+    @Test("External changes in nested directories update sidebar")
+    func externalNestedChangesAutoRefresh() async throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+
+        let siteURL = try makeTempHugoSite(sections: ["blog"])
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+
+        // Nested year directory that exists at open time.
+        let yearDir = siteURL.appendingPathComponent("content/blog/2024")
+        try FileManager.default.createDirectory(at: yearDir, withIntermediateDirectories: true)
+
+        store.openFolder(siteURL)
+        #expect(store.sections.first(where: { $0.name == "blog" })?.items.isEmpty == true)
+
+        let newFile = yearDir.appendingPathComponent("nicolas-cage.md")
+        try """
+        ---
+        title: "Nicolas Cage: Good or Bad?"
+        date: 2024-10-01
+        ---
+        """.write(to: newFile, atomically: true, encoding: .utf8)
+
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        let section = store.sections.first { $0.name == "blog" }
+        #expect(section?.items.contains(where: { $0.slug == "nicolas-cage" }) == true)
+    }
+
     // MARK: - openFile
 
     @Test("openFile sets selectedFileURL")
