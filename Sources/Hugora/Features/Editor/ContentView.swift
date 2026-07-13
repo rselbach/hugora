@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var workspaceStore: WorkspaceStore
     @EnvironmentObject private var editorState: EditorState
+    @EnvironmentObject private var hugoServer: HugoServerController
     @StateObject private var viewModel = EditorViewModel()
     @State private var showSidebar = true
 
@@ -34,6 +35,8 @@ struct ContentView: View {
                         .help("Unsaved changes")
                         .accessibilityLabel("Document has unsaved changes")
                 }
+
+                previewServerIndicator
 
                 Button {
                     withAnimation { showSidebar.toggle() }
@@ -78,7 +81,44 @@ struct ContentView: View {
             DispatchQueue.main.async { syncEditorContext() }
         }
         .onReceive(workspaceStore.$currentFolderURL) { _ in
-            DispatchQueue.main.async { syncEditorContext() }
+            DispatchQueue.main.async {
+                syncEditorContext()
+                stopPreviewIfWorkspaceChanged()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var previewServerIndicator: some View {
+        switch hugoServer.state {
+        case .stopped:
+            EmptyView()
+        case .starting:
+            ProgressView()
+                .controlSize(.small)
+                .help("Preview server starting…")
+                .accessibilityLabel("Preview server starting")
+        case .running:
+            Button {
+                hugoServer.openInBrowser()
+            } label: {
+                Image(systemName: "globe")
+                    .foregroundStyle(.green)
+            }
+            .help("Preview server running — open in browser")
+            .accessibilityLabel("Open preview in browser")
+        case .failed(let message):
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .help("Preview server failed: \(message)")
+                .accessibilityLabel("Preview server failed")
+        }
+    }
+
+    private func stopPreviewIfWorkspaceChanged() {
+        guard let servedSite = hugoServer.siteURL else { return }
+        if workspaceStore.currentFolderURL?.standardizedFileURL != servedSite.standardizedFileURL {
+            hugoServer.stop()
         }
     }
 
@@ -137,4 +177,5 @@ struct ContentView: View {
     ContentView()
         .environmentObject(WorkspaceStore())
         .environmentObject(EditorState())
+        .environmentObject(HugoServerController())
 }

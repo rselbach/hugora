@@ -140,6 +140,38 @@ struct AppCommands: Commands {
     }
 }
 
+struct SiteCommands: Commands {
+    @ObservedObject var workspaceStore: WorkspaceStore
+    @ObservedObject var hugoServer: HugoServerController
+
+    var body: some Commands {
+        CommandMenu("Site") {
+            if hugoServer.isRunning {
+                Button("Stop Preview Server") {
+                    hugoServer.stop()
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+            } else {
+                Button("Start Preview Server") {
+                    guard let siteURL = workspaceStore.currentFolderURL else { return }
+                    hugoServer.start(siteURL: siteURL)
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
+                .disabled(workspaceStore.currentFolderURL == nil)
+            }
+
+            Button("Open Preview in Browser") {
+                hugoServer.openInBrowser()
+            }
+            .keyboardShortcut("b", modifiers: [.command, .shift])
+            .disabled({
+                guard case .running = hugoServer.state else { return true }
+                return false
+            }())
+        }
+    }
+}
+
 struct WorkspaceCommands: Commands {
     @ObservedObject var workspaceStore: WorkspaceStore
 

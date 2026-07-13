@@ -20,15 +20,18 @@ struct HugoraApp: App {
     }
     @StateObject private var workspaceStore = WorkspaceStore()
     @StateObject private var editorState = EditorState()
+    @StateObject private var hugoServer = HugoServerController()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(workspaceStore)
                 .environmentObject(editorState)
+                .environmentObject(hugoServer)
                 .onAppear {
                     appDelegate.editorState = editorState
                     appDelegate.workspaceStore = workspaceStore
+                    appDelegate.hugoServer = hugoServer
                     appDelegate.handleLaunchArguments()
                 }
                 // hugora://open?path=/path/to/site — the CLI's handoff
@@ -46,6 +49,7 @@ struct HugoraApp: App {
         .commands {
             AppCommands(editorState: editorState, updater: updaterController.updater)
             WorkspaceCommands(workspaceStore: workspaceStore)
+            SiteCommands(workspaceStore: workspaceStore, hugoServer: hugoServer)
         }
 
         Settings {
@@ -58,6 +62,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     static var shared: AppDelegate?
     var editorState: EditorState?
     var workspaceStore: WorkspaceStore?
+    var hugoServer: HugoServerController?
     private var didHandleLaunchArgs = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -100,6 +105,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // A failed save leaves the document dirty; stay open so the error
         // alert is visible instead of quitting past it.
         return editorState.isDirty ? .terminateCancel : .terminateNow
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Kill the preview server: an orphaned hugo process would keep
+        // serving (and holding the port) after the app quits.
+        MainActor.assumeIsolated {
+            hugoServer?.stop()
+        }
     }
 
     func handleLaunchArguments() {
