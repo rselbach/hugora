@@ -49,7 +49,7 @@ struct HugoraApp: App {
         .commands {
             AppCommands(editorState: editorState, updater: updaterController.updater)
             WorkspaceCommands(workspaceStore: workspaceStore)
-            SiteCommands(workspaceStore: workspaceStore, hugoServer: hugoServer)
+            SiteCommands(workspaceStore: workspaceStore, hugoServer: hugoServer, editorState: editorState)
             FormatCommands(workspaceStore: workspaceStore)
             ViewCommands()
         }

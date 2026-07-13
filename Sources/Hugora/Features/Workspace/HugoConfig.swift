@@ -12,12 +12,25 @@ struct HugoConfig {
     let archetypeDir: String
     let title: String?
     let themes: [String]
+    let baseURL: String?
+    /// Per-section permalink patterns (permalinks.posts or
+    /// permalinks.page.posts in site config).
+    let permalinks: [String: String]
 
-    init(contentDir: String, archetypeDir: String, title: String?, themes: [String] = []) {
+    init(
+        contentDir: String,
+        archetypeDir: String,
+        title: String?,
+        themes: [String] = [],
+        baseURL: String? = nil,
+        permalinks: [String: String] = [:]
+    ) {
         self.contentDir = contentDir
         self.archetypeDir = archetypeDir
         self.title = title
         self.themes = themes
+        self.baseURL = baseURL
+        self.permalinks = permalinks
     }
 
     static let `default` = HugoConfig(contentDir: "content", archetypeDir: "archetypes", title: nil)
@@ -127,8 +140,38 @@ struct HugoConfig {
             contentDir: contentDir,
             archetypeDir: archetypeDir,
             title: title,
-            themes: extractThemes(from: object)
+            themes: extractThemes(from: object),
+            baseURL: extractString("baseURL", from: object),
+            permalinks: extractPermalinks(from: object)
         )
+    }
+
+    /// Hugo accepts permalinks as a flat section→pattern map or nested
+    /// under page/section kinds; pages are what individual posts use.
+    private static func extractPermalinks(from object: [String: Any]) -> [String: String] {
+        guard
+            let entry = object.first(where: { $0.key.caseInsensitiveCompare("permalinks") == .orderedSame }),
+            let raw = entry.value as? [String: Any]
+        else {
+            return [:]
+        }
+
+        var patterns: [String: String] = [:]
+        for (key, value) in raw {
+            switch value {
+            case let pattern as String:
+                patterns[key] = pattern
+            case let nested as [String: Any] where key.caseInsensitiveCompare("page") == .orderedSame:
+                for (section, pattern) in nested {
+                    if let pattern = pattern as? String {
+                        patterns[section] = pattern
+                    }
+                }
+            default:
+                break
+            }
+        }
+        return patterns
     }
 
     private static func extractString(_ key: String, from object: [String: Any]) -> String? {

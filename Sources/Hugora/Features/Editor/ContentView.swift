@@ -76,6 +76,7 @@ struct ContentView: View {
             Text(editorState.lastError?.localizedDescription ?? "An unknown editor error occurred.")
         }
         .navigationTitle(editorState.title)
+        .navigationSubtitle(permalinkDisplay ?? "")
         .onAppear {
             workspaceStore.onOpenFile = { [weak editorState, weak workspaceStore] url in
                 guard let editorState, let workspaceStore else { return }
@@ -118,6 +119,14 @@ struct ContentView: View {
                 onCancel: { showPostLinkPicker = false }
             )
         }
+    }
+
+    /// The URL this post will publish at, shown as the window subtitle.
+    private var permalinkDisplay: String? {
+        guard let item = editorState.currentItem, let config = workspaceStore.hugoConfig else {
+            return nil
+        }
+        return PermalinkResolver.permalink(content: editorState.content, item: item, config: config)
     }
 
     private func insertPostLink(to item: ContentItem) {

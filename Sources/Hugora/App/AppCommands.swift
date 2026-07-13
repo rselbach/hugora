@@ -231,6 +231,14 @@ struct FormatCommands: Commands {
 struct SiteCommands: Commands {
     @ObservedObject var workspaceStore: WorkspaceStore
     @ObservedObject var hugoServer: HugoServerController
+    @ObservedObject var editorState: EditorState
+
+    private var currentPermalink: String? {
+        guard let item = editorState.currentItem, let config = workspaceStore.hugoConfig else {
+            return nil
+        }
+        return PermalinkResolver.permalink(content: editorState.content, item: item, config: config)
+    }
 
     var body: some Commands {
         CommandMenu("Site") {
@@ -257,6 +265,21 @@ struct SiteCommands: Commands {
                     guard case .running = hugoServer.state else { return true }
                     return false
                 }())
+
+            Divider()
+
+            Button("Copy Post URL") {
+                guard let permalink = currentPermalink else { return }
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(permalink, forType: .string)
+            }
+            .disabled(currentPermalink == nil)
+
+            Button("Open Post on Site") {
+                guard let permalink = currentPermalink, let url = URL(string: permalink) else { return }
+                NSWorkspace.shared.open(url)
+            }
+            .disabled(currentPermalink == nil)
         }
     }
 }
