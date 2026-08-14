@@ -20,6 +20,7 @@ final class HugoServerController: ObservableObject {
         category: "HugoServerController"
     )
     private static let maxBufferedOutput = 16 * 1024
+    private static let startupTimeout: UInt64 = 10_000_000_000
 
     @Published private(set) var state: State = .stopped
 
@@ -37,6 +38,7 @@ final class HugoServerController: ObservableObject {
     private var process: Process?
     private var outputBuffer = ""
     private var openBrowserWhenReady = false
+    private var startupTimeoutTask: Task<Void, Never>?
 
     /// Starts the preview server for `siteURL`, replacing any running
     /// instance. When `openBrowser` is set, the site opens in the default
@@ -97,11 +99,29 @@ final class HugoServerController: ObservableObject {
         self.outputBuffer = ""
         self.openBrowserWhenReady = openBrowser
         state = .starting
+        startupTimeoutTask = Task { @MainActor [weak self, weak process] in
+            do {
+                try await Task.sleep(nanoseconds: Self.startupTimeout)
+            } catch {
+                return
+            }
+            guard let self, let process, process === self.process, case .starting = self.state else { return }
+            self.fail(
+                process: process,
+                message: "Hugo started but did not report a preview URL within 10 seconds."
+            )
+        }
     }
 
     /// Stops the preview server if it is running.
     func stop() {
-        guard let process else { return }
+        startupTimeoutTask?.cancel()
+        startupTimeoutTask = nil
+        guard let process else {
+            siteURL = nil
+            state = .stopped
+            return
+        }
         // Clearing the reference first makes the termination handler treat
         // this as a deliberate stop rather than a crash.
         self.process = nil
@@ -131,6 +151,8 @@ final class HugoServerController: ObservableObject {
         guard let url = Self.serverURL(in: outputBuffer) else { return }
 
         state = .running(url)
+        startupTimeoutTask?.cancel()
+        startupTimeoutTask = nil
         if openBrowserWhenReady {
             openBrowserWhenReady = false
             NSWorkspace.shared.open(url)
@@ -139,6 +161,8 @@ final class HugoServerController: ObservableObject {
 
     private func handleTermination(of finished: Process) {
         guard finished === process else { return }
+        startupTimeoutTask?.cancel()
+        startupTimeoutTask = nil
         process = nil
         siteURL = nil
 
@@ -150,6 +174,19 @@ final class HugoServerController: ObservableObject {
             .joined(separator: "\n")
         Self.logger.error("hugo server exited (status \(finished.terminationStatus)): \(tail)")
         state = .failed(tail.isEmpty ? "hugo server exited unexpectedly." : tail)
+    }
+
+    private func fail(process: Process, message: String) {
+        startupTimeoutTask?.cancel()
+        startupTimeoutTask = nil
+        self.process = nil
+        siteURL = nil
+        process.terminationHandler = nil
+        if process.isRunning {
+            process.terminate()
+        }
+        Self.logger.error("Hugo preview failed: \(message)")
+        state = .failed(message)
     }
 
     /// Extracts the serving URL from hugo's startup output, e.g.

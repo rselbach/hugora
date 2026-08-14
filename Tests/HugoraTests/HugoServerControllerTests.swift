@@ -87,7 +87,9 @@ struct HugoServerControllerTests {
         let controller = HugoServerController()
         controller.start(siteURL: URL(fileURLWithPath: "/tmp"), openBrowser: false)
         if case .failed = controller.state {
-            // expected
+            controller.stop()
+            #expect(controller.state == .stopped)
+            #expect(controller.siteURL == nil)
         } else {
             Issue.record("Expected .failed state, got \(controller.state)")
         }

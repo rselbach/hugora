@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var showSidebar = true
     @State private var showPostLinkPicker = false
     @State private var postLinkTarget: EditorTextView?
+    @State private var previewErrorMessage: String?
     @AppStorage(DefaultsKey.showFrontmatterInspector) private var showInspector = false
 
     var body: some View {
@@ -74,6 +75,24 @@ struct ContentView: View {
             }
         } message: {
             Text(editorState.lastError?.localizedDescription ?? "An unknown editor error occurred.")
+        }
+        .alert(
+            "Preview Server Failed",
+            isPresented: Binding(
+                get: { previewErrorMessage != nil },
+                set: { if !$0 { previewErrorMessage = nil } }
+            )
+        ) {
+            Button("Retry") {
+                previewErrorMessage = nil
+                guard let siteURL = workspaceStore.currentFolderURL else { return }
+                hugoServer.start(siteURL: siteURL)
+            }
+            Button("Cancel", role: .cancel) {
+                previewErrorMessage = nil
+            }
+        } message: {
+            Text(previewErrorMessage ?? "Hugo preview failed.")
         }
         .navigationTitle(editorState.title)
         .navigationSubtitle(permalinkDisplay ?? "")
@@ -182,10 +201,14 @@ struct ContentView: View {
             .help("Preview server running — open in browser")
             .accessibilityLabel("Open preview in browser")
         case .failed(let message):
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .help("Preview server failed: \(message)")
-                .accessibilityLabel("Preview server failed")
+            Button {
+                previewErrorMessage = message
+            } label: {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+            }
+            .help("Show preview server error")
+            .accessibilityLabel("Show preview server error")
         }
     }
 
