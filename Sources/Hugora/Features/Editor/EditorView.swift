@@ -24,6 +24,7 @@ struct EditorView: NSViewRepresentable {
         let textView = EditorTextView()
         textView.delegate = context.coordinator
         textView.string = text
+        viewModel.setText(text)
         textView.allowsUndo = true
         textView.isRichText = false
         textView.usesFontPanel = false
