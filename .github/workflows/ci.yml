@@ -32,4 +32,4 @@ jobs:
         run: swift test --build-path .build-tests
 
       - name: Lint
-        run: just lint
+        run: swift-format lint -r Sources/ Tests/
