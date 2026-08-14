@@ -7,6 +7,7 @@ enum EditorStateError: LocalizedError, Equatable {
     case utf8EncodingFailed
     case renameTargetAlreadyExists(String)
     case unsafeFileOperation(String)
+    case externallyModified(String)
 
     var errorDescription: String? {
         switch self {
@@ -16,6 +17,8 @@ enum EditorStateError: LocalizedError, Equatable {
             "Cannot rename because a file already exists at \(path)."
         case .unsafeFileOperation(let path):
             "Refusing to modify a file outside the workspace content directory: \(path)"
+        case .externallyModified(let path):
+            "The file changed on disk after it was opened. Reload it before saving: \(path)"
         }
     }
 }
@@ -79,6 +82,7 @@ final class EditorState: ObservableObject {
         return f
     }()
     private var entityMappings: [HTMLEntityMapping] = []
+    private var loadedFileData: Data?
     private var openRevision: UInt64 = 0
     private var autoSaveTask: Task<Void, Never>?
     var contentRootURL: URL?
@@ -88,7 +92,8 @@ final class EditorState: ObservableObject {
 
     /// The display title of the current item, or placeholder if none selected.
     var title: String {
-        currentItem?.title ?? "No Document Selected"
+        guard currentItem != nil else { return "No Document Selected" }
+        return FrontmatterParser.value(forKey: "title", in: content) ?? currentItem?.title ?? "Untitled"
     }
 
     /// Initializes the editor state and restores the previous session if available.
@@ -101,7 +106,7 @@ final class EditorState: ObservableObject {
     /// - Parameter item: The content item to open.
     /// - Note: Saves the current item if dirty before opening the new one.
     func openItem(_ item: ContentItem) {
-        saveCurrentIfDirty()
+        guard saveCurrentIfDirty() else { return }
         autoSaveTask?.cancel()
         autoSaveTask = nil
         openRevision &+= 1
@@ -129,6 +134,7 @@ final class EditorState: ObservableObject {
                 self.currentItem = item
                 self.content = decoded.decoded
                 self.entityMappings = decoded.mappings
+                self.loadedFileData = rawContent.data(using: .utf8)
                 self.isDirty = false
                 self.isLoading = false
                 self.cursorPosition = 0
@@ -149,6 +155,7 @@ final class EditorState: ObservableObject {
     ///
     /// - Parameter newContent: The new content string.
     func updateContent(_ newContent: String) {
+        guard !isLoading else { return }
         guard newContent != content else { return }
         openRevision &+= 1
         if isLoading {
@@ -178,8 +185,9 @@ final class EditorState: ObservableObject {
     /// session state.
     ///
     /// - Note: No-op if no item is loaded or content is not dirty.
-    func save() {
-        guard let item = currentItem, isDirty else { return }
+    @discardableResult
+    func save() -> Bool {
+        guard let item = currentItem, isDirty else { return true }
         autoSaveTask?.cancel()
         autoSaveTask = nil
         isLoading = true
@@ -192,6 +200,7 @@ final class EditorState: ObservableObject {
                 content = aliased
             }
             let encodedContent = HTMLEntityCodec.encode(content, mappings: entityMappings)
+            try verifyFileHasNotChanged(item.url)
             let newURL = try saveWithRename(
                 item: item,
                 displayContent: content,
@@ -201,6 +210,7 @@ final class EditorState: ObservableObject {
                 currentItem = ContentItem(url: newURL, format: item.format, section: item.section)
                 saveSession()
             }
+            loadedFileData = encodedContent.data(using: .utf8)
             isDirty = false
             isLoading = false
             justSaved = true
@@ -208,10 +218,12 @@ final class EditorState: ObservableObject {
                 do { try await Task.sleep(nanoseconds: Timing.justSavedDuration) } catch { return }  // task cancelled
                 self.justSaved = false
             }
+            return true
         } catch {
             Self.logger.error("Failed to save file \(item.url.lastPathComponent): \(error.localizedDescription)")
             isLoading = false
             lastError = error
+            return false
         }
     }
 
@@ -226,7 +238,7 @@ final class EditorState: ObservableObject {
 
         guard autoRenameOnSave else {
             try validateWritableURL(item.url)
-            try saveData.write(to: item.url)
+            try saveData.write(to: item.url, options: .atomic)
             return item.url
         }
 
@@ -249,6 +261,7 @@ final class EditorState: ObservableObject {
                 if fm.fileExists(atPath: newFolder.path) {
                     throw EditorStateError.renameTargetAlreadyExists(newFolder.path)
                 }
+                try saveData.write(to: item.url, options: .atomic)
                 try fm.moveItem(at: currentFolder, to: newFolder)
                 // Keep the index file exactly as it was named
                 // (index.markdown, index.en.md, ...); only the folder moved.
@@ -270,13 +283,29 @@ final class EditorState: ObservableObject {
                 if fm.fileExists(atPath: newFile.path) {
                     throw EditorStateError.renameTargetAlreadyExists(newFile.path)
                 }
+                try saveData.write(to: item.url, options: .atomic)
                 try fm.moveItem(at: item.url, to: newFile)
                 finalURL = newFile
             }
         }
 
-        try saveData.write(to: finalURL)
+        if finalURL == item.url {
+            try saveData.write(to: finalURL, options: .atomic)
+        }
         return finalURL
+    }
+
+    private func verifyFileHasNotChanged(_ url: URL) throws {
+        guard let loadedFileData else { return }
+        let currentData: Data
+        do {
+            currentData = try Data(contentsOf: url)
+        } catch {
+            throw EditorStateError.externallyModified(url.path)
+        }
+        guard currentData == loadedFileData else {
+            throw EditorStateError.externallyModified(url.path)
+        }
     }
 
     private func expectedRenameName(item: ContentItem, displayContent: String) -> String {
@@ -432,10 +461,10 @@ final class EditorState: ObservableObject {
     /// Saves the current item if it has unsaved changes.
     ///
     /// Convenience method for saving before opening another file or closing.
-    func saveCurrentIfDirty() {
-        if isDirty {
-            save()
-        }
+    @discardableResult
+    func saveCurrentIfDirty() -> Bool {
+        guard isDirty else { return true }
+        return save()
     }
 
     // MARK: - Session Persistence
@@ -476,6 +505,7 @@ final class EditorState: ObservableObject {
                 self.currentItem = ContentItem(url: url, format: format, section: section, content: rawContent)
                 self.content = decoded.decoded
                 self.entityMappings = decoded.mappings
+                self.loadedFileData = rawContent.data(using: .utf8)
                 self.isDirty = false
             } catch {
                 guard self.openRevision == capturedRevision else { return }

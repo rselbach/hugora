@@ -24,6 +24,14 @@ struct EditorStateTests {
         try await body()
     }
 
+    @MainActor
+    private func waitForLoad(_ state: EditorState) async throws {
+        for _ in 0..<100 where state.isLoading {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        #expect(!state.isLoading)
+    }
+
     @Test("Auto-rename disabled keeps original path")
     @MainActor
     func autoRenameDisabledKeepsOriginalPath() async throws {
@@ -49,6 +57,7 @@ struct EditorStateTests {
             let item = ContentItem(url: fileURL, format: .file, section: "blog")
             let state = EditorState()
             state.openItem(item)
+            try await waitForLoad(state)
 
             let updatedContent = """
                 ---
@@ -93,6 +102,7 @@ struct EditorStateTests {
             let item = ContentItem(url: fileURL, format: .file, section: "blog")
             let state = EditorState()
             state.openItem(item)
+            try await waitForLoad(state)
 
             let updatedContent = """
                 ---
@@ -134,6 +144,7 @@ struct EditorStateTests {
 
             let state = EditorState()
             state.openItem(ContentItem(url: fileURL, format: .file, section: "blog"))
+            try await waitForLoad(state)
             state.updateContent(
                 """
                 ---
@@ -160,6 +171,7 @@ struct EditorStateTests {
 
             let bundleState = EditorState()
             bundleState.openItem(ContentItem(url: indexURL, format: .bundle, section: "blog"))
+            try await waitForLoad(bundleState)
             bundleState.updateContent(
                 """
                 ---
@@ -202,6 +214,7 @@ struct EditorStateTests {
             let item = ContentItem(url: fileURL, format: .file, section: "blog")
             let state = EditorState()
             state.openItem(item)
+            try await waitForLoad(state)
 
             state.updateContent(
                 """
@@ -249,6 +262,7 @@ struct EditorStateTests {
                 baseURL: "https://greendale.edu"
             )
             state.openItem(ContentItem(url: fileURL, format: .file, section: "posts"))
+            try await waitForLoad(state)
             state.updateContent(
                 """
                 ---
@@ -298,6 +312,7 @@ struct EditorStateTests {
                 baseURL: "https://greendale.edu"
             )
             state.openItem(ContentItem(url: fileURL, format: .file, section: "posts"))
+            try await waitForLoad(state)
             state.updateContent(
                 """
                 ---
@@ -347,6 +362,7 @@ struct EditorStateTests {
 
             let state = EditorState()
             state.openItem(ContentItem(url: originalURL, format: .file, section: "blog"))
+            try await waitForLoad(state)
             state.updateContent(
                 """
                 ---
@@ -394,6 +410,7 @@ struct EditorStateTests {
             let state = EditorState()
             state.contentRootURL = tempDir.appendingPathComponent("content")
             state.openItem(ContentItem(url: originalURL, format: .file, section: "posts"))
+            try await waitForLoad(state)
             state.updateContent(
                 """
                 ---
@@ -484,6 +501,7 @@ struct EditorStateTests {
 
             let state = EditorState()
             state.openItem(ContentItem(url: fileURL, format: .file, section: "blog"))
+            try await waitForLoad(state)
             state.updateContent("new")
 
             try await Task.sleep(nanoseconds: 1_200_000_000)
@@ -511,6 +529,7 @@ struct EditorStateTests {
 
             let state = EditorState()
             state.openItem(ContentItem(url: fileURL, format: .file, section: "blog"))
+            try await waitForLoad(state)
             state.updateContent("new")
 
             try await Task.sleep(nanoseconds: 1_200_000_000)
@@ -518,6 +537,66 @@ struct EditorStateTests {
 
             #expect(stored == "old")
             #expect(state.isDirty == true)
+        }
+    }
+
+    @Test("Failed save prevents navigation and preserves the buffer")
+    @MainActor
+    func failedSavePreventsNavigation() async throws {
+        try await withCleanDefaults {
+            UserDefaults.standard.set(false, forKey: "autoSaveEnabled")
+            UserDefaults.standard.set(true, forKey: "autoRenameOnSave")
+
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempDir) }
+
+            let firstURL = tempDir.appendingPathComponent("2024-01-01-first.md")
+            let secondURL = tempDir.appendingPathComponent("second.md")
+            try "---\ntitle: First\ndate: 2024-01-01\n---\nOld".write(
+                to: firstURL, atomically: true, encoding: .utf8)
+            try "Second".write(to: secondURL, atomically: true, encoding: .utf8)
+            let collisionURL = tempDir.appendingPathComponent("2024-01-01-new-title.md")
+            try "Collision".write(to: collisionURL, atomically: true, encoding: .utf8)
+
+            let state = EditorState()
+            state.openItem(ContentItem(url: firstURL, format: .file, section: "blog"))
+            try await waitForLoad(state)
+            let unsaved = "---\ntitle: New Title\ndate: 2024-01-01\n---\nUnsaved"
+            state.updateContent(unsaved)
+
+            state.openItem(ContentItem(url: secondURL, format: .file, section: "blog"))
+
+            #expect(state.currentItem?.url == firstURL)
+            #expect(state.content == unsaved)
+            #expect(state.isDirty)
+            #expect(state.lastError != nil)
+        }
+    }
+
+    @Test("External file changes are not overwritten")
+    @MainActor
+    func externalChangesAreNotOverwritten() async throws {
+        try await withCleanDefaults {
+            UserDefaults.standard.set(false, forKey: "autoSaveEnabled")
+            UserDefaults.standard.set(false, forKey: "autoRenameOnSave")
+
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempDir) }
+            let fileURL = tempDir.appendingPathComponent("post.md")
+            try "Original".write(to: fileURL, atomically: true, encoding: .utf8)
+
+            let state = EditorState()
+            state.openItem(ContentItem(url: fileURL, format: .file, section: "blog"))
+            try await waitForLoad(state)
+            state.updateContent("Hugora edit")
+            try "External edit".write(to: fileURL, atomically: true, encoding: .utf8)
+
+            #expect(!state.save())
+            #expect(try String(contentsOf: fileURL, encoding: .utf8) == "External edit")
+            #expect(state.isDirty)
+            #expect(state.lastError as? EditorStateError == .externallyModified(fileURL.path))
         }
     }
 }

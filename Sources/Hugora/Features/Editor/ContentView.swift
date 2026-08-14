@@ -189,7 +189,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private var editorPane: some View {
-        if editorState.currentItem != nil {
+        if editorState.currentItem != nil, !editorState.isLoading {
             EditorView(
                 text: contentBinding,
                 viewModel: viewModel,
@@ -199,6 +199,9 @@ struct ContentView: View {
                 onScrollChange: { editorState.scrollPosition = $0 }
             )
             .frame(minWidth: 400)
+        } else if editorState.isLoading {
+            ProgressView("Loading document…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             emptyState
         }
