@@ -4,9 +4,16 @@ import SwiftUI
 /// values through FrontmatterParser and writes them back through
 /// FrontmatterRewriter, so the document text stays the source of truth.
 struct FrontmatterInspectorView: View {
+    private enum EditableField: Hashable {
+        case title
+        case slug
+        case description
+    }
+
     @EnvironmentObject private var workspaceStore: WorkspaceStore
     @EnvironmentObject private var editorState: EditorState
 
+    @FocusState private var focusedField: EditableField?
     @State private var title = ""
     @State private var slug = ""
     @State private var postDescription = ""
@@ -20,6 +27,9 @@ struct FrontmatterInspectorView: View {
     /// Guards value-change handlers while state is being loaded from the
     /// document, so reloads don't echo back as edits.
     @State private var isReloading = false
+    /// Text fields keep local drafts while they are being edited. A draft is
+    /// cleared only after it has been written back to the document.
+    @State private var dirtyFields: Set<EditableField> = []
 
     private static let isoLocalFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
@@ -51,16 +61,24 @@ struct FrontmatterInspectorView: View {
         .onReceive(editorState.$content) { _ in
             DispatchQueue.main.async { reload() }
         }
+        .onChange(of: focusedField) { oldField, _ in
+            if let oldField {
+                commitPendingEdit(oldField)
+                reload()
+            }
+        }
     }
 
     private var inspectorForm: some View {
         Form {
             Section("Post") {
-                TextField("Title", text: $title)
-                    .onSubmit { commit("title", .string(title)) }
+                TextField("Title", text: titleBinding)
+                    .focused($focusedField, equals: .title)
+                    .onSubmit { commitPendingEdit(.title) }
 
-                TextField("Slug", text: $slug)
-                    .onSubmit { commitSlug() }
+                TextField("Slug", text: slugBinding)
+                    .focused($focusedField, equals: .slug)
+                    .onSubmit { commitPendingEdit(.slug) }
 
                 Toggle("Draft", isOn: $isDraft)
                     .onChange(of: isDraft) { _, newValue in
@@ -78,9 +96,10 @@ struct FrontmatterInspectorView: View {
             }
 
             Section("Description") {
-                TextField("Meta description", text: $postDescription, axis: .vertical)
+                TextField("Meta description", text: descriptionBinding, axis: .vertical)
                     .lineLimit(2...5)
-                    .onSubmit { commitDescription() }
+                    .focused($focusedField, equals: .description)
+                    .onSubmit { commitPendingEdit(.description) }
 
                 Text("\(postDescription.count) characters · ≤\(Self.descriptionTarget) recommended")
                     .font(.caption)
@@ -104,6 +123,37 @@ struct FrontmatterInspectorView: View {
             )
         }
         .formStyle(.grouped)
+        .onDisappear(perform: commitPendingEdits)
+    }
+
+    private var titleBinding: Binding<String> {
+        Binding(
+            get: { title },
+            set: {
+                title = $0
+                dirtyFields.insert(.title)
+            }
+        )
+    }
+
+    private var slugBinding: Binding<String> {
+        Binding(
+            get: { slug },
+            set: {
+                slug = $0
+                dirtyFields.insert(.slug)
+            }
+        )
+    }
+
+    private var descriptionBinding: Binding<String> {
+        Binding(
+            get: { postDescription },
+            set: {
+                postDescription = $0
+                dirtyFields.insert(.description)
+            }
+        )
     }
 
     @ViewBuilder
@@ -174,36 +224,98 @@ struct FrontmatterInspectorView: View {
     private func setTerms(_ terms: [String], key: String, binding: Binding<[String]>) {
         binding.wrappedValue = terms
         if terms.isEmpty {
-            guard let updated = FrontmatterRewriter.remove(key, in: editorState.content) else { return }
-            editorState.updateContent(updated)
+            remove(key)
         } else {
             commit(key, .stringArray(terms))
         }
     }
 
-    private func commitSlug() {
+    private func commitPendingEdits() {
+        for field in Array(dirtyFields) {
+            commitPendingEdit(field)
+        }
+    }
+
+    private func commitPendingEdit(_ field: EditableField) {
+        guard dirtyFields.contains(field) else { return }
+
+        let didCommit: Bool
+        switch field {
+        case .title:
+            didCommit = commit("title", .string(title))
+        case .slug:
+            didCommit = commitSlug()
+        case .description:
+            didCommit = commitDescription()
+        }
+
+        if didCommit {
+            dirtyFields.remove(field)
+        }
+    }
+
+    private func commitSlug() -> Bool {
         let trimmed = slug.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            guard let updated = FrontmatterRewriter.remove("slug", in: editorState.content) else { return }
-            editorState.updateContent(updated)
-        } else {
-            commit("slug", .string(trimmed))
+            let didRemove = remove("slug")
+            if didRemove {
+                slug = ""
+            }
+            return didRemove
         }
+        let didCommit = commit("slug", .string(trimmed))
+        if didCommit {
+            slug = trimmed
+        }
+        return didCommit
     }
 
-    private func commitDescription() {
+    private func commitDescription() -> Bool {
         let trimmed = postDescription.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            guard let updated = FrontmatterRewriter.remove("description", in: editorState.content) else { return }
-            editorState.updateContent(updated)
-        } else {
-            commit("description", .string(trimmed))
+            let didRemove = remove("description")
+            if didRemove {
+                postDescription = ""
+            }
+            return didRemove
         }
+        let didCommit = commit("description", .string(trimmed))
+        if didCommit {
+            postDescription = trimmed
+        }
+        return didCommit
     }
 
-    private func commit(_ key: String, _ value: FrontmatterValue) {
-        guard let updated = FrontmatterRewriter.set(key, to: value, in: editorState.content) else { return }
+    @discardableResult
+    private func commit(_ key: String, _ value: FrontmatterValue) -> Bool {
+        guard let updated = FrontmatterRewriter.set(key, to: value, in: editorState.content) else {
+            reportRewriteFailure(for: key)
+            return false
+        }
         editorState.updateContent(updated)
+        return confirmRewrite(updated, key: key)
+    }
+
+    @discardableResult
+    private func remove(_ key: String) -> Bool {
+        guard let updated = FrontmatterRewriter.remove(key, in: editorState.content) else {
+            reportRewriteFailure(for: key)
+            return false
+        }
+        editorState.updateContent(updated)
+        return confirmRewrite(updated, key: key)
+    }
+
+    private func confirmRewrite(_ updated: String, key: String) -> Bool {
+        guard editorState.content == updated else {
+            reportRewriteFailure(for: key)
+            return false
+        }
+        return true
+    }
+
+    private func reportRewriteFailure(for key: String) {
+        editorState.lastError = FrontmatterInspectorError.rewriteFailed(key)
     }
 
     private func reload() {
@@ -211,9 +323,15 @@ struct FrontmatterInspectorView: View {
         defer { isReloading = false }
 
         let content = editorState.content
-        title = FrontmatterParser.value(forKey: "title", in: content) ?? ""
-        slug = FrontmatterParser.value(forKey: "slug", in: content) ?? ""
-        postDescription = FrontmatterParser.value(forKey: "description", in: content) ?? ""
+        if focusedField != .title, !dirtyFields.contains(.title) {
+            title = FrontmatterParser.value(forKey: "title", in: content) ?? ""
+        }
+        if focusedField != .slug, !dirtyFields.contains(.slug) {
+            slug = FrontmatterParser.value(forKey: "slug", in: content) ?? ""
+        }
+        if focusedField != .description, !dirtyFields.contains(.description) {
+            postDescription = FrontmatterParser.value(forKey: "description", in: content) ?? ""
+        }
         isDraft = FrontmatterParser.bool(forKey: "draft", in: content) ?? false
         if let parsedDate = FrontmatterParser.date(forKey: "date", in: content) {
             date = parsedDate
@@ -223,5 +341,16 @@ struct FrontmatterInspectorView: View {
         }
         tags = FrontmatterParser.stringArray(forKey: "tags", in: content)
         categories = FrontmatterParser.stringArray(forKey: "categories", in: content)
+    }
+}
+
+private enum FrontmatterInspectorError: LocalizedError {
+    case rewriteFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .rewriteFailed(let key):
+            return "Could not update the \(key) front matter field."
+        }
     }
 }
