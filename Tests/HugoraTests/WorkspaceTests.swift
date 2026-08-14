@@ -396,6 +396,55 @@ struct WorkspaceErrorTests {
     }
 }
 
+@Suite("ContentListView Tests")
+struct ContentListViewTests {
+    private let url = URL(fileURLWithPath: "/tmp/post.md")
+
+    @Test("Publish status filters are mutually exclusive")
+    func publishStatusFilters() {
+        let draft = makeItem(date: "2020-01-01", draft: true)
+        let scheduled = makeItem(date: "2999-01-01", draft: false)
+        let published = makeItem(date: "2020-01-01", draft: false)
+
+        #expect(ContentListView.PostStatusFilter.drafts.matches(draft))
+        #expect(!ContentListView.PostStatusFilter.drafts.matches(scheduled))
+        #expect(ContentListView.PostStatusFilter.scheduled.matches(scheduled))
+        #expect(!ContentListView.PostStatusFilter.published.matches(scheduled))
+        #expect(ContentListView.PostStatusFilter.published.matches(published))
+    }
+
+    @Test("Workspace errors only replace an empty sidebar")
+    func workspaceErrorPresentation() {
+        #expect(
+            ContentListView.shouldShowWorkspaceError(
+                .notHugoSite,
+                hasWorkspace: false
+            )
+        )
+        #expect(
+            !ContentListView.shouldShowWorkspaceError(
+                .notHugoSite,
+                hasWorkspace: true
+            )
+        )
+    }
+
+    private func makeItem(date: String, draft: Bool) -> ContentItem {
+        ContentItem(
+            url: url,
+            format: .file,
+            section: "posts",
+            content: """
+                ---
+                title: Greendale News
+                date: \(date)
+                draft: \(draft)
+                ---
+                """
+        )
+    }
+}
+
 @Suite("HugoContentCreatorError Tests")
 struct HugoContentCreatorErrorTests {
     @Test("Executable not found error is user actionable")

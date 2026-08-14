@@ -8,6 +8,7 @@ struct ContentListView: View {
     enum PostStatusFilter: String, CaseIterable, Identifiable {
         case all = "All"
         case drafts = "Drafts"
+        case scheduled = "Scheduled"
         case published = "Published"
 
         var id: String { rawValue }
@@ -15,8 +16,9 @@ struct ContentListView: View {
         func matches(_ item: ContentItem) -> Bool {
             switch self {
             case .all: true
-            case .drafts: item.isDraft
-            case .published: !item.isDraft
+            case .drafts: item.publishStatus == .draft
+            case .scheduled: item.publishStatus == .scheduled
+            case .published: item.publishStatus == .published
             }
         }
     }
@@ -135,7 +137,11 @@ struct ContentListView: View {
     }
 
     private var viewState: ViewState {
-        if let error = workspaceStore.lastError { return .error(error) }
+        if let error = workspaceStore.lastError,
+            Self.shouldShowWorkspaceError(error, hasWorkspace: workspaceStore.currentFolderURL != nil)
+        {
+            return .error(error)
+        }
         if !filteredSections.isEmpty { return .sections }
         let isFiltering =
             !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -145,6 +151,10 @@ struct ContentListView: View {
         }
         if workspaceStore.currentFolderURL != nil { return .emptyContent }
         return .noWorkspace
+    }
+
+    static func shouldShowWorkspaceError(_ error: WorkspaceError?, hasWorkspace: Bool) -> Bool {
+        error != nil && !hasWorkspace
     }
 
     @ViewBuilder
@@ -305,6 +315,10 @@ struct ContentRow: View {
         return f
     }()
 
+    private var isSelected: Bool {
+        workspaceStore.selectedFileURL == item.url
+    }
+
     private func accessibilityDescription(for item: ContentItem) -> String {
         let dateString = item.date.map { Self.dateFormatter.string(from: $0) } ?? "no date"
         switch item.publishStatus {
@@ -377,9 +391,14 @@ struct ContentRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(isHovering ? Color.primary.opacity(0.06) : Color.clear)
+        .background(
+            isSelected
+                ? Color.accentColor.opacity(0.18)
+                : isHovering ? Color.primary.opacity(0.06) : Color.clear
+        )
         .contentShape(Rectangle())
         .accessibilityLabel(accessibilityDescription(for: item))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .onHover { isHovering = $0 }
         .onTapGesture {
             workspaceStore.openFile(item.url)
