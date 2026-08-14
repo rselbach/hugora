@@ -959,6 +959,25 @@ struct WorkspaceStoreTests {
         #expect(store.selectedFileURL == nil)
     }
 
+    @Test("Delete can be cancelled before moving content to Trash")
+    func deleteCanBeCancelled() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+        let siteURL = try makeTempHugoSite(
+            sections: ["posts"],
+            posts: [(section: "posts", slug: "troy-and-abed", content: "---\ntitle: Troy and Abed\n---")]
+        )
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+        store.openFolder(siteURL)
+        let item = try #require(store.sections.first?.items.first)
+        store.onWillDeleteContent = { _ in false }
+
+        store.deleteContent(item)
+
+        #expect(FileManager.default.fileExists(atPath: item.url.path))
+        #expect(store.sections.first?.items.contains(item) == true)
+    }
+
     @Test("Deleting a bundle-format item removes the parent folder")
     func deleteBundleItem() throws {
         let (store, cleanup) = makeStore()
@@ -1142,6 +1161,20 @@ struct WorkspaceStoreTests {
         #expect(store.hugoConfig == nil)
         #expect(store.siteName == nil)
         #expect(store.lastError == nil)
+    }
+
+    @Test("Close workspace is cancelled when document preparation fails")
+    func closeWorkspaceCanBeCancelled() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+        let siteURL = try makeTempHugoSite(sections: ["posts"])
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+        store.openFolder(siteURL)
+        store.onWillChangeWorkspace = { false }
+
+        store.closeWorkspace()
+
+        #expect(store.currentFolderURL == siteURL)
     }
 
     // MARK: - refreshPosts
@@ -1442,5 +1475,18 @@ struct WorkspaceStoreTests {
         store.openFile(url)
 
         #expect(store.selectedFileURL == url)
+    }
+
+    @Test("Rejected file navigation preserves sidebar selection")
+    func rejectedOpenPreservesSelection() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+        let original = URL(fileURLWithPath: "/tmp/original.md")
+        store.selectedFileURL = original
+        store.onOpenFile = { _ in false }
+
+        store.openFile(URL(fileURLWithPath: "/tmp/rejected.md"))
+
+        #expect(store.selectedFileURL == original)
     }
 }

@@ -79,16 +79,32 @@ struct ContentView: View {
         .navigationSubtitle(permalinkDisplay ?? "")
         .onAppear {
             workspaceStore.onOpenFile = { [weak editorState, weak workspaceStore] url in
-                guard let editorState, let workspaceStore else { return }
+                guard let editorState, let workspaceStore else { return false }
                 let item = workspaceStore.sections
                     .flatMap { $0.items }
                     .first { $0.url == url }
-                guard let item else { return }
-                editorState.openItem(item)
+                guard let item else { return false }
+                return editorState.openItem(item)
             }
 
             workspaceStore.onContentRenamed = { [weak editorState] oldURL, newURL in
                 editorState?.handleExternalRename(from: oldURL, to: newURL)
+            }
+
+            workspaceStore.onWillChangeWorkspace = { [weak editorState] in
+                editorState?.saveCurrentIfDirty() ?? true
+            }
+            workspaceStore.onDidChangeWorkspace = { [weak editorState] in
+                editorState?.closeCurrentDocument()
+            }
+            workspaceStore.onWillDeleteContent = { [weak editorState] item in
+                guard editorState?.currentItem?.url.standardizedFileURL == item.url.standardizedFileURL else {
+                    return true
+                }
+                return editorState?.saveCurrentIfDirty() ?? true
+            }
+            workspaceStore.onContentDeleted = { [weak editorState] url in
+                editorState?.handleExternalDeletion(url)
             }
 
             // Cover a session restore that completed before this view appeared.

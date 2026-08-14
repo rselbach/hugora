@@ -106,11 +106,16 @@ final class WorkspaceStore: ObservableObject {
 
     /// Callback invoked when a file should be opened in the editor.
     /// Wired up by ContentView so WorkspaceStore doesn't depend on EditorState.
-    var onOpenFile: ((URL) -> Void)?
+    var onOpenFile: ((URL) -> Bool)?
 
     /// Callback invoked after a sidebar rename moves a file on disk, so the
     /// editor can follow if that post is open. Arguments: old and new URL.
     var onContentRenamed: ((URL, URL) -> Void)?
+
+    var onWillChangeWorkspace: (() -> Bool)?
+    var onDidChangeWorkspace: (() -> Void)?
+    var onWillDeleteContent: ((ContentItem) -> Bool)?
+    var onContentDeleted: ((URL) -> Void)?
 
     private var securityScopedURL: URL?
     private let hugoContentCreator: any HugoContentCreator
@@ -224,8 +229,13 @@ final class WorkspaceStore: ObservableObject {
             lastError = .notHugoSite
             return
         }
+        guard onWillChangeWorkspace?() != false else {
+            isLoading = false
+            return
+        }
 
         stopAccessingCurrentFolder()
+        onDidChangeWorkspace?()
 
         guard let bookmarkData = createBookmark(for: url) else {
             openFolderWithoutBookmark(url)
@@ -278,8 +288,14 @@ final class WorkspaceStore: ObservableObject {
             lastError = .notHugoSite
             return
         }
+        guard onWillChangeWorkspace?() != false else {
+            if scopeActive { url.stopAccessingSecurityScopedResource() }
+            isLoading = false
+            return
+        }
 
         stopAccessingCurrentFolder()
+        onDidChangeWorkspace?()
 
         guard isStale else {
             saveCurrentBookmark(ref.bookmarkData)
@@ -303,7 +319,9 @@ final class WorkspaceStore: ObservableObject {
     /// Stops accessing security-scoped resources and clears sections,
     /// config, and selection state.
     func closeWorkspace() {
+        guard onWillChangeWorkspace?() != false else { return }
         stopAccessingCurrentFolder()
+        onDidChangeWorkspace?()
         lastSafetyWarning = nil
         sections = []
         hugoConfig = nil
@@ -332,8 +350,8 @@ final class WorkspaceStore: ObservableObject {
     ///
     /// - Parameter url: The URL of the file to open.
     func openFile(_ url: URL) {
+        guard onOpenFile?(url) != false else { return }
         selectedFileURL = url
-        onOpenFile?(url)
     }
 
     // MARK: - Create New Post
@@ -484,8 +502,9 @@ final class WorkspaceStore: ObservableObject {
                     self.loadContent(from: siteURL)
                     let finalURL = self.resolveCreatedURLAfterRefresh(
                         createdURL: createdURL, fallbackURL: expectedFileURL)
-                    self.selectedFileURL = finalURL
-                    self.onOpenFile?(finalURL)
+                    if self.onOpenFile?(finalURL) != false {
+                        self.selectedFileURL = finalURL
+                    }
                     self.isLoading = false
                 }
             } catch {
@@ -684,6 +703,7 @@ final class WorkspaceStore: ObservableObject {
     ///
     /// - Parameter item: The content item to delete.
     func deleteContent(_ item: ContentItem) {
+        guard onWillDeleteContent?(item) != false else { return }
         let fm = FileManager.default
         guard let contentDir = contentDirectoryURL else {
             lastError = .unsafeFileOperation(item.url.path)
@@ -715,6 +735,7 @@ final class WorkspaceStore: ObservableObject {
             if selectedFileURL == item.url {
                 selectedFileURL = nil
             }
+            onContentDeleted?(item.url)
         } catch {
             NSApp.presentError(error)
         }

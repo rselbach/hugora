@@ -105,8 +105,9 @@ final class EditorState: ObservableObject {
     ///
     /// - Parameter item: The content item to open.
     /// - Note: Saves the current item if dirty before opening the new one.
-    func openItem(_ item: ContentItem) {
-        guard saveCurrentIfDirty() else { return }
+    @discardableResult
+    func openItem(_ item: ContentItem) -> Bool {
+        guard saveCurrentIfDirty() else { return false }
         autoSaveTask?.cancel()
         autoSaveTask = nil
         openRevision &+= 1
@@ -147,6 +148,7 @@ final class EditorState: ObservableObject {
                 self.lastError = error
             }
         }
+        return true
     }
 
     /// Updates the editor content and marks it as dirty.
@@ -176,6 +178,28 @@ final class EditorState: ObservableObject {
         else { return }
         currentItem = ContentItem(url: newURL, format: item.format, section: item.section, content: content)
         saveSession()
+    }
+
+    /// Clears the active document after its workspace or file is removed.
+    func closeCurrentDocument() {
+        autoSaveTask?.cancel()
+        autoSaveTask = nil
+        openRevision &+= 1
+        currentItem = nil
+        content = ""
+        entityMappings = []
+        loadedFileData = nil
+        isDirty = false
+        isLoading = false
+        cursorPosition = 0
+        scrollPosition = 0
+        lastError = nil
+        saveSession()
+    }
+
+    func handleExternalDeletion(_ url: URL) {
+        guard currentItem?.url.standardizedFileURL == url.standardizedFileURL else { return }
+        closeCurrentDocument()
     }
 
     /// Saves the current content to disk.

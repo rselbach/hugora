@@ -599,4 +599,31 @@ struct EditorStateTests {
             #expect(state.lastError as? EditorStateError == .externallyModified(fileURL.path))
         }
     }
+
+    @Test("Closing a document cancels pending saves and clears state")
+    @MainActor
+    func closeCurrentDocumentClearsState() async throws {
+        try await withCleanDefaults {
+            UserDefaults.standard.set(true, forKey: "autoSaveEnabled")
+            UserDefaults.standard.set(false, forKey: "autoRenameOnSave")
+
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: tempDir) }
+            let fileURL = tempDir.appendingPathComponent("post.md")
+            try "Original".write(to: fileURL, atomically: true, encoding: .utf8)
+
+            let state = EditorState()
+            state.openItem(ContentItem(url: fileURL, format: .file, section: "blog"))
+            try await waitForLoad(state)
+            state.updateContent("Pending")
+            state.closeCurrentDocument()
+            try await Task.sleep(nanoseconds: 1_100_000_000)
+
+            #expect(state.currentItem == nil)
+            #expect(state.content.isEmpty)
+            #expect(!state.isDirty)
+            #expect(try String(contentsOf: fileURL, encoding: .utf8) == "Original")
+        }
+    }
 }
