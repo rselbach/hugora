@@ -23,7 +23,7 @@ struct HugoraApp: App {
     @StateObject private var hugoServer = HugoServerController()
 
     var body: some Scene {
-        WindowGroup {
+        Window("Hugora", id: "main") {
             ContentView()
                 .environmentObject(workspaceStore)
                 .environmentObject(editorState)
@@ -60,12 +60,16 @@ struct HugoraApp: App {
     }
 }
 
+@MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
     static var shared: AppDelegate?
     var editorState: EditorState?
-    var workspaceStore: WorkspaceStore?
+    var workspaceStore: WorkspaceStore? {
+        didSet { handlePendingOpenURLs() }
+    }
     var hugoServer: HugoServerController?
     private var didHandleLaunchArgs = false
+    private var pendingOpenURLs: [URL] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Self.shared = self
@@ -75,6 +79,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        pendingOpenURLs.append(contentsOf: urls)
+        handlePendingOpenURLs()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -112,9 +121,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // Kill the preview server: an orphaned hugo process would keep
         // serving (and holding the port) after the app quits.
-        MainActor.assumeIsolated {
-            hugoServer?.stop()
-        }
+        hugoServer?.stop()
     }
 
     func handleLaunchArguments() {
@@ -131,6 +138,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         DispatchQueue.main.async { [weak self] in
             self?.workspaceStore?.openFromExternalPath(url)
+        }
+    }
+
+    func handlePendingOpenURLs() {
+        guard let workspaceStore, !pendingOpenURLs.isEmpty else { return }
+        let urls = pendingOpenURLs
+        pendingOpenURLs = []
+        for url in urls {
+            workspaceStore.openFromExternalPath(url)
         }
     }
 }

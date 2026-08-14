@@ -132,6 +132,7 @@ final class WorkspaceStore: ObservableObject {
     private var contentWatcherReloadTask: Task<Void, Never>?
     private var sectionRefreshTasks: [String: Task<Void, Never>] = [:]
     private var lastSafetyWarning: String?
+    private var pendingExternalFileURL: URL?
 
     /// The resolved URL of the Hugo content directory for the current workspace.
     ///
@@ -176,6 +177,7 @@ final class WorkspaceStore: ObservableObject {
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
             self?.openFolder(url)
+            self?.openPendingExternalFile()
         }
     }
 
@@ -188,6 +190,16 @@ final class WorkspaceStore: ObservableObject {
     /// folder, which grants access through user consent.
     func openFromExternalPath(_ url: URL) {
         let standardized = url.standardizedFileURL
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: standardized.path, isDirectory: &isDirectory) else {
+            lastError = .staleWorkspaceReference(standardized.path)
+            return
+        }
+
+        if !isDirectory.boolValue {
+            openExternalFile(standardized)
+            return
+        }
 
         if let current = currentFolderURL,
             current.standardizedFileURL == standardized
@@ -208,6 +220,43 @@ final class WorkspaceStore: ObservableObject {
         }
 
         openFolderPanel(directoryURL: standardized)
+    }
+
+    private func openExternalFile(_ fileURL: URL) {
+        pendingExternalFileURL = fileURL
+        if let contentDirectoryURL,
+            PathSafety.isSameOrDescendant(fileURL, of: contentDirectoryURL)
+        {
+            openPendingExternalFile()
+            return
+        }
+
+        guard let siteURL = hugoSiteURL(containing: fileURL) else {
+            openFolderPanel(directoryURL: fileURL.deletingLastPathComponent())
+            return
+        }
+        openFolder(siteURL)
+        openPendingExternalFile()
+    }
+
+    private func hugoSiteURL(containing fileURL: URL) -> URL? {
+        var candidate = fileURL.deletingLastPathComponent().standardizedFileURL
+        while true {
+            if validateHugoSite(at: candidate) { return candidate }
+            let parent = candidate.deletingLastPathComponent().standardizedFileURL
+            if parent == candidate { return nil }
+            candidate = parent
+        }
+    }
+
+    private func openPendingExternalFile() {
+        guard let fileURL = pendingExternalFileURL,
+            let contentDirectoryURL,
+            PathSafety.isSameOrDescendant(fileURL, of: contentDirectoryURL),
+            sections.flatMap(\.items).contains(where: { $0.url.standardizedFileURL == fileURL })
+        else { return }
+        pendingExternalFileURL = nil
+        openFile(fileURL)
     }
 
     /// Opens a Hugo workspace at the given URL.

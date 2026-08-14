@@ -110,6 +110,11 @@ struct ContentView: View {
             // Cover a session restore that completed before this view appeared.
             syncEditorContext()
             viewModel.setText(editorState.content)
+            if let selectedFileURL = workspaceStore.selectedFileURL,
+                editorState.currentItem?.url != selectedFileURL
+            {
+                workspaceStore.openFile(selectedFileURL)
+            }
         }
         // Follow the current item wherever it changes — open, session
         // restore finishing after onAppear, or auto-rename-on-save moving

@@ -1466,6 +1466,27 @@ struct WorkspaceStoreTests {
 
     // MARK: - openFile
 
+    @Test("Opening a Markdown file finds its Hugo site and selects it")
+    func openExternalMarkdownFile() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+        let siteURL = try makeTempHugoSite(
+            sections: ["posts"],
+            posts: [(section: "posts", slug: "study-group", content: "---\ntitle: Study Group\n---")]
+        )
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+        let files = try FileManager.default.contentsOfDirectory(
+            at: siteURL.appendingPathComponent("content/posts"),
+            includingPropertiesForKeys: nil
+        )
+        let fileURL = try #require(files.first)
+
+        store.openFromExternalPath(fileURL)
+
+        #expect(store.currentFolderURL?.resolvingSymlinksInPath() == siteURL.resolvingSymlinksInPath())
+        #expect(store.selectedFileURL?.resolvingSymlinksInPath() == fileURL.resolvingSymlinksInPath())
+    }
+
     @Test("openFile sets selectedFileURL")
     func openFileSetsSelected() throws {
         let (store, cleanup) = makeStore()
