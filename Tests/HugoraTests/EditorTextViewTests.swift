@@ -99,6 +99,7 @@ struct EditorViewProgrammaticLoadTests {
     func clearsUndoStackOnLoad() {
         // A bare NSTextView has no undo manager; provide one via delegate
         // like a window-hosted text view would have.
+        @MainActor
         final class UndoProvidingDelegate: NSObject, NSTextViewDelegate {
             let manager = UndoManager()
             func undoManager(for view: NSTextView) -> UndoManager? { manager }

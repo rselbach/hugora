@@ -1,7 +1,8 @@
-import AppKit
+@preconcurrency import AppKit
 import Combine
 import SwiftUI
 
+@MainActor
 final class ThemeManager: ObservableObject {
     static let shared = ThemeManager()
 
@@ -33,8 +34,10 @@ final class ThemeManager: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            guard let self else { return }
-            self.updateTheme(name: self.selectedThemeName)
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.updateTheme(name: self.selectedThemeName)
+            }
         }
     }
 
@@ -43,11 +46,6 @@ final class ThemeManager: ObservableObject {
         NotificationCenter.default.post(name: .themeDidChange, object: nil)
     }
 
-    deinit {
-        if let observer = appearanceObserver {
-            DistributedNotificationCenter.default.removeObserver(observer)
-        }
-    }
 }
 
 extension Notification.Name {

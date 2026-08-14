@@ -5,6 +5,7 @@ import Foundation
 ///
 /// Falls back to the full document range when layout/viewport information is
 /// not ready yet. This prevents no-op style passes during initial view setup.
+@MainActor
 func computeRenderableRange(for textView: NSTextView, padding: Int = 2000) -> NSRange {
     let fullRange = NSRange(location: 0, length: textView.string.utf16.count)
     guard fullRange.length > 0 else { return fullRange }

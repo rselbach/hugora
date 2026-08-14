@@ -1,6 +1,23 @@
 import Foundation
 import os
 
+private final class LockedData: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored = Data()
+
+    var value: Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return stored
+    }
+
+    func set(_ data: Data) {
+        lock.lock()
+        stored = data
+        lock.unlock()
+    }
+}
+
 /// Defines a strategy for creating new Hugo content.
 ///
 /// Allows decoupling the app from Hugo CLI by providing an interface that
@@ -140,11 +157,11 @@ struct HugoCLIContentCreator: HugoContentCreator {
 
         // Drain both pipes before reaping the child: waiting first deadlocks
         // once hugo writes more than the pipe buffer holds.
-        var stderrData = Data()
+        let stderrData = LockedData()
         let stderrDone = DispatchSemaphore(value: 0)
         let stderrHandle = stderrPipe.fileHandleForReading
         DispatchQueue.global(qos: .utility).async {
-            stderrData = stderrHandle.readDataToEndOfFile()
+            stderrData.set(stderrHandle.readDataToEndOfFile())
             stderrDone.signal()
         }
 
@@ -155,7 +172,7 @@ struct HugoCLIContentCreator: HugoContentCreator {
         return ProcessResult(
             status: process.terminationStatus,
             stdout: String(data: stdoutData, encoding: .utf8) ?? "",
-            stderr: String(data: stderrData, encoding: .utf8) ?? ""
+            stderr: String(data: stderrData.value, encoding: .utf8) ?? ""
         )
     }
 

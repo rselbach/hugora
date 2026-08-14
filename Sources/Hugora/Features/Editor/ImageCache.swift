@@ -4,7 +4,7 @@ import Foundation
 // MARK: - Image Cache
 
 /// Simple in-memory cache for loaded images.
-final class ImageCache {
+final class ImageCache: @unchecked Sendable {
     static let shared = ImageCache()
 
     private struct Entry {

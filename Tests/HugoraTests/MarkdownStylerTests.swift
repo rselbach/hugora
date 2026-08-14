@@ -523,6 +523,7 @@ struct StyleApplicationTests {
 // MARK: - Theme Tests
 
 @Suite("Themes")
+@MainActor
 struct ThemeTests {
     @Test("Theme.named returns correct theme for each name")
     func testThemeNamed() {

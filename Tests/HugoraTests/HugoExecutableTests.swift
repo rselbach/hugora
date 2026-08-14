@@ -33,7 +33,7 @@ struct HugoExecutableTests {
         try "#!/bin/sh\n".write(to: fakeHugo, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeHugo.path)
 
-        try withDefaultsValue(fakeHugo.path) {
+        withDefaultsValue(fakeHugo.path) {
             #expect(HugoExecutable.resolve()?.path == fakeHugo.resolvingSymlinksInPath().path)
         }
     }
@@ -47,7 +47,7 @@ struct HugoExecutableTests {
         let notExecutable = tempDir.appendingPathComponent("hugo")
         try "not a binary".write(to: notExecutable, atomically: true, encoding: .utf8)
 
-        try withDefaultsValue(notExecutable.path) {
+        withDefaultsValue(notExecutable.path) {
             let resolved = HugoExecutable.resolve()
             #expect(resolved?.path != notExecutable.path)
         }

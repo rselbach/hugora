@@ -17,6 +17,7 @@ struct CheckForUpdatesView: View {
     }
 }
 
+@MainActor
 final class CheckForUpdatesViewModel: ObservableObject {
     @Published var canCheckForUpdates = false
     let updater: SPUUpdater

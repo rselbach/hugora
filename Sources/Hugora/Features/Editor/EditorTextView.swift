@@ -1,4 +1,4 @@
-import AppKit
+@preconcurrency import AppKit
 import os
 
 class EditorTextView: NSTextView {
@@ -25,7 +25,7 @@ class EditorTextView: NSTextView {
             }
         }
     }
-    private var spinnerTimer: Timer?
+    nonisolated(unsafe) private var spinnerTimer: Timer?
     private(set) var contentRevision: UInt64 = 0
 
     private static let pairs: [Character: Character] = [
@@ -40,7 +40,7 @@ class EditorTextView: NSTextView {
     private static let openers: Set<Character> = Set(pairs.keys)
     private static let closers: Set<Character> = Set(pairs.values)
     private static let symmetricPairs: Set<Character> = ["*", "_", "`"]
-    private var defaultsObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var defaultsObserver: NSObjectProtocol?
 
     override init(frame frameRect: NSRect, textContainer container: NSTextContainer?) {
         super.init(frame: frameRect, textContainer: container)
@@ -84,7 +84,9 @@ class EditorTextView: NSTextView {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.applyPreferences()
+            MainActor.assumeIsolated {
+                self?.applyPreferences()
+            }
         }
     }
 
@@ -492,8 +494,10 @@ class EditorTextView: NSTextView {
         guard spinnerTimer == nil else { return }
         // ~30 fps is smooth enough for a simple spinner and cheap on CPU
         spinnerTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.needsDisplay = true
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.needsDisplay = true
+            }
         }
     }
 
@@ -800,23 +804,30 @@ class EditorTextView: NSTextView {
             return
         }
 
+        guard
+            let encodedData = encodeImageData(
+                from: tiffData,
+                format: outputFormat,
+                maxDimension: maxDimension,
+                jpegQuality: jpegQuality
+            )
+        else {
+            isPastingImage = false
+            needsDisplay = true
+            let alert = NSAlert()
+            alert.messageText = "Failed to save image"
+            alert.informativeText = "Could not encode image data for save."
+            alert.alertStyle = .critical
+            alert.runModal()
+            return
+        }
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             do {
                 try FileManager.default.createDirectory(
                     at: destination.saveURL.deletingLastPathComponent(),
                     withIntermediateDirectories: true
                 )
-
-                guard
-                    let encodedData = self?.encodeImageData(
-                        from: tiffData,
-                        format: outputFormat,
-                        maxDimension: maxDimension,
-                        jpegQuality: jpegQuality
-                    )
-                else {
-                    throw CocoaError(.fileWriteUnknown)
-                }
 
                 guard FileManager.default.createFile(atPath: destination.saveURL.path, contents: encodedData) else {
                     throw CocoaError(.fileWriteFileExists)

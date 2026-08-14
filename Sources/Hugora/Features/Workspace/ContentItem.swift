@@ -56,7 +56,7 @@ enum FrontmatterParser {
         case let string as String:
             return string
         case let date as Date:
-            return isoFormatter.string(from: date)
+            return isoFormatter(fractionalSeconds: true).string(from: date)
         case let number as NSNumber:
             return number.stringValue
         case let bool as Bool:
@@ -121,25 +121,22 @@ enum FrontmatterParser {
         }
     }
 
-    private static let isoFormatter: ISO8601DateFormatter = {
+    private static func isoFormatter(fractionalSeconds: Bool) -> ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        formatter.formatOptions =
+            fractionalSeconds
+            ? [.withInternetDateTime, .withFractionalSeconds]
+            : [.withInternetDateTime]
         return formatter
-    }()
+    }
 
-    private static let isoFormatterNoFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
-    private static let fullDateFormatter: ISO8601DateFormatter = {
+    private static func fullDateFormatter() -> ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withFullDate, .withDashSeparatorInDate]
         return formatter
-    }()
+    }
 
-    private static let customDateFormatters: [DateFormatter] = {
+    private static func customDateFormatters() -> [DateFormatter] {
         let formats = [
             "yyyy-MM-dd HH:mm:ssZZZZZ",
             "yyyy-MM-dd HH:mm:ss ZZZZZ",
@@ -157,7 +154,7 @@ enum FrontmatterParser {
             formatter.timeZone = TimeZone(secondsFromGMT: 0)
             return formatter
         }
-    }()
+    }
 
     private static func rawValue(forKey key: String, in content: String) -> Any? {
         guard let map = parseFrontmatter(in: content) else { return nil }
@@ -213,19 +210,19 @@ enum FrontmatterParser {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
-        if let parsed = isoFormatter.date(from: trimmed) {
+        if let parsed = isoFormatter(fractionalSeconds: true).date(from: trimmed) {
             return parsed
         }
 
-        if let parsed = isoFormatterNoFractional.date(from: trimmed) {
+        if let parsed = isoFormatter(fractionalSeconds: false).date(from: trimmed) {
             return parsed
         }
 
-        if let parsed = fullDateFormatter.date(from: trimmed) {
+        if let parsed = fullDateFormatter().date(from: trimmed) {
             return parsed
         }
 
-        for formatter in customDateFormatters {
+        for formatter in customDateFormatters() {
             if let parsed = formatter.date(from: trimmed) {
                 return parsed
             }

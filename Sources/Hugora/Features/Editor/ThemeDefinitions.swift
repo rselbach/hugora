@@ -5,6 +5,7 @@ extension Theme {
         "Default", "GitHub", "Dracula", "Solarized Light", "Solarized Dark", "rselbach.com",
     ]
 
+    @MainActor
     static func named(_ name: String, appearance: NSAppearance? = nil) -> Theme {
         let resolvedAppearance =
             appearance

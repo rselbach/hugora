@@ -222,26 +222,22 @@ enum CLIInstaller {
         _ source: String,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            var error: NSDictionary?
-            let script = NSAppleScript(source: source)
-            script?.executeAndReturnError(&error)
+        var error: NSDictionary?
+        let script = NSAppleScript(source: source)
+        script?.executeAndReturnError(&error)
 
-            DispatchQueue.main.async {
-                guard let error else {
-                    completion(.success(()))
-                    return
-                }
-
-                let message =
-                    error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
-                if message.contains("User canceled") {
-                    completion(.failure(CLIInstallerError.userCancelled))
-                    return
-                }
-                completion(.failure(CLIInstallerError.scriptFailed(message)))
-            }
+        guard let error else {
+            completion(.success(()))
+            return
         }
+
+        let message =
+            error[NSAppleScript.errorMessage] as? String ?? "Unknown error"
+        if message.contains("User canceled") {
+            completion(.failure(CLIInstallerError.userCancelled))
+            return
+        }
+        completion(.failure(CLIInstallerError.scriptFailed(message)))
     }
 
     private static func escapeShellPath(_ path: String) -> String {

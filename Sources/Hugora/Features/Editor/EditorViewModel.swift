@@ -1,6 +1,6 @@
 import AppKit
 import Combine
-import Markdown
+@preconcurrency import Markdown
 
 @MainActor
 final class EditorViewModel: ObservableObject {
@@ -28,7 +28,8 @@ final class EditorViewModel: ObservableObject {
         styler.theme
     }
 
-    init(text: String = "", themeManager: ThemeManager = .shared) {
+    init(text: String = "", themeManager: ThemeManager? = nil) {
+        let themeManager = themeManager ?? .shared
         self.text = text
         self.themeManager = themeManager
         self.styler = MarkdownStyler(theme: themeManager.currentTheme)

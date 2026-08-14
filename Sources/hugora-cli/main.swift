@@ -8,6 +8,23 @@ import Foundation
 let args = CommandLine.arguments.dropFirst()
 let expectedBundleID = "com.selbach.hugora"
 
+final class OpenResult: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedError: Error?
+
+    var error: Error? {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedError
+    }
+
+    func finish(with error: Error?) {
+        lock.lock()
+        storedError = error
+        lock.unlock()
+    }
+}
+
 func isValidHugoraApp(at url: URL) -> Bool {
     guard let bundle = Bundle(url: url) else { return false }
     return bundle.bundleIdentifier == expectedBundleID
@@ -72,7 +89,7 @@ func openHugora(with folderPath: String?) {
     }
 
     let semaphore = DispatchSemaphore(value: 0)
-    var openError: Error?
+    let result = OpenResult()
     let config = NSWorkspace.OpenConfiguration()
 
     if let folder = folderPath {
@@ -95,19 +112,19 @@ func openHugora(with folderPath: String?) {
         }
 
         NSWorkspace.shared.open([openURL], withApplicationAt: appURL, configuration: config) { _, error in
-            openError = error
+            result.finish(with: error)
             semaphore.signal()
         }
     } else {
         NSWorkspace.shared.openApplication(at: appURL, configuration: config) { _, error in
-            openError = error
+            result.finish(with: error)
             semaphore.signal()
         }
     }
 
     semaphore.wait()
 
-    if let error = openError {
+    if let error = result.error {
         fputs("error: \(error.localizedDescription)\n", stderr)
         exit(1)
     }

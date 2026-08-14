@@ -5,7 +5,7 @@ extension Notification.Name {
     static let asyncImageLoaderDidLoad = Notification.Name("com.hugora.asyncImageLoaderDidLoad")
 }
 
-final class AsyncImageLoader {
+final class AsyncImageLoader: @unchecked Sendable {
     static let shared = AsyncImageLoader()
 
     private var inFlight: Set<URL> = []

@@ -1,5 +1,5 @@
 import SwiftUI
-import AppKit
+@preconcurrency import AppKit
 import Combine
 
 struct EditorView: NSViewRepresentable {
@@ -80,6 +80,10 @@ struct EditorView: NSViewRepresentable {
         }
     }
 
+    static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
+        coordinator.detach()
+    }
+
     /// Replaces the text view content for a programmatic load (open file,
     /// switch post, session restore). The previous document's undo stack
     /// must not survive — Cmd+Z would replay its edits into the new text —
@@ -129,10 +133,12 @@ struct EditorView: NSViewRepresentable {
             setupStylingPipeline()
         }
 
-        deinit {
+        func detach() {
             if let observer = scrollObserver {
                 NotificationCenter.default.removeObserver(observer)
             }
+            scrollObserver = nil
+            textView = nil
         }
 
         func attach(textView: EditorTextView) {

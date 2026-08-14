@@ -139,12 +139,12 @@ struct NewPostBuilder {
     // Local time with offset, like `hugo new` writes. Keeping this in the
     // local zone means the yyyy-MM-dd folder prefix (also local) and the
     // frontmatter date can never disagree across midnight.
-    private static let isoFormatter: ISO8601DateFormatter = {
+    private static func isoFormatter() -> ISO8601DateFormatter {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
         f.timeZone = .current
         return f
-    }()
+    }
 
     private func render(
         template: String,
@@ -153,7 +153,7 @@ struct NewPostBuilder {
         sectionName: String?,
         date: Date
     ) -> String {
-        let dateString = Self.isoFormatter.string(from: date)
+        let dateString = Self.isoFormatter().string(from: date)
 
         let typeValue = sectionName ?? ""
         var rendered = template
@@ -176,7 +176,7 @@ struct NewPostBuilder {
     }
 
     private func defaultFrontmatter(title: String, date: Date) -> String {
-        let dateString = Self.isoFormatter.string(from: date)
+        let dateString = Self.isoFormatter().string(from: date)
 
         return """
             ---
