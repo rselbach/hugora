@@ -119,6 +119,34 @@ struct EditorViewProgrammaticLoadTests {
         #expect(!delegate.manager.canUndo)
         #expect(textView.string == "post B")
     }
+
+    @Test("Programmatic loads invalidate pending image paste operations")
+    @MainActor
+    func programmaticLoadAdvancesRevision() {
+        let textView = EditorTextView()
+        let revision = textView.contentRevision
+
+        EditorView.loadProgrammaticText("another post", into: textView)
+
+        #expect(textView.contentRevision == revision + 1)
+    }
+
+    @Test("Image paste completion requires the same post and revision")
+    @MainActor
+    func imagePasteCompletionIdentity() {
+        let siteURL = URL(fileURLWithPath: "/tmp/greendale")
+        let firstPost = siteURL.appendingPathComponent("content/first.md")
+        let secondPost = siteURL.appendingPathComponent("content/second.md")
+        let textView = EditorTextView()
+        textView.imageContext = ImageContext(postURL: firstPost, siteURL: siteURL)
+        let revision = textView.contentRevision
+
+        #expect(textView.canCompleteImagePaste(revision: revision, postURL: firstPost))
+        #expect(!textView.canCompleteImagePaste(revision: revision, postURL: secondPost))
+
+        textView.noteContentChanged()
+        #expect(!textView.canCompleteImagePaste(revision: revision, postURL: firstPost))
+    }
 }
 
 @Suite("Markdown Formatting")

@@ -87,6 +87,7 @@ struct EditorView: NSViewRepresentable {
     /// raises NSRangeException.
     static func loadProgrammaticText(_ text: String, into textView: NSTextView) {
         let selectedRanges = textView.selectedRanges
+        (textView as? EditorTextView)?.noteContentChanged()
         textView.string = text
         let maxLength = (text as NSString).length
         let clamped =
@@ -184,6 +185,7 @@ struct EditorView: NSViewRepresentable {
             guard let textView = notification.object as? EditorTextView else { return }
             // Don't interfere while input method is composing (dead keys, IME)
             guard !textView.hasMarkedText() else { return }
+            textView.noteContentChanged()
             isUpdatingFromTextView = true
             text.wrappedValue = textView.string
             viewModel.updateTextFromEditor(textView.string)

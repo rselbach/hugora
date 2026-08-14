@@ -1,6 +1,11 @@
 import AppKit
+import os
 
 class EditorTextView: NSTextView {
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.selbach.hugora",
+        category: "EditorTextView"
+    )
     private var fontSize: Double = 16
     private var lineSpacing: Double = 1.4
     private var spellCheckEnabled = true
@@ -21,6 +26,7 @@ class EditorTextView: NSTextView {
         }
     }
     private var spinnerTimer: Timer?
+    private(set) var contentRevision: UInt64 = 0
 
     private static let pairs: [Character: Character] = [
         "(": ")",
@@ -80,6 +86,15 @@ class EditorTextView: NSTextView {
         ) { [weak self] _ in
             self?.applyPreferences()
         }
+    }
+
+    func noteContentChanged() {
+        contentRevision &+= 1
+    }
+
+    func canCompleteImagePaste(revision: UInt64, postURL: URL) -> Bool {
+        contentRevision == revision
+            && imageContext?.postURL.standardizedFileURL == postURL.standardizedFileURL
     }
 
     private func applyPreferences() {
@@ -771,6 +786,8 @@ class EditorTextView: NSTextView {
             return
         }
         let insertionRange = selectedRange()
+        let pasteRevision = contentRevision
+        let pastePostURL = context.postURL.standardizedFileURL
 
         guard let tiffData = image.tiffRepresentation else {
             isPastingImage = false
@@ -806,9 +823,16 @@ class EditorTextView: NSTextView {
                 }
 
                 DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
+                    guard let self else {
+                        Self.removePastedFile(at: destination.saveURL)
+                        return
+                    }
                     self.isPastingImage = false
                     self.needsDisplay = true
+                    guard self.canCompleteImagePaste(revision: pasteRevision, postURL: pastePostURL) else {
+                        Self.removePastedFile(at: destination.saveURL)
+                        return
+                    }
 
                     let maxLocation = self.string.utf16.count
                     let safeRange = NSRange(location: min(insertionRange.location, maxLocation), length: 0)
@@ -832,6 +856,14 @@ class EditorTextView: NSTextView {
                     alert.runModal()
                 }
             }
+        }
+    }
+
+    private static func removePastedFile(at url: URL) {
+        do {
+            try FileManager.default.removeItem(at: url)
+        } catch {
+            logger.error("Failed to remove cancelled pasted image: \(error.localizedDescription)")
         }
     }
 
