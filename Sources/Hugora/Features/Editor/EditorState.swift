@@ -217,6 +217,7 @@ final class EditorState: ObservableObject {
         isLoading = true
         lastError = nil
         do {
+            try verifyFileHasNotChanged(item.url)
             // A rename of a published post silently breaks its inbound
             // links; record the old URL as an alias before saving.
             if let aliased = contentWithRenameAlias(item: item, displayContent: content) {
@@ -224,7 +225,6 @@ final class EditorState: ObservableObject {
                 content = aliased
             }
             let encodedContent = HTMLEntityCodec.encode(content, mappings: entityMappings)
-            try verifyFileHasNotChanged(item.url)
             let newURL = try saveWithRename(
                 item: item,
                 displayContent: content,

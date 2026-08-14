@@ -829,9 +829,7 @@ class EditorTextView: NSTextView {
                     withIntermediateDirectories: true
                 )
 
-                guard FileManager.default.createFile(atPath: destination.saveURL.path, contents: encodedData) else {
-                    throw CocoaError(.fileWriteFileExists)
-                }
+                try encodedData.write(to: destination.saveURL, options: .withoutOverwriting)
 
                 DispatchQueue.main.async { [weak self] in
                     guard let self else {

@@ -74,7 +74,7 @@ final class HugoServerController: ObservableObject {
                 handle.readabilityHandler = nil
                 return
             }
-            guard let text = String(data: data, encoding: .utf8) else { return }
+            let text = String(decoding: data, as: UTF8.self)
             Task { @MainActor [weak self] in
                 self?.consumeOutput(text, from: process)
             }

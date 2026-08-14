@@ -114,7 +114,7 @@ final class WorkspaceStore: ObservableObject {
 
     var onWillChangeWorkspace: (() -> Bool)?
     var onDidChangeWorkspace: (() -> Void)?
-    var onWillDeleteContent: ((ContentItem) -> Bool)?
+    var onWillDeleteContent: ((ContentItem) -> URL?)?
     var onContentDeleted: ((URL) -> Void)?
 
     private var securityScopedURL: URL?
@@ -752,7 +752,13 @@ final class WorkspaceStore: ObservableObject {
     ///
     /// - Parameter item: The content item to delete.
     func deleteContent(_ item: ContentItem) {
-        guard onWillDeleteContent?(item) != false else { return }
+        let deletionURL: URL
+        if let onWillDeleteContent {
+            guard let preparedURL = onWillDeleteContent(item) else { return }
+            deletionURL = preparedURL
+        } else {
+            deletionURL = item.url
+        }
         let fm = FileManager.default
         guard let contentDir = contentDirectoryURL else {
             lastError = .unsafeFileOperation(item.url.path)
@@ -762,9 +768,9 @@ final class WorkspaceStore: ObservableObject {
         let targetURL: URL
         switch item.format {
         case .bundle:
-            targetURL = item.url.deletingLastPathComponent()
+            targetURL = deletionURL.deletingLastPathComponent()
         case .file:
-            targetURL = item.url
+            targetURL = deletionURL
         }
 
         let standardizedTarget = targetURL.standardizedFileURL
@@ -781,10 +787,10 @@ final class WorkspaceStore: ObservableObject {
                 sections[sectionIdx].items.removeAll { $0.id == item.id }
             }
 
-            if selectedFileURL == item.url {
+            if selectedFileURL == item.url || selectedFileURL == deletionURL {
                 selectedFileURL = nil
             }
-            onContentDeleted?(item.url)
+            onContentDeleted?(deletionURL)
         } catch {
             NSApp.presentError(error)
         }

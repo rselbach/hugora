@@ -118,9 +118,10 @@ struct ContentView: View {
             }
             workspaceStore.onWillDeleteContent = { [weak editorState] item in
                 guard editorState?.currentItem?.url.standardizedFileURL == item.url.standardizedFileURL else {
-                    return true
+                    return item.url
                 }
-                return editorState?.saveCurrentIfDirty() ?? true
+                guard editorState?.saveCurrentIfDirty() ?? true else { return nil }
+                return editorState?.currentItem?.url ?? item.url
             }
             workspaceStore.onContentDeleted = { [weak editorState] url in
                 editorState?.handleExternalDeletion(url)

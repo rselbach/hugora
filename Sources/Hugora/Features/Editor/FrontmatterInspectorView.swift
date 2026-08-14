@@ -30,6 +30,7 @@ struct FrontmatterInspectorView: View {
     /// Text fields keep local drafts while they are being edited. A draft is
     /// cleared only after it has been written back to the document.
     @State private var dirtyFields: Set<EditableField> = []
+    @State private var draftItemURL: URL?
 
     private static let isoLocalFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
@@ -57,7 +58,18 @@ struct FrontmatterInspectorView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .onAppear(perform: reload)
+        .onAppear {
+            draftItemURL = editorState.currentItem?.url
+            reload()
+        }
+        .onReceive(editorState.$currentItem) { item in
+            DispatchQueue.main.async {
+                guard draftItemURL != item?.url else { return }
+                draftItemURL = item?.url
+                dirtyFields.removeAll()
+                reload()
+            }
+        }
         .onReceive(editorState.$content) { _ in
             DispatchQueue.main.async { reload() }
         }
@@ -132,6 +144,7 @@ struct FrontmatterInspectorView: View {
             set: {
                 title = $0
                 dirtyFields.insert(.title)
+                commitPendingEdit(.title)
             }
         )
     }
@@ -142,6 +155,7 @@ struct FrontmatterInspectorView: View {
             set: {
                 slug = $0
                 dirtyFields.insert(.slug)
+                commitPendingEdit(.slug)
             }
         )
     }
@@ -152,6 +166,7 @@ struct FrontmatterInspectorView: View {
             set: {
                 postDescription = $0
                 dirtyFields.insert(.description)
+                commitPendingEdit(.description)
             }
         )
     }

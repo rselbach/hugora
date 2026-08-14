@@ -970,12 +970,38 @@ struct WorkspaceStoreTests {
         defer { try? FileManager.default.removeItem(at: siteURL) }
         store.openFolder(siteURL)
         let item = try #require(store.sections.first?.items.first)
-        store.onWillDeleteContent = { _ in false }
+        store.onWillDeleteContent = { _ in nil }
 
         store.deleteContent(item)
 
         #expect(FileManager.default.fileExists(atPath: item.url.path))
         #expect(store.sections.first?.items.contains(item) == true)
+    }
+
+    @Test("Delete follows a path changed by document preparation")
+    func deleteUsesPreparedURL() throws {
+        let (store, cleanup) = makeStore()
+        defer { cleanup() }
+        let siteURL = try makeTempHugoSite(
+            sections: ["posts"],
+            posts: [(section: "posts", slug: "original", content: "---\ntitle: Original\n---")]
+        )
+        defer { try? FileManager.default.removeItem(at: siteURL) }
+        store.openFolder(siteURL)
+        let item = try #require(store.sections.first?.items.first)
+        let renamedURL = item.url.deletingLastPathComponent().appendingPathComponent("renamed.md")
+        store.onWillDeleteContent = { original in
+            do {
+                try FileManager.default.moveItem(at: original.url, to: renamedURL)
+                return renamedURL
+            } catch {
+                return nil
+            }
+        }
+
+        store.deleteContent(item)
+
+        #expect(!FileManager.default.fileExists(atPath: renamedURL.path))
     }
 
     @Test("Deleting a bundle-format item removes the parent folder")
