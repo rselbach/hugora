@@ -117,8 +117,8 @@ jobs:
           cp -R "${SPARKLE_PATH}" "${CONTENTS}/Frameworks/"
 
           # Fail loudly if either slice is missing.
-          lipo -verify_arch arm64 x86_64 "${CONTENTS}/MacOS/Hugora"
-          lipo -verify_arch arm64 x86_64 "${CONTENTS}/MacOS/hugora-cli"
+          lipo "${CONTENTS}/MacOS/Hugora" -verify_arch arm64 x86_64
+          lipo "${CONTENTS}/MacOS/hugora-cli" -verify_arch arm64 x86_64
           
           # Add rpath for Frameworks directory
           install_name_tool -add_rpath @executable_path/../Frameworks "${CONTENTS}/MacOS/Hugora"
