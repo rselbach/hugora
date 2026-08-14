@@ -10,17 +10,27 @@ struct ContentView: View {
     @State private var postLinkTarget: EditorTextView?
     @State private var previewErrorMessage: String?
     @AppStorage(DefaultsKey.showFrontmatterInspector) private var showInspector = false
+    @AppStorage(DefaultsKey.showOutline) private var showOutline = false
+    @AppStorage(DefaultsKey.focusMode) private var focusMode = false
+    @AppStorage(DefaultsKey.typewriterMode) private var typewriterMode = false
 
     var body: some View {
         HSplitView {
-            if showSidebar {
+            if showSidebar, !focusMode {
                 ContentListView()
                     .frame(minWidth: 180, idealWidth: 220, maxWidth: 350)
             }
 
             editorPane
 
-            if showInspector, editorState.currentItem != nil {
+            if showOutline, !focusMode, editorState.currentItem != nil {
+                HeadingOutlineView(headings: viewModel.headings) { heading in
+                    viewModel.selectAndReveal(heading.range)
+                }
+                .frame(minWidth: 180, idealWidth: 220, maxWidth: 320)
+            }
+
+            if showInspector, !focusMode, editorState.currentItem != nil {
                 FrontmatterInspectorView()
                     .frame(minWidth: 230, idealWidth: 270, maxWidth: 360)
             }
@@ -61,6 +71,14 @@ struct ContentView: View {
                 }
                 .help("Toggle frontmatter inspector")
                 .accessibilityLabel("Toggle frontmatter inspector")
+
+                Button {
+                    withAnimation { showOutline.toggle() }
+                } label: {
+                    Label("Outline", systemImage: "list.bullet.indent")
+                }
+                .help("Toggle heading outline")
+                .accessibilityLabel("Toggle heading outline")
             }
         }
         .alert(
@@ -240,6 +258,8 @@ struct ContentView: View {
                 viewModel: viewModel,
                 initialCursorPosition: editorState.cursorPosition,
                 initialScrollPosition: editorState.scrollPosition,
+                focusMode: focusMode,
+                typewriterMode: typewriterMode,
                 onCursorChange: { editorState.cursorPosition = $0 },
                 onScrollChange: { editorState.scrollPosition = $0 }
             )

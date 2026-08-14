@@ -143,6 +143,9 @@ struct AppCommands: Commands {
 
 struct ViewCommands: Commands {
     @AppStorage(DefaultsKey.showFrontmatterInspector) private var showInspector = false
+    @AppStorage(DefaultsKey.showOutline) private var showOutline = false
+    @AppStorage(DefaultsKey.focusMode) private var focusMode = false
+    @AppStorage(DefaultsKey.typewriterMode) private var typewriterMode = false
 
     var body: some Commands {
         CommandGroup(after: .sidebar) {
@@ -150,6 +153,19 @@ struct ViewCommands: Commands {
                 showInspector.toggle()
             }
             .keyboardShortcut("i", modifiers: [.command, .option])
+
+            Button(showOutline ? "Hide Outline" : "Show Outline") {
+                showOutline.toggle()
+            }
+            .keyboardShortcut("o", modifiers: [.command, .option])
+
+            Divider()
+
+            Toggle("Focus Mode", isOn: $focusMode)
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+
+            Toggle("Typewriter Mode", isOn: $typewriterMode)
+                .keyboardShortcut("t", modifiers: [.command, .control])
         }
     }
 }

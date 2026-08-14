@@ -7,6 +7,8 @@ struct EditorView: NSViewRepresentable {
     @ObservedObject var viewModel: EditorViewModel
     var initialCursorPosition: Int = 0
     var initialScrollPosition: CGFloat = 0
+    var focusMode = false
+    var typewriterMode = false
     var onCursorChange: ((Int) -> Void)?
     var onScrollChange: ((CGFloat) -> Void)?
 
@@ -42,6 +44,8 @@ struct EditorView: NSViewRepresentable {
         context.coordinator.attach(textView: textView)
         context.coordinator.onCursorChange = onCursorChange
         context.coordinator.onScrollChange = onScrollChange
+        context.coordinator.typewriterMode = typewriterMode
+        viewModel.setFocusMode(focusMode)
         textView.imageContext = viewModel.imageContext
         textView.applyTheme(viewModel.editorTheme)
 
@@ -67,6 +71,8 @@ struct EditorView: NSViewRepresentable {
         guard let textView = scrollView.documentView as? EditorTextView else { return }
 
         textView.imageContext = viewModel.imageContext
+        context.coordinator.typewriterMode = typewriterMode
+        viewModel.setFocusMode(focusMode)
 
         // Skip if input method is composing (dead keys, IME) - touching the text view breaks composition
         guard !textView.hasMarkedText() else { return }
@@ -120,6 +126,7 @@ struct EditorView: NSViewRepresentable {
         weak var textView: EditorTextView?
         var onCursorChange: ((Int) -> Void)?
         var onScrollChange: ((CGFloat) -> Void)?
+        var typewriterMode = false
         private var isStyling = false
         private var scrollObserver: NSObjectProtocol?
         private var stylingCancellable: AnyCancellable?
@@ -205,7 +212,9 @@ struct EditorView: NSViewRepresentable {
             let cursorPos = textView.selectedRange().location
             viewModel.updateCursorPosition(cursorPos)
             onCursorChange?(cursorPos)
-
+            if typewriterMode {
+                centerSelection(textView)
+            }
         }
 
         func triggerStyling() {
@@ -222,6 +231,31 @@ struct EditorView: NSViewRepresentable {
 
         private func computeVisibleRange(textView: NSTextView) -> NSRange {
             computeRenderableRange(for: textView)
+        }
+
+        private func centerSelection(_ textView: NSTextView) {
+            guard let scrollView = textView.enclosingScrollView,
+                let layoutManager = textView.layoutManager
+            else { return }
+
+            let textLength = textView.string.utf16.count
+            let cursor = min(textView.selectedRange().location, textLength)
+            var rect: NSRect
+            if cursor == textLength, layoutManager.extraLineFragmentTextContainer != nil {
+                rect = layoutManager.extraLineFragmentRect
+            } else {
+                guard layoutManager.numberOfGlyphs > 0 else { return }
+                let characterRange = NSRange(location: min(cursor, max(textLength - 1, 0)), length: 1)
+                let glyphRange = layoutManager.glyphRange(
+                    forCharacterRange: characterRange, actualCharacterRange: nil)
+                rect = layoutManager.lineFragmentRect(forGlyphAt: glyphRange.location, effectiveRange: nil)
+            }
+            rect.origin.x += textView.textContainerOrigin.x
+            rect.origin.y += textView.textContainerOrigin.y
+            let maxY = max(0, textView.bounds.height - scrollView.contentView.bounds.height)
+            let targetY = min(max(rect.midY - scrollView.contentView.bounds.height / 2, 0), maxY)
+            scrollView.contentView.scroll(to: NSPoint(x: 0, y: targetY))
+            scrollView.reflectScrolledClipView(scrollView.contentView)
         }
     }
 }

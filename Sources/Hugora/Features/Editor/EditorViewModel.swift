@@ -6,6 +6,7 @@ import Combine
 final class EditorViewModel: ObservableObject {
     @Published var text: String
     @Published var cursorPosition: Int = 0
+    @Published private(set) var headings: [HeadingOutlineItem] = []
 
     private var styler: MarkdownStyler
     private let themeManager: ThemeManager
@@ -16,7 +17,7 @@ final class EditorViewModel: ObservableObject {
     private let parseQueue = DispatchQueue(label: "com.hugora.parse", qos: .userInitiated)
     private weak var currentTextView: NSTextView?
     private var styleCache: StylePassCache?
-    private var skipNextAsyncParse = false
+    private var focusMode = false
 
     /// Context for resolving image paths. Set when opening a post.
     @Published var imageContext: ImageContext?
@@ -88,10 +89,6 @@ final class EditorViewModel: ObservableObject {
             .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
             .sink { [weak self] newText in
                 guard let self else { return }
-                if self.skipNextAsyncParse {
-                    self.skipNextAsyncParse = false
-                    return
-                }
                 self.parseAsync(newText, revision: self.textRevision)
             }
             .store(in: &cancellables)
@@ -103,10 +100,14 @@ final class EditorViewModel: ObservableObject {
 
         parseQueue.async { [weak self] in
             let doc = Document(parsing: textCopy, options: [.parseBlockDirectives, .parseSymbolLinks])
+            var outlineCollector = HeadingOutlineCollector(text: textCopy)
+            outlineCollector.visit(doc)
+            let headings = outlineCollector.headings
 
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.textRevision == capturedRevision else { return }
                 self.currentDocument = doc
+                self.headings = headings
                 self.parsedRevision = capturedRevision
                 self.forceRestyle()
             }
@@ -128,6 +129,7 @@ final class EditorViewModel: ObservableObject {
             styleCache = styler.applyStyles(
                 to: textStorage, in: visibleRange, document: doc, cursorPosition: cursorPosition,
                 imageContext: imageContext)
+            applyFocusMode(to: textStorage, visibleRange: visibleRange)
             return
         }
 
@@ -135,12 +137,18 @@ final class EditorViewModel: ObservableObject {
         styleCache = styler.applyStyles(
             to: textStorage, in: visibleRange, document: doc, cursorPosition: cursorPosition, imageContext: imageContext
         )
+        applyFocusMode(to: textStorage, visibleRange: visibleRange)
     }
 
     func updateCursorPosition(_ position: Int) {
         guard position != cursorPosition else { return }
         let oldPosition = cursorPosition
         cursorPosition = position
+
+        if focusMode {
+            forceRestyle()
+            return
+        }
 
         guard let cache = styleCache,
             let textView = currentTextView,
@@ -163,12 +171,58 @@ final class EditorViewModel: ObservableObject {
 
     private func parseSync() {
         currentDocument = Document(parsing: text, options: [.parseBlockDirectives, .parseSymbolLinks])
+        if let currentDocument {
+            var outlineCollector = HeadingOutlineCollector(text: text)
+            outlineCollector.visit(currentDocument)
+            headings = outlineCollector.headings
+        }
         parsedRevision = textRevision
+    }
+
+    func setFocusMode(_ enabled: Bool) {
+        guard focusMode != enabled else { return }
+        focusMode = enabled
+        forceRestyle()
+    }
+
+    func selectAndReveal(_ range: NSRange) {
+        guard let textView = currentTextView else { return }
+        let clampedRange = NSIntersectionRange(range, NSRange(location: 0, length: textView.string.utf16.count))
+        let insertionRange = NSRange(location: clampedRange.location, length: 0)
+        textView.setSelectedRange(insertionRange)
+        textView.scrollRangeToVisible(insertionRange)
+        textView.window?.makeFirstResponder(textView)
+    }
+
+    private func applyFocusMode(to textStorage: NSTextStorage, visibleRange: NSRange) {
+        guard focusMode, textStorage.length > 0 else { return }
+        let cursor = min(cursorPosition, textStorage.length)
+        let paragraphRange = (textStorage.string as NSString).paragraphRange(
+            for: NSRange(location: cursor, length: 0))
+        for range in Self.dimmedRanges(visibleRange: visibleRange, focusedRange: paragraphRange) {
+            textStorage.enumerateAttribute(.foregroundColor, in: range) { value, subrange, _ in
+                guard let color = value as? NSColor else { return }
+                textStorage.addAttribute(.foregroundColor, value: color.withAlphaComponent(0.28), range: subrange)
+            }
+        }
+    }
+
+    nonisolated static func dimmedRanges(visibleRange: NSRange, focusedRange: NSRange) -> [NSRange] {
+        let focused = NSIntersectionRange(visibleRange, focusedRange)
+        guard focused.length > 0 else { return visibleRange.length > 0 ? [visibleRange] : [] }
+        var ranges: [NSRange] = []
+        if focused.location > visibleRange.location {
+            ranges.append(NSRange(location: visibleRange.location, length: focused.location - visibleRange.location))
+        }
+        if NSMaxRange(focused) < NSMaxRange(visibleRange) {
+            ranges.append(
+                NSRange(location: NSMaxRange(focused), length: NSMaxRange(visibleRange) - NSMaxRange(focused)))
+        }
+        return ranges
     }
 
     func setText(_ newText: String) {
         textRevision &+= 1
-        skipNextAsyncParse = true
         text = newText
         parseSync()
         forceRestyle()
@@ -177,6 +231,7 @@ final class EditorViewModel: ObservableObject {
     func updateTextFromEditor(_ newText: String) {
         textRevision &+= 1
         text = newText
+        headings = []
         styleCache = nil
     }
 }
