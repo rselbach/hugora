@@ -65,6 +65,13 @@ bundle: build-release
     if [[ -d "${BUILD_DIR}/${APP_NAME}_${APP_NAME}.bundle" ]]; then
         cp -R "${BUILD_DIR}/${APP_NAME}_${APP_NAME}.bundle/"* "${BUNDLE_DIR}/Contents/Resources/" 2>/dev/null || true
     fi
+
+    # Re-sign copied and modified code before sealing the app bundle.
+    codesign --force --deep --sign - "${BUNDLE_DIR}/Contents/Frameworks/Sparkle.framework"
+    codesign --force --sign - "${BUNDLE_DIR}/Contents/MacOS/hugora-cli"
+    codesign --force --sign - "${BUNDLE_DIR}/Contents/MacOS/${APP_NAME}"
+    codesign --force --sign - "${BUNDLE_DIR}"
+    codesign --verify --deep --strict --verbose=2 "${BUNDLE_DIR}"
     
     echo "Bundle created: ${BUNDLE_DIR}"
 

@@ -28,6 +28,18 @@ jobs:
       - name: Select Xcode 16
         run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
 
+      - name: Install swift-format
+        run: brew install swift-format
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test --build-path .build-tests
+
+      - name: Lint
+        run: just lint
+
       - name: Set version
         id: version
         run: |
